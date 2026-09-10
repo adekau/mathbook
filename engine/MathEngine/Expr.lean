@@ -157,8 +157,69 @@ where
     | _, [] => .gt
     | x :: xs, y :: ys => (compare x y).then (compareList xs ys)
 
-def equal (a b : Expr) : Bool := compare a b == .eq
-instance : BEq Expr := ⟨equal⟩
+mutual
+  /-- Structural equality. Written out (rather than derived) so that `beq_eq` can be proved. -/
+  def beq : Expr → Expr → Bool
+    | .num p, .num q => p == q
+    | .var x, .var y => x == y
+    | .add xs, .add ys => beqList xs ys
+    | .mul xs, .mul ys => beqList xs ys
+    | .pow a b, .pow c d => beq a c && beq b d
+    | .fn f xs, .fn g ys => f == g && beqList xs ys
+    | .matrix r, .matrix s => beqRows r s
+    | _, _ => false
+  def beqList : List Expr → List Expr → Bool
+    | [], [] => true
+    | x :: xs, y :: ys => beq x y && beqList xs ys
+    | _, _ => false
+  def beqRows : List (List Expr) → List (List Expr) → Bool
+    | [], [] => true
+    | r :: rs, s :: ss => beqList r s && beqRows rs ss
+    | _, _ => false
+end
+
+instance : BEq Expr := ⟨beq⟩
+def equal (a b : Expr) : Bool := beq a b
+
+mutual
+  theorem beq_eq : ∀ a b : Expr, beq a b = true → a = b
+    | .num p, b, h => by cases b <;> simp [beq] at h; rw [h]
+    | .var x, b, h => by cases b <;> simp [beq] at h; rw [h]
+    | .add xs, b, h => by cases b <;> simp [beq] at h; rw [beqList_eq xs _ h]
+    | .mul xs, b, h => by cases b <;> simp [beq] at h; rw [beqList_eq xs _ h]
+    | .pow a₁ a₂, b, h => by cases b <;> simp [beq] at h; rw [beq_eq a₁ _ h.1, beq_eq a₂ _ h.2]
+    | .fn f xs, b, h => by cases b <;> simp [beq] at h; rw [h.1, beqList_eq xs _ h.2]
+    | .matrix r, b, h => by cases b <;> simp [beq] at h; rw [beqRows_eq r _ h]
+  theorem beqList_eq : ∀ xs ys : List Expr, beqList xs ys = true → xs = ys
+    | [], ys, h => by cases ys <;> simp [beqList] at h; rfl
+    | x :: xs, ys, h => by
+      cases ys with
+      | nil => simp [beqList] at h
+      | cons y ys => simp [beqList] at h; rw [beq_eq x y h.1, beqList_eq xs ys h.2]
+  theorem beqRows_eq : ∀ rs ss : List (List Expr), beqRows rs ss = true → rs = ss
+    | [], ss, h => by cases ss <;> simp [beqRows] at h; rfl
+    | r :: rs, ss, h => by
+      cases ss with
+      | nil => simp [beqRows] at h
+      | cons s ss => simp [beqRows] at h; rw [beqList_eq r s h.1, beqRows_eq rs ss h.2]
+end
+
+theorem equal_eq {a b : Expr} (h : equal a b = true) : a = b := beq_eq a b h
+
+/-- Remove the first element satisfying `p`. Unlike `List.erase` this needs no lawful `BEq`. -/
+def removeFirst (p : Expr → Bool) : List Expr → List Expr
+  | [] => []
+  | a :: as => if p a then as else a :: removeFirst p as
+
+theorem perm_find?_removeFirst (p : Expr → Bool) : ∀ (l : List Expr) (f : Expr),
+    l.find? p = some f → l.Perm (f :: removeFirst p l)
+  | [], f, h => by simp at h
+  | a :: as, f, h => by
+    by_cases hp : p a = true
+    · simp [List.find?_cons_of_pos hp] at h; subst h; simp [removeFirst, hp]
+    · rw [List.find?_cons_of_neg hp] at h
+      simp only [removeFirst, hp, Bool.false_eq_true, ↓reduceIte]
+      exact (List.Perm.cons a (perm_find?_removeFirst p as f h)).trans (List.Perm.swap f a _)
 
 end Expr
 end MathEngine

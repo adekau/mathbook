@@ -133,9 +133,44 @@ def tests : TestM Unit := do
   check "rewrite: sums ordered by degree" (derive [unwrap] (.add [.ofInt 1, .pow x (.ofInt 2), .mul [.ofInt 3, x]])).output.toText "x^2 + 3*x + 1"
   check "rewrite: fuel exhausted" (match (normalizeFuel [unwrapP] 0 (.add [x])).run' #[] with | some e => e.toText | none => "exhausted") "exhausted"
   check "rewrite: fuel sufficient" (match (normalizeFuel [unwrapP] 5 (.mul [.add [.add [x]]])).run' #[] with | some e => e.toText | none => "exhausted") "x"
+  -- step 3: simplify (rendered text after normalization, as the reference tests do)
+  let simp (src : String) : String := match parse src with
+    | .ok e => (simplify0 e).toText
+    | .error err => s!"<syntax error: {err.message}>"
+  check "simp 2 + 3*4" (simp "2 + 3*4") "14"
+  check "simp -2^2" (simp "-2^2") "-4"
+  check "simp (-2)^2" (simp "(-2)^2") "4"
+  check "simp 2^3^2" (simp "2^3^2") "512"
+  check "simp 8/2/2" (simp "8/2/2") "2"
+  check "simp a - b - c" (simp "a - b - c") "a - b - c"
+  check "simp 2x + 3x" (simp "2x + 3x") "5*x"
+  check "simp 2(x+1)" (simp "2(x+1)") "2*(x + 1)"
+  check "simp sin(0)" (simp "sin(0)") "0"
+  check "simp x/(y*z)" (simp "x/(y*z)") "x/(y*z)"
+  check "simp (x+1)/(x-1)" (simp "(x+1)/(x-1)") "(x + 1)/(x - 1)"
+  check "simp 1/x" (simp "1/x") "1/x"
+  check "simp -(-x)" (simp "-(-x)") "x"
+  check "simp sqrt(2)" (simp "sqrt(2)") "sqrt(2)"
+  check "simp 0*x + 1*y" (simp "0*x + 1*y") "y"
+  check "simp x - x" (simp "x - x") "0"
+  check "simp x*x*x" (simp "x*x*x") "x^3"
+  check "simp x^2 * x^3 / x" (simp "x^2 * x^3 / x") "x^4"
+  check "simp (x^2)^3" (simp "(x^2)^3") "x^6"
+  check "simp sqrt(16)" (simp "sqrt(16)") "4"
+  check "simp ln(exp(x))" (simp "ln(exp(x))") "x"
+  check "simp 1/2 + 1/3" (simp "1/2 + 1/3") "5/6"
+  check "simp x^2 + 3x + 1 order" (simp "1 + 3x + x^2") "x^2 + 3*x + 1"
+  check "simp x + 2x + y" (simp "x + 2x + y") "3*x + y"
+  check "simp x*0.5*2" (simp "x*0.5*2") "x"  -- 0.5*2 folds to an approximate 1, which isOne drops (same as the reference)
+  checkTrue "simp canonical order" (match parse "x*2 + y", parse "y + 2*x" with
+    | .ok a, .ok b => Expr.equal (simplify0 a) (simplify0 b) | _, _ => false)
+  let d := match parse "0*x + 1*y" with | .ok e => derive simpRules e | .error _ => default
+  check "simp derivation rules" (", ".intercalate (d.steps.toList.map (·.rule))) "simp.identity, simp.identity, simp.identity"
+  check "simp derivation before/after" (showSteps d) "simp.identity@[0] 0*x + 1*y -> 0 + 1*y, simp.identity@[1] 0 + 1*y -> 0 + y, simp.identity@[] y + 0 -> y"  -- canonical order (constants last) is silent
   -- wire: RPC round trip
   checkTrue "capabilities" ((rpc "engine.capabilities" "{}").startsWith "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"engine\":\"engine-lean\"")
   check "rpc x + 0" (evalText "x + 0") "x"
+  checkTrue "rpc derivation" ((rpc "engine.evaluate" "{\"source\":\"x + 0\",\"showWork\":true}").endsWith "\"derivation\":{\"input\":{\"k\":\"add\",\"args\":[{\"k\":\"var\",\"name\":\"x\"},{\"k\":\"num\",\"v\":{\"num\":\"0\",\"den\":\"1\"}}]},\"steps\":[{\"rule\":\"simp.identity\",\"explanation\":\"$a + 0 = a$: zero is the additive identity.\",\"path\":[],\"before\":{\"k\":\"add\",\"args\":[{\"k\":\"var\",\"name\":\"x\"},{\"k\":\"num\",\"v\":{\"num\":\"0\",\"den\":\"1\"}}]},\"after\":{\"k\":\"var\",\"name\":\"x\"}}],\"output\":{\"k\":\"var\",\"name\":\"x\"}}}}")
   check "rpc syntax error" (evalText "x +") "<error: unexpected end of input>"
   checkTrue "rpc error span" ((rpc "engine.evaluate" "{\"source\":\"3 4\"}").endsWith "\"span\":{\"start\":2,\"end\":3}}}}")
   checkTrue "rpc value json" ((rpc "engine.evaluate" "{\"source\":\"2x\"}").startsWith "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"ok\":true,\"value\":{\"k\":\"mul\",\"args\":[{\"k\":\"num\",\"v\":{\"num\":\"2\",\"den\":\"1\"}},{\"k\":\"var\",\"name\":\"x\"}]}")

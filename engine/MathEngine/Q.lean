@@ -46,7 +46,6 @@ instance : Mul Q := ⟨mul⟩
 instance : Neg Q := ⟨neg⟩
 instance : Sub Q := ⟨sub⟩
 instance : Div Q := ⟨div⟩
-instance : BEq Q := ⟨fun a b => a.val == b.val && a.approx == b.approx⟩
 
 /-- Parse a numeric literal: `"3"`, `"2.5"`, `".5"`, `"1/3"`. Decimal literals are stored exactly
 (`2.5 = 5/2`) but flagged approximate. Returns `none` on malformed input. -/

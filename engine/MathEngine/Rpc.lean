@@ -2,7 +2,7 @@ import MathEngine.Json
 import MathEngine.Wire
 import MathEngine.Parser
 import MathEngine.Print
-import MathEngine.Simp
+import MathEngine.SimpRules
 /-!
 # JSON-RPC surface
 
@@ -15,7 +15,7 @@ open Json
 
 def capabilities : Json :=
   .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m1"), ("verified", .bool true),
-         ("features", .arr #[.str "parse", .str "print", .str "simp.identity"])]
+         ("features", .arr #[.str "simplify"])]
 
 def Rendered.toJson (e : Expr) (paths : Bool) : Json :=
   .obj #[("text", .str e.toText), ("latex", .str (e.toLatex paths))]
@@ -34,9 +34,11 @@ def evaluate (params : Json) : Json :=
     match parseStmt src with
     | .error e => errorJson "syntax" e.message (some (e.start, e.stop))
     | .ok stmt =>
-      let out := simpTop stmt.value
+      let input := stmt.value
+      let (out, steps) := (simplify input).run #[]
       let paths := params.getBool "paths"
       let res := #[("ok", .bool true), ("value", out.toJson), ("rendered", Rendered.toJson out paths)]
+      let res := if params.getBool "showWork" then res.push ("derivation", (Derivation.mk input steps out).toJson) else res
       let res := match stmt with
         | .«let» name _ => res.push ("bound", .arr #[.str name])
         | _ => res
