@@ -48,6 +48,28 @@ def evalText (src : String) : String :=
 
 def qParse (s : String) : Q := (Q.parse s).getD default
 
+-- --- step 2: the traced rewriter ---------------------------------------------------------
+/-- A toy verified rule: a one-element sum or product is that element. Under unit weights the
+node it removes weighs 1, so the obligation is immediate. -/
+def unwrap : Rule unitWeights where
+  name := "test.unwrap"
+  apply e := match e with
+    | .add [x] => some ⟨x, "A sum of one term is that term.", none⟩
+    | .mul [x] => some ⟨x, "A product of one factor is that factor.", none⟩
+    | _ => none
+  decreasing e r h := by
+    cases e with
+    | add es => match es, h with
+      | [x], h => simp at h; subst h; simp only [MathEngine.measure, MathEngine.measureList, unitWeights]; omega
+    | mul es => match es, h with
+      | [x], h => simp at h; subst h; simp only [MathEngine.measure, MathEngine.measureList, unitWeights]; omega
+    | _ => simp at h
+
+def unwrapP : PlainRule := { name := "test.unwrap", apply := unwrap.apply }
+
+def showSteps (d : Derivation) : String :=
+  ", ".intercalate (d.steps.toList.map fun s => s!"{s.rule}@{s.path} {s.before.toText} -> {s.after.toText}")
+
 def tests : TestM Unit := do
   -- rational arithmetic is exact and normalized
   check "Q 6/-4" (Q.ofRat (Rat.divInt 6 (-4))).toText "-3/2"
@@ -99,6 +121,18 @@ def tests : TestM Unit := do
   check "latex greek and mathit" (latexOf "pi * abc") "\\pi \\cdot \\mathit{abc}"
   check "latex matrix" (latexOf "[1,2;3,4]") "\\begin{bmatrix}1 & 2 \\\\ 3 & 4\\end{bmatrix}"
   check "latex paths" (latexOf "x^3" true) "\\htmlData{path=root}{{\\htmlData{path=0}{x}}^{\\htmlData{path=1}{3}}}"
+  -- step 2: normalize records whole-term before/after and the path; innermost order
+  let x := Expr.var "x"; let y := Expr.var "y"
+  let d := derive [unwrap] (.add [x, .add [y]])
+  check "rewrite: one step" (showSteps d) "test.unwrap@[1] x + (y) -> x + y"
+  check "rewrite: output" d.output.toText "x + y"
+  let d2 := derive [unwrap] (.mul [.add [.add [x]]])
+  check "rewrite: innermost, three steps" (showSteps d2)
+    "test.unwrap@[0, 0] (x) -> (x), test.unwrap@[0] (x) -> x, test.unwrap@[] x -> x"
+  check "rewrite: canonical order is silent" (derive [unwrap] (.add [y, x])).output.toText "x + y"
+  check "rewrite: sums ordered by degree" (derive [unwrap] (.add [.ofInt 1, .pow x (.ofInt 2), .mul [.ofInt 3, x]])).output.toText "x^2 + 3*x + 1"
+  check "rewrite: fuel exhausted" (match (normalizeFuel [unwrapP] 0 (.add [x])).run' #[] with | some e => e.toText | none => "exhausted") "exhausted"
+  check "rewrite: fuel sufficient" (match (normalizeFuel [unwrapP] 5 (.mul [.add [.add [x]]])).run' #[] with | some e => e.toText | none => "exhausted") "x"
   -- wire: RPC round trip
   checkTrue "capabilities" ((rpc "engine.capabilities" "{}").startsWith "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"engine\":\"engine-lean\"")
   check "rpc x + 0" (evalText "x + 0") "x"

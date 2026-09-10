@@ -4,7 +4,15 @@ M0 wasm spike (book/SPIKE-RESULTS.md) — DONE 2026-09-10 on Lean v4.33.1: runti
 M1 Lean engine parity (book/M1-BRIEF.md) — IN PROGRESS.
    1. DONE 2026-09-10: `Q` over core `Rat` with the approximate flag, full parser with spans, two-target printer with
       `\htmlData` paths, `lake test` driver (55 cases ported from `engine.test.mjs`), `proofs/` skeleton + `scripts/check-engine-deps.sh`.
-   2. traced rewriter — termination by a per-rule measure obligation (brief option a); see the step-2 note when it lands.
+   2. DONE 2026-09-10: traced rewriter `MathEngine/Rewrite.lean`. Option (a) from the brief: `Rule W` carries
+      `decreasing : apply e = some r → measure W r.result < measure W e` for a weighted node count `measure W`
+      (weights are head-only, ≥ 1); `normalize` is well-founded on `(measure, size, phase)`, never `partial`.
+      Additivity (`measure_withChildren`) and permutation invariance (`measure_canon`) are proved once for all
+      weights, so canonical argument order runs silently inside the loop instead of as a rule.
+      DECISION TO REVISIT BEFORE M5 (flagged per the brief): a single additive measure cannot cover the combined
+      notebook pipeline (`diff.*` duplicates subterms — product/chain rules — and commands like `expand` grow
+      terms). Those rule sets run on `normalizeFuel` (total, explicit fuel, reports exhaustion) until M5 replaces
+      it with a polynomial/RPO ordering. The `simp.*` set gets a proven measure in step 3.
    3. `simp.*` rules with per-rule soundness; derivations reach the work panel.
    4. `diff.*`, `la.*`, `rref`, session state through `handle`.
 M2 wire-level differential test reference-ts ⇄ engine-lean; then delete reference-ts.

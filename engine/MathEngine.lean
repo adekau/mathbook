@@ -2,6 +2,7 @@ import MathEngine.Q
 import MathEngine.Expr
 import MathEngine.Semantics
 import MathEngine.Simp
+import MathEngine.Rewrite
 import MathEngine.Json
 import MathEngine.Wire
 import MathEngine.Parser

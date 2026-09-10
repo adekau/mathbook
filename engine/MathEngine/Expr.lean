@@ -48,6 +48,20 @@ def children : Expr → List Expr
   | .pow b e => [b, e]
   | .matrix rows => rows.flatten
 
+/-- Cut `cs` into rows of the same lengths as `rows` (the inverse of `List.flatten` for that shape). -/
+def regroup : List (List Expr) → List Expr → List (List Expr)
+  | [], _ => []
+  | r :: rs, cs => cs.take r.length :: regroup rs (cs.drop r.length)
+
+theorem flatten_regroup (rows : List (List Expr)) (cs : List Expr) (h : cs.length = rows.flatten.length) :
+    (regroup rows cs).flatten = cs := by
+  induction rows generalizing cs with
+  | nil => simp at h; simp [regroup, h]
+  | cons r rs ih =>
+    simp only [List.flatten_cons, List.length_append] at h
+    simp only [regroup, List.flatten_cons]
+    rw [ih (cs.drop r.length) (by rw [List.length_drop]; omega), List.take_append_drop]
+
 /-- Rebuild a node around new children (same count and order as `children`). -/
 def withChildren (e : Expr) (cs : List Expr) : Expr :=
   match e with
@@ -56,27 +70,52 @@ def withChildren (e : Expr) (cs : List Expr) : Expr :=
   | .mul _ => .mul cs
   | .fn f _ => .fn f cs
   | .pow _ _ => match cs with | [b, x] => .pow b x | _ => e
-  | .matrix rows =>
-    let w := (rows.head?.map List.length).getD 0
-    .matrix ((List.range rows.length).map fun i => (cs.drop (i * w)).take w)
+  | .matrix rows => .matrix (regroup rows cs)
+
+theorem children_withChildren (e : Expr) (cs : List Expr) (h : cs.length = (children e).length) :
+    children (withChildren e cs) = cs := by
+  cases e with
+  | pow b x =>
+    simp only [children, List.length_cons, List.length_nil] at h
+    match cs, h with
+    | [b', x'], _ => rfl
+  | matrix rows => simp only [withChildren, children] at h ⊢; exact flatten_regroup rows cs h
+  | _ => simp_all [withChildren, children]
 
 def at? (e : Expr) : Path → Option Expr
   | [] => some e
   | i :: rest => do let c ← (children e)[i]?; c.at? rest
 
-/-- Number of nodes. -/
-def size : Expr → Nat
-  | .num _ | .var _ => 1
-  | .add es | .mul es | .fn _ es => 1 + sizeList es
-  | .pow b e => 1 + b.size + e.size
-  | .matrix rows => 1 + sizeRows rows
-where
-  sizeList : List Expr → Nat
+mutual
+  /-- Number of nodes. -/
+  def size : Expr → Nat
+    | .num _ | .var _ => 1
+    | .add es | .mul es | .fn _ es => 1 + sizeList es
+    | .pow b e => 1 + b.size + e.size
+    | .matrix rows => 1 + sizeRows rows
+  def sizeList : List Expr → Nat
     | [] => 0
     | e :: es => e.size + sizeList es
-  sizeRows : List (List Expr) → Nat
+  def sizeRows : List (List Expr) → Nat
     | [] => 0
     | r :: rs => sizeList r + sizeRows rs
+end
+
+theorem sizeList_append (l₁ l₂ : List Expr) : sizeList (l₁ ++ l₂) = sizeList l₁ + sizeList l₂ := by
+  induction l₁ with
+  | nil => simp [sizeList]
+  | cons e es ih => simp [sizeList, ih]; omega
+
+theorem sizeRows_flatten (rows : List (List Expr)) : sizeRows rows = sizeList rows.flatten := by
+  induction rows with
+  | nil => simp [sizeRows, sizeList]
+  | cons r rs ih => simp [sizeRows, sizeList_append, ih]
+
+theorem size_eq (e : Expr) : size e = 1 + sizeList (children e) := by
+  cases e <;> simp [size, children, sizeList, sizeRows_flatten] <;> omega
+
+theorem size_pos (e : Expr) : 0 < size e := by rw [size_eq]; omega
+theorem sizeList_children_lt (e : Expr) : sizeList (children e) < size e := by rw [size_eq]; omega
 
 def freeVars : Expr → List String
   | .num _ => []
