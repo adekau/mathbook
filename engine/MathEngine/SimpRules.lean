@@ -163,22 +163,25 @@ def addExp (a b : Expr) : Expr :=
   | .num p, .num q => .num (p + q)
   | _, _ => .add [a, b]
 
+/-- Binary search for a `y` with `y ^ n = x`. Top-level (rather than a `let rec`) so that
+`proofs/` can state its specification: it only ever returns a `y` whose power it has *checked*,
+so correctness is read straight off the final guard and completeness is never needed. -/
+def natRootGo (n x : Nat) : Nat → Nat → Nat → Option Nat
+  | _, _, 0 => none
+  | lo, hi, fuel + 1 =>
+    if lo < hi then
+      let mid := (lo + hi) / 2
+      if mid ^ n < x then natRootGo n x (mid + 1) hi fuel else natRootGo n x lo mid fuel
+    else if lo ^ n = x then some lo else none
+
+/-- Exact natural `n`-th root of `x`, if there is one. -/
+def natRoot (n x : Nat) : Option Nat :=
+  if x < 2 then some x else natRootGo n x 1 x 200
+
 /-- Integer `n`-th root of a rational, if exact. -/
 def exactRoot (r : Rat) (n : Nat) : Option Rat :=
   if r < 0 || n = 0 then none else
-  let root (x : Nat) : Option Nat :=
-    if x < 2 then some x else
-    -- binary search for y with y^n = x
-    let rec go (lo hi : Nat) (fuel : Nat) : Option Nat :=
-      match fuel with
-      | 0 => none
-      | fuel + 1 =>
-        if lo < hi then
-          let mid := (lo + hi) / 2
-          if mid ^ n < x then go (mid + 1) hi fuel else go lo mid fuel
-        else if lo ^ n = x then some lo else none
-    go 1 x 200
-  do let a ← root r.num.natAbs; let b ← root r.den; some (mkRat a b)
+  do let a ← natRoot n r.num.natAbs; let b ← natRoot n r.den; some (mkRat a b)
 
 -- ---------------------------------------------------------------------------
 -- simp.flatten (silent)
