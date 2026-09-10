@@ -53,7 +53,7 @@ async function evaluate(cellId: string, source: string, out: HTMLElement) {
       renderWork(`Selected: ${tex(ex.rendered.latex)}`, ex.steps);
     });
   });
-  if (r.derivation) renderWork(`${tex(latexOf(r.derivation.input))} \u2192 ${tex(r.rendered.latex)}`, r.derivation.steps);
+  if (r.derivation) renderWork(`${tex(latexOf(r.derivation.input))} \u2192 ${tex(r.rendered.latex, true)}`, r.derivation.steps);
   if (out.parentElement === $("#cells").lastElementChild) addCell();
 }
 
@@ -69,9 +69,10 @@ function stepHtml(s: Step): string {
   const sub = s.sub ? `<div class="sub">${s.sub.steps.map(stepHtml).join("")}</div>` : "";
   return `<div class="step"><div class="rule">${s.rule} @ ${s.path.join(".") || "root"}</div><div class="expl">${inlineMath(s.explanation)}</div>${sub}</div>`;
 }
-/** Render $...$ spans inside explanation text. */
+/** Render $...$ spans inside explanation text; everything outside them is escaped as plain text. */
 function inlineMath(md: string): string {
-  return md.replace(/\$([^$]+)\$/g, (_, t) => tex(t)).replace(/</g, (m, i) => (md[i + 1] === "s" ? m : "&lt;"));
+  const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return md.split(/(\$[^$]+\$)/g).map((seg) => (seg.length > 2 && seg.startsWith("$") && seg.endsWith("$") ? tex(seg.slice(1, -1)) : escape(seg))).join("");
 }
 
 void connect().then(() => { for (const s of SAMPLES) addCell(s); addCell(); });
