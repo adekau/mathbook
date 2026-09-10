@@ -132,7 +132,7 @@ test("protocol: round trip through JSON-RPC serve/createClient", async () => {
   serve({ send: b.send, onMessage: a.onMessage }, new Engine());
   const client = createClient({ send: a.send, onMessage: b.onMessage });
   const caps = await client.call("engine.capabilities", {});
-  assert.equal(caps.engine, "engine-ts");
+  assert.equal(caps.engine, "reference-ts");
   const res = await client.call("engine.evaluate", { sessionId: "p", cellId: "1", source: "diff(x^2, x)" });
   assert.equal(res.rendered.text, "2*x");
   assert.equal(res.value.k, "mul");

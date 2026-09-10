@@ -18,10 +18,10 @@ where
       if c.isWhitespace then go cs acc
       else if c.isDigit then
         let ds := (c :: cs).takeWhile Char.isDigit
-        go ((c :: cs).drop ds.length) (acc.push (.num (String.mk ds).toNat!))
+        go ((c :: cs).drop ds.length) (acc.push (.num (String.ofList ds).toNat!))
       else if c.isAlpha || c == '_' then
         let ds := (c :: cs).takeWhile fun d => d.isAlphanum || d == '_'
-        go ((c :: cs).drop ds.length) (acc.push (.id (String.mk ds)))
+        go ((c :: cs).drop ds.length) (acc.push (.id (String.ofList ds)))
       else if "+-*^()".contains c then go cs (acc.push (.op c))
       else .error s!"unexpected character '{c}'"
 

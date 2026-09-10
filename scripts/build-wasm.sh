@@ -1,31 +1,22 @@
 #!/usr/bin/env bash
-# Lean -> C -> wasm. Requires: emcc on PATH (emsdk), python3 with zstandard, curl.
+# Lean -> C -> wasm. Requires: emcc on PATH (emsdk), elan, git.
 # Output: apps/notebook/dist/engine-lean.{js,wasm}
 #
-# The last Lean release that shipped a prebuilt wasm32 runtime is v4.15.0 (checked 2026-09-10:
-# v4.16.0+ have no linux_wasm32 asset). Two roads, pick with LEAN_WASM_TOOLCHAIN:
-#   (A) prebuilt: pin engine/lean-toolchain to v4.15.0 and let this script download the artifact.
-#   (B) build the runtime yourself for a current Lean: see book/SPIKE.md §"Road B".
+# The Lean runtime + Init for wasm32 come from scripts/build-lean-wasm-runtime.sh (built from source
+# for the toolchain pinned in engine/lean-toolchain; cached under engine/toolchains/). The engine's
+# own C comes from `lake build` with the host toolchain — Lean's C output is target-independent.
 set -euo pipefail
 cd "$(dirname "$0")/../engine"
 VER=$(sed -E 's/.*:v//' lean-toolchain)
-TC=${LEAN_WASM_TOOLCHAIN:-toolchains/lean-$VER-linux_wasm32}
-if [ ! -d "$TC" ]; then
-  mkdir -p toolchains
-  URL="https://github.com/leanprover/lean4/releases/download/v$VER/lean-$VER-linux_wasm32.tar.zst"
-  echo "downloading $URL"
-  curl -fL -o "toolchains/wasm32.tar.zst" "$URL" || { echo "no prebuilt wasm32 runtime for v$VER — use Road B (SPIKE.md)"; exit 1; }
-  python3 -c "import zstandard,tarfile;
-f=open('toolchains/wasm32.tar.zst','rb');t=tarfile.open(fileobj=zstandard.ZstdDecompressor().stream_reader(f),mode='r|');t.extractall('toolchains')"
-fi
+TC=${LEAN_WASM_TOOLCHAIN:-toolchains/lean-$VER-wasm32}
+[ -f "$TC/lib/libleanrt.a" ] && [ -f "$TC/lib/libInit.a" ] || ../scripts/build-lean-wasm-runtime.sh
 lake build                                     # produces .lake/build/ir/**/*.c
 OUT=../apps/notebook/dist; mkdir -p "$OUT"
-# NOTE: no -pthread. Lean's runtime can run single-threaded; -pthread would force COOP/COEP
-# headers (SharedArrayBuffer) on the host page. If the link fails with atomics/pthread
-# symbols, add -pthread and serve with cross-origin isolation — record that in SPIKE.md.
+# NOTE: no -pthread. The runtime is built single-threaded (MULTI_THREAD=OFF); -pthread would force
+# COOP/COEP headers (SharedArrayBuffer) on the host page, a real constraint for "self-hostable".
 emcc -O2 -o "$OUT/engine-lean.js" \
-  -I "$TC/include" -L "$TC/lib/lean" \
-  c/shim.c $(find .lake/build/ir/MathEngine -name '*.c') .lake/build/ir/MathEngine.c \
+  -I "$TC/include" -I toolchains/src/libuv/include -L "$TC/lib" \
+  c/shim.c c/uv-stubs.c $(find .lake/build/ir/MathEngine -name '*.c') .lake/build/ir/MathEngine.c \
   -lInit -lleanrt \
   -sMODULARIZE=1 -sEXPORT_NAME=createMathEngine -sENVIRONMENT=worker,node \
   -sEXPORTED_FUNCTIONS=_mathengine_init,_mathengine_call,_mathengine_free,_malloc,_free \

@@ -13,9 +13,13 @@ async function connect() {
   client?.close();
   const mode = $<HTMLSelectElement>("#engine").value;
   $("#url").hidden = mode !== "http";
-  client = mode === "worker" ? createClient(workerTransport(new Worker("engine.worker.js"))) : createClient(httpTransport($<HTMLInputElement>("#url").value));
+  const workerFile = mode === "worker" ? "engine.worker.js" : mode === "lean-worker" ? "engine-lean.worker.js" : null;
+  client = workerFile ? createClient(workerTransport(new Worker(workerFile))) : createClient(httpTransport($<HTMLInputElement>("#url").value));
+  const t0 = performance.now();
   const caps = await client.call("engine.capabilities", {});
-  $("#caps").textContent = `${caps.engine} v${caps.version}${caps.verified ? " · verified" : ""} · ${caps.features.join(", ")}`;
+  const ms = Math.round(performance.now() - t0);
+  console.log(`[mathbook] ${mode}: first engine.capabilities reply after ${ms} ms`);
+  $("#caps").textContent = `${caps.engine} v${caps.version}${caps.verified ? " · verified" : ""} · ${caps.features.join(", ")} · ready in ${ms} ms`;
 }
 $("#engine").addEventListener("change", connect);
 $("#url").addEventListener("change", connect);

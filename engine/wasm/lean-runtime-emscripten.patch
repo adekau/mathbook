@@ -1,0 +1,44 @@
+diff --git a/src/runtime/object.cpp b/src/runtime/object.cpp
+index 5237296..f19389d 100644
+--- a/src/runtime/object.cpp
++++ b/src/runtime/object.cpp
+@@ -2188,7 +2188,10 @@ static obj_res string_to_list_core(std::string const & s, bool reverse = false)
+     utf8_decode(s, tmp);
+     if (reverse)
+         std::reverse(tmp.begin(), tmp.end());
+-    obj_res  r = lean_box_uint32(0);
++    // `[]` is the scalar `lean_box(0)`. `lean_box_uint32(0)` only coincides with it on 64-bit; on 32-bit
++    // (wasm32) it allocates a heap object that pattern matching accepts as `nil` (tag 0) but
++    // `lean_string_mk`'s `lean_is_scalar` test does not, so `String.ofList (s.toList)` never terminates.
++    obj_res  r = lean_box(0);
+     unsigned i = tmp.size();
+     while (i > 0) {
+         --i;
+diff --git a/src/runtime/uv/event_loop.cpp b/src/runtime/uv/event_loop.cpp
+index fa85439..cf73ed4 100644
+--- a/src/runtime/uv/event_loop.cpp
++++ b/src/runtime/uv/event_loop.cpp
+@@ -146,8 +146,8 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_event_loop_configure(b_obj_arg optio
+ }
+ 
+ /* Std.Internal.UV.Loop.alive : BaseIO UInt64 */
+-extern "C" LEAN_EXPORT lean_obj_res lean_uv_event_loop_alive() {
+-    return io_result_mk_error("lean_uv_event_loop_alive is not supported");
++extern "C" LEAN_EXPORT uint8_t lean_uv_event_loop_alive() {
++    return 0;
+ }
+ 
+ #endif
+diff --git a/src/runtime/uv/system.cpp b/src/runtime/uv/system.cpp
+index 3ac95b6..a2283fb 100644
+--- a/src/runtime/uv/system.cpp
++++ b/src/runtime/uv/system.cpp
+@@ -634,7 +634,7 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_os_get_passwd() {
+ }
+ 
+ // Std.Internal.UV.System.osGetGroup : IO (Option GroupInfo)
+-extern "C" LEAN_EXPORT lean_obj_res lean_uv_os_get_group() {
++extern "C" LEAN_EXPORT lean_obj_res lean_uv_os_get_group(uint64_t gid) {
+     lean_always_assert(
+         false && ("Please build a version of Lean4 with libuv to invoke this.")
+     );

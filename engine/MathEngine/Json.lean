@@ -24,7 +24,7 @@ def getBool (j : Json) (k : String) (d := false) : Bool :=
 private def escape (s : String) : String :=
   s.foldl (fun acc c => acc ++ match c with
     | '"' => "\\\"" | '\\' => "\\\\" | '\n' => "\\n" | '\r' => "\\r" | '\t' => "\\t"
-    | c => if c.val < 32 then s!"\\u{String.mk (Nat.toDigits 16 c.val.toNat)}" else c.toString) ""
+    | c => if c.val < 32 then s!"\\u{String.ofList (Nat.toDigits 16 c.val.toNat)}" else c.toString) ""
 
 partial def render : Json → String
   | .null => "null"
@@ -37,12 +37,12 @@ partial def render : Json → String
 -- --- parser -------------------------------------------------------------
 structure P where
   s : String
-  i : String.Pos := 0
+  i : String.Pos.Raw := {}
 
 abbrev PM := StateT P (Except String)
 
-private def peek : PM (Option Char) := do let p ← get; pure (if p.i < p.s.endPos then some (p.s.get p.i) else none)
-private def adv : PM Unit := modify fun p => { p with i := p.s.next p.i }
+private def peek : PM (Option Char) := do let p ← get; pure (if p.i.atEnd p.s then none else some (p.i.get p.s))
+private def adv : PM Unit := modify fun p => { p with i := p.i.next p.s }
 private def ws : PM Unit := do
   repeat
     match ← peek with

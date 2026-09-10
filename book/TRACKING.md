@@ -1,6 +1,6 @@
 # Tracking log — what the book needs, in build order
 
-M0 wasm spike (book/SPIKE.md) — ABI + protocol proven natively; emcc link pending on your machine.
+M0 wasm spike (book/SPIKE.md) — DONE 2026-09-10 on Lean v4.33.1: runtime + Init built from source for wasm32, 1.5 MB, 96 ms to first reply in the browser, no COOP/COEP. One upstream 32-bit runtime bug found and patched (string_to_list_core), to report.
 M1 Lean engine parity: `Q` normalization/arithmetic, full parser (calls, implicit mul, matrices), printer with `-`/`/` recovery,
    recursive `simp0` (spike's `simpTop` is root-only), traced rewriter as `StateM (Array Step)` with `termination_by` on `size`,
    diff + linalg rules ported from `reference-ts`, session state threaded through `handle`. Port `engine.test.mjs` to `lake test`.

@@ -32,7 +32,7 @@
 <main>
   <header>
     <strong>mathbook</strong>
-    <label>engine <select id="engine"><option value="worker">in-browser (web worker)</option><option value="http">self-hosted (HTTP)</option></select></label>
+    <label>engine <select id="engine"><option value="worker">in-browser (TS reference, web worker)</option><option value="lean-worker">in-browser (Lean/wasm, web worker)</option><option value="http">self-hosted (HTTP)</option></select></label>
     <input id="url" value="http://localhost:8787" size="26" hidden />
     <span id="caps"></span>
     <span class="kbd">Shift+Enter evaluates · click any subterm of a result to see how it was derived</span>

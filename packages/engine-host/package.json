@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p .",
-    "serve": "node dist/server.js"
+    "serve": "node dist/server.js",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@mathbook/protocol": "0.1.0",
