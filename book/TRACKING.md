@@ -30,8 +30,21 @@ M2 DONE 2026-09-10: wire-level differential test (scripts/difftest.mjs, 147 sour
    paths + value trees + errors + bindings, zero mismatches) then reference-ts deleted. Its answers are `engine/Tests/golden.tsv`,
    replayed by `lake test`. Found by the diff: matrix products must not be canonically sorted; `(ab)^n` and `(b^m)^n` with
    symbolic `m` are parity rules in the fuel pipeline only. The HTTP host now fronts the native Lean engine.
-M3 Mathlib: semantics over ℝ (spec only, noncomputable); each `simp.*` rule gets a soundness theorem.
-M4 `HasDerivAt` proofs for each `diff.*` rule.
+M3 DONE 2026-09-10: Mathlib pinned at release tag v4.33.1 in `proofs/` — its lean-toolchain is exactly ours, so no
+   toolchain move and no engine port. (Mathlib *master* is on v4.34.0-rc2, ahead of stable, so "pin to master" from the
+   M1 brief would have been wrong; pin to the release tag whose toolchain matches, and bump both together.)
+   `proofs/Proofs/Semantics.lean`: `evalR` over ℝ (rpow, Real.sin/log/sqrt, Mathlib junk conventions), `SemEqR`,
+   `SemEqROn`, and the bridge `evalR_of_eval?` — wherever the integer fragment is defined, ℝ agrees, so M1's
+   `simplify_sound` was a restriction of the truth. `proofs/Proofs/SimpReal.lean`: every `simp.*` rule gets its ℝ theorem.
+   FINDING, worth a chapter: two rules are *not* unconditionally sound over ℝ, and the refutations are proved, not just
+   unproven. `simp.collect-powers` turns `x·x⁻¹` into `x⁰`, i.e. 0 into 1 at x = 0 (`not_collectPowers_soundR`); it is
+   sound exactly where the merged base is positive (`collectPowers_soundR_on`). `simp.function` turns `exp(ln x)` into
+   `x`, i.e. 1 into -1 at x = -1 (`not_functionRules_soundR`), because `Real.log` is even. Both are the standard CAS
+   convention (Mathematica simplifies `x/x` to 1 too), so the engine keeps them; what changed is that the assumption is
+   now written down. The other five rules are unconditionally sound and `normalizeR_sound` folds them.
+   Engine change: `RewriteSound`'s fold is now stated for an abstract `Congruence`, so ℝ (and M4's derivatives, and any
+   future module) reuse the M1 theorem instead of re-proving it. Axioms: propext, Classical.choice, Quot.sound only.
+M4 `HasDerivAt` proofs for each `diff.*` rule (in `proofs/`, against `evalR`; expect side conditions like M3's).
 M5 termination: measure-decreasing proof replaces the step budget (connects to the order-theory book).
 M6 origin tracking for `explain` (van Deursen–Klint–Tip 1993); current path-prefix heuristic over-approximates.
 M7 linear algebra over ℚ verified (elimination preserves solution set).

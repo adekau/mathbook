@@ -107,6 +107,7 @@ abbrev RuleSoundR (r : Rule simpW) : Prop := RuleSoundFor semEqRCongruence r
 @[simp] theorem Q_val_mul (a b : Q) : ((a * b : Q)).val = a.val * b.val := rfl
 @[simp] theorem Q_val_zero : (Q.zero).val = 0 := rfl
 @[simp] theorem Q_val_one : (Q.one).val = 1 := rfl
+@[simp] theorem Q_val_ofInt (n : ℤ) : (Q.ofInt n).val = (n : ℚ) := rfl
 
 theorem evalR_of_isZero {e : Expr} (h : Expr.isZero e = true) (ρ : EnvR) : evalR ρ e = 0 := by
   cases e <;> simp [Expr.isZero] at h
@@ -315,6 +316,259 @@ theorem collectTerms_soundR : RuleSoundR collectTerms := by
     simp only [Option.some.injEq] at h; subst h
     rw [evalR_add, evalR_add]; exact (mergeTerms_soundR ρ es l t hm).symm
   · simp at h
+
+-- ---------------------------------------------------------------------------
+-- simp.power
+-- ---------------------------------------------------------------------------
+
+/-- The search only ever returns a `y` whose power it has checked, so correctness needs no
+reasoning about the search itself — and completeness is never needed. -/
+theorem natRootGo_pow (n x : ℕ) :
+    ∀ (fuel lo hi a : ℕ), natRootGo n x lo hi fuel = some a → a ^ n = x
+  | 0, _, _, _, h => by simp [natRootGo] at h
+  | fuel + 1, lo, hi, a, h => by
+    simp only [natRootGo] at h
+    split at h
+    · split at h
+      · exact natRootGo_pow n x fuel _ _ _ h
+      · exact natRootGo_pow n x fuel _ _ _ h
+    · split at h
+      · rename_i heq; simp only [Option.some.injEq] at h; subst h; exact heq
+      · simp at h
+
+theorem natRoot_pow {n x a : ℕ} (hn : n ≠ 0) (h : natRoot n x = some a) : a ^ n = x := by
+  simp only [natRoot] at h
+  split at h
+  · rename_i hx
+    simp only [Option.some.injEq] at h
+    rw [h] at hx ⊢
+    rcases (show a = 0 ∨ a = 1 by omega) with rfl | rfl <;> simp [hn]
+  · exact natRootGo_pow n x _ _ _ _ h
+
+theorem exactRoot_spec {r : ℚ} {n : ℕ} {a : ℚ} (hn : n ≠ 0) (h : exactRoot r n = some a) :
+    0 ≤ a ∧ a ^ n = r := by
+  simp only [exactRoot] at h
+  split at h
+  · exact absurd h (by simp)
+  · rename_i hg
+    have hr : 0 ≤ r := by
+      by_contra hlt
+      push_neg at hlt
+      exact hg (by
+        first
+          | simp [hlt]
+          | rw [decide_eq_true hlt, Bool.true_or]
+          | simp [decide_eq_true hlt]
+          | exact Bool.or_eq_true _ _ ▸ Or.inl (decide_eq_true hlt))
+    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+    obtain ⟨p, hp, q, hq, ha⟩ := h
+    have hpn := natRoot_pow hn hp
+    have hqn := natRoot_pow hn hq
+    simp only [Option.some.injEq] at ha
+    subst ha
+    have hnum : ((r.num.natAbs : ℕ) : ℚ) = (r.num : ℚ) := by
+      obtain ⟨k, hk⟩ := Int.eq_ofNat_of_zero_le (Rat.num_nonneg.mpr hr)
+      rw [hk]; simp
+    rw [Rat.mkRat_eq_div]
+    refine ⟨by positivity, ?_⟩
+    rw [div_pow]
+    have e1 : ((p : ℤ) : ℚ) ^ n = (r.num : ℚ) := by rw [← hnum, ← hpn]; push_cast; ring
+    have e2 : ((q : ℕ) : ℚ) ^ n = (r.den : ℚ) := by rw [← hqn]; push_cast; ring
+    rw [e1, e2, Rat.num_div_den]
+
+theorem Q_cast_isInt {q : Q} (h : q.isInt = true) : (q.val : ℝ) = ((q.val.num : ℤ) : ℝ) := by
+  have hd : q.val.den = 1 := by simpa [Q.isInt] using h
+  rw [Rat.cast_def, hd]; norm_num
+
+theorem isPosNum_ne_zero {x : Expr} (h : isPosNum x = true) (ρ : EnvR) : evalR ρ x ≠ 0 := by
+  cases x <;> simp only [isPosNum, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true,
+    reduceCtorEq] at h
+  rename_i q
+  have : q.val ≠ 0 := by
+    intro hz; rw [show q.isZero = true by simp [Q.isZero, hz]] at h; simp at h
+  simpa using this
+
+theorem powerRules_soundR : RuleSoundR powerRules := by
+  intro e r h ρ
+  cases e <;> simp only [powerRules, powerApply, reduceCtorEq] at h
+  rename_i b x
+  simp only [powerAt] at h
+  split at h
+  · simp only [Option.some.injEq] at h; subst h; rename_i hz
+    rw [evalR_pow, evalR_of_isZero hz]
+    show _ = evalR ρ Expr.one
+    rw [evalR_one, Real.rpow_zero]
+  split at h
+  · simp only [Option.some.injEq] at h; subst h; rename_i h1
+    rw [evalR_pow, evalR_of_isOne h1, Real.rpow_one]
+  split at h
+  · simp only [Option.some.injEq] at h; subst h; rename_i h1
+    rw [evalR_pow, evalR_of_isOne h1]
+    show _ = evalR ρ Expr.one
+    rw [evalR_one, Real.one_rpow]
+  split at h
+  · simp only [Option.some.injEq] at h; subst h; rename_i h0
+    simp only [Bool.and_eq_true] at h0
+    rw [evalR_pow, evalR_of_isZero h0.1]
+    show _ = evalR ρ Expr.zero
+    rw [evalR_zero, Real.zero_rpow (isPosNum_ne_zero h0.2 ρ)]
+  · cases b with
+    | num p =>
+      cases x with
+      | num q =>
+        simp only [powerNum, powNumeric] at h
+        split at h
+        · simp only [Option.some.injEq] at h; subst h; rename_i hint
+          rw [evalR_pow, evalR_num, evalR_num, Q_cast_isInt hint, Real.rpow_intCast]
+          show _ = ((p.val ^ q.val.num : ℚ) : ℝ)
+          rw [Rat.cast_zpow]
+        · split at h
+          · rename_i hone
+            split at h
+            · rename_i rr hroot
+              simp only [Option.some.injEq] at h; subst h
+              obtain ⟨hnn, hpow⟩ := exactRoot_spec (Rat.den_nz q.val) hroot
+              have hnum1 : q.val.num = 1 := by simpa using hone
+              have hqv : (q.val : ℝ) = (((q.val.den : ℕ) : ℝ))⁻¹ := by
+                rw [Rat.cast_def, hnum1]; norm_num
+              rw [evalR_pow, evalR_num, evalR_num, hqv]
+              show (((p.val : ℚ) : ℝ)) ^ _ = ((rr : ℚ) : ℝ)
+              have hp : ((p.val : ℚ) : ℝ) = ((rr : ℚ) : ℝ) ^ (q.val.den) := by
+                rw [← hpow]; push_cast; ring
+              rw [hp]
+              exact Real.pow_rpow_inv_natCast (by exact_mod_cast hnn) (Rat.den_nz q.val)
+            · simp at h
+          · simp at h
+      | _ => simp [powerNum] at h
+    | pow b' m =>
+      cases x with
+      | num n' =>
+        cases m with
+        | num mq =>
+          simp only [powerNum] at h
+          split at h <;> simp only [Option.some.injEq, reduceCtorEq] at h
+          subst h; rename_i hint
+          simp only [Bool.and_eq_true] at hint
+          obtain ⟨hn', hm⟩ := hint
+          have hmn : ((mq * n' : Q).val : ℝ) = ((mq.val.num * n'.val.num : ℤ) : ℝ) := by
+            rw [Q_val_mul, Rat.cast_mul, Q_cast_isInt hm, Q_cast_isInt hn']; push_cast; ring
+          show ((evalR ρ b') ^ (evalR ρ (Expr.num mq))) ^ (evalR ρ (Expr.num n'))
+            = (evalR ρ b') ^ (evalR ρ (Expr.num (mq * n')))
+          rw [evalR_num, evalR_num, evalR_num, hmn, Q_cast_isInt hm, Q_cast_isInt hn',
+            Real.rpow_intCast, Real.rpow_intCast, Real.rpow_intCast, zpow_mul]
+        | _ => simp [powerNum] at h
+      | _ => simp [powerNum] at h
+    | _ => cases x <;> simp [powerNum] at h
+
+-- ---------------------------------------------------------------------------
+-- simp.collect-powers: sound exactly where the merged base is positive
+-- ---------------------------------------------------------------------------
+
+theorem evalR_addExp (ρ : EnvR) (x y : Expr) : evalR ρ (addExp x y) = evalR ρ x + evalR ρ y := by
+  cases x <;> cases y <;> simp [addExp]
+
+theorem evalR_baseExp {e b x : Expr} (h : baseExp e = (b, x)) (ρ : EnvR) :
+    evalR ρ e = (evalR ρ b) ^ (evalR ρ x) := by
+  rcases baseExp_cases e b x h with he | ⟨he, hx⟩
+  · rw [he, evalR_pow]
+  · rw [he, hx, evalR_one, Real.rpow_one]
+
+theorem mergePowers_soundR_on (ρ : EnvR) : ∀ (es l : List Expr) (t : Expr),
+    mergePowers es = some (l, t) → 0 < evalR ρ t → prodR ρ l = prodR ρ es
+  | [], _, _, h, _ => by simp [mergePowers] at h
+  | e :: rest, l, t, h, ht => by
+    simp only [mergePowers] at h
+    obtain ⟨b, x, hbx⟩ : ∃ b x, baseExp e = (b, x) := ⟨_, _, rfl⟩
+    rw [hbx] at h
+    simp only at h
+    split at h
+    · split at h
+      · rename_i f hf
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        have hp : Expr.equal (baseExp f).1 b = true := by simpa using List.find?_some hf
+        have hfb : baseExp f = (b, (baseExp f).2) := by rw [← Expr.equal_eq hp]
+        have h1 : prodR ρ rest
+            = evalR ρ f * prodR ρ (removeFirst (fun y => (baseExp y).1.equal b) rest) := by
+          rw [prodR_perm ρ (perm_find?_removeFirst _ rest f hf), prodR_cons]
+        rw [prodR_cons, prodR_cons, h1, evalR_baseExp hbx, evalR_baseExp hfb, evalR_pow,
+          evalR_addExp, Real.rpow_add ht]
+        ring
+      · simp only [Option.map_eq_some_iff] at h
+        obtain ⟨⟨l', t'⟩, hm, hl⟩ := h
+        simp only [Prod.mk.injEq] at hl
+        obtain ⟨rfl, rfl⟩ := hl
+        rw [prodR_cons, prodR_cons, mergePowers_soundR_on ρ rest l' t' hm ht]
+    · simp only [Option.map_eq_some_iff] at h
+      obtain ⟨⟨l', t'⟩, hm, hl⟩ := h
+      simp only [Prod.mk.injEq] at hl
+      obtain ⟨rfl, rfl⟩ := hl
+      rw [prodR_cons, prodR_cons, mergePowers_soundR_on ρ rest l' t' hm ht]
+
+/-- **`simp.collect-powers` is sound wherever the base it merged is positive.** -/
+theorem collectPowers_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
+    (h : collectPowers.apply e = some res)
+    (ht : ∀ es l t, e = .mul es → mergePowers es = some (l, t) → 0 < evalR ρ t) :
+    evalR ρ e = evalR ρ res.result := by
+  cases e <;> simp only [collectPowers, collectPowersApply, reduceCtorEq] at h
+  rename_i es
+  split at h
+  · rename_i l t hm
+    simp only [Option.some.injEq] at h; subst h
+    rw [evalR_mul, evalR_mul]
+    exact (mergePowers_soundR_on ρ es l t hm (ht es l t rfl hm)).symm
+  · simp at h
+
+/-- **…and it is not sound without that hypothesis.** At `x = 0` the rule turns `x·x⁻¹` into `x⁰`,
+that is `0` into `1`. This is the usual computer-algebra convention (`x/x` simplifies to `1`), so
+the engine keeps the rule; the point is that the assumption is now explicit. -/
+theorem not_collectPowers_soundR : ¬ RuleSoundR collectPowers := by
+  intro hs
+  have h := hs (.mul [.var "x", .pow (.var "x") (.num (Q.ofInt (-1)))]) _ rfl (fun _ => 0)
+  norm_num [evalR_mul, prodR_cons, prodR_nil, evalR_var, evalR_pow, evalR_num, Q_val_ofInt,
+    baseExp, addExp, Expr.one, removeFirst, Expr.equal, Expr.beq, Q_val_add, Q_val_one,
+    Real.rpow_zero] at h
+
+-- ---------------------------------------------------------------------------
+-- simp.function: sound except that `exp (ln x) ⟶ x` needs `0 < x`
+-- ---------------------------------------------------------------------------
+
+/-- The justification the rule actually needs for its `exp ∘ ln` case. -/
+theorem exp_log_sound {x : ℝ} (hx : 0 < x) : Real.exp (Real.log x) = x := Real.exp_log hx
+
+/-- **`simp.function` is not unconditionally sound over ℝ**: at `x = -1`, `exp (ln x)` is `1`,
+not `-1`, because `Real.log` is even. Every other case of the rule is unconditional. -/
+theorem not_functionRules_soundR : ¬ RuleSoundR functionRules := by
+  intro hs
+  have h := hs (.fn "exp" [.fn "ln" [.var "x"]]) _ rfl (fun _ => -1)
+  simp only [evalR_fn₁, applyFn_exp, applyFn_ln, evalR_var] at h
+  rw [show ((-1 : ℝ)) = -(1 : ℝ) by norm_num, Real.log_neg_eq_log, Real.log_one, Real.exp_zero] at h
+  norm_num at h
+
+-- ---------------------------------------------------------------------------
+-- The fold over the unconditionally sound rules
+-- ---------------------------------------------------------------------------
+
+/-- The subset of `simpRules` that is unconditionally sound over ℝ: everything except
+`simp.collect-powers` and `simp.function`, each of which needs a side condition (above). -/
+def simpRulesR : List (Rule simpW) := [flatten, identity, foldConstants, collectTerms, powerRules]
+
+theorem simpRulesR_soundR : ∀ r ∈ simpRulesR, RuleSoundR r := by
+  intro r hr
+  simp only [simpRulesR, List.mem_cons, List.not_mem_nil, or_false] at hr
+  rcases hr with rfl | rfl | rfl | rfl | rfl
+  · exact flatten_soundR
+  · exact identity_soundR
+  · exact foldConstants_soundR
+  · exact collectTerms_soundR
+  · exact powerRules_soundR
+
+/-- **Normalization with the unconditionally sound rules preserves the real value.** The proof is
+`normalize_sound_for` — the same fold M1 used for the integer fragment, reused at ℝ because
+`RewriteSound` is stated for an arbitrary `Congruence`. -/
+theorem normalizeR_sound (e : Expr) (s : Array Step) :
+    SemEqR e ((normalize simpRulesR e).run' s) :=
+  normalize_sound_for semEqRCongruence simpRulesR simpRulesR_soundR e s
 
 end MathProofs
 end

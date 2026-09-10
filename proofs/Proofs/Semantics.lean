@@ -47,7 +47,7 @@ mutual
     | .var x => ρ x
     | .add es => sumR ρ es
     | .mul es => prodR ρ es
-    | .pow b e => Real.rpow (evalR ρ b) (evalR ρ e)
+    | .pow b e => (evalR ρ b) ^ (evalR ρ e)
     | .fn f [a] => applyFn f (evalR ρ a)
     | .fn _ _ => 0
     | .matrix _ => 0
@@ -64,7 +64,7 @@ end
 @[simp] theorem evalR_add (ρ : EnvR) (es : List Expr) : evalR ρ (.add es) = sumR ρ es := rfl
 @[simp] theorem evalR_mul (ρ : EnvR) (es : List Expr) : evalR ρ (.mul es) = prodR ρ es := rfl
 @[simp] theorem evalR_pow (ρ : EnvR) (b e : Expr) :
-    evalR ρ (.pow b e) = Real.rpow (evalR ρ b) (evalR ρ e) := rfl
+    evalR ρ (.pow b e) = (evalR ρ b) ^ (evalR ρ e) := rfl
 @[simp] theorem evalR_fn₁ (ρ : EnvR) (f : String) (a : Expr) :
     evalR ρ (.fn f [a]) = applyFn f (evalR ρ a) := rfl
 @[simp] theorem evalR_matrix (ρ : EnvR) (rows : List (List Expr)) : evalR ρ (.matrix rows) = 0 := rfl

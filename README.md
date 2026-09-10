@@ -9,13 +9,17 @@ from was deleted after M2; its answers live on in `engine/Tests/golden.tsv`.
 packages/protocol       JSON-RPC contract + Transport abstraction (the seam everything hangs on)
 packages/engine-host    transports (worker / HTTP / WebSocket / stdio), HTTP host over the native engine, wasm worker glue
 engine/                 Lean engine: syntax, semantics, verified rewriter + rules, JSON, RPC, C shim, tests + golden
+proofs/                 separate Lake package, Mathlib only here: ℝ semantics and the rules' real soundness theorems
 apps/notebook           minimal shell (real design comes from the Claude Design export)
 book/                   SPIKE-RESULTS.md (milestone 0, done), M1-BRIEF.md (current), TRACKING.md
 scripts/                bundle.mjs (esbuild), build-wasm.sh (Lean → C → emcc), build-lean-wasm-runtime.sh (leanrt + Init for wasm32, from source)
 ```
 
-`npm install && npm run build && npm test` — TS. `cd engine && lake build` — Lean (toolchain
+`npm install && npm run build && npm test` — TS. `cd engine && lake build && lake test` — Lean (toolchain
 pinned in `engine/lean-toolchain`, currently v4.33.1; policy: latest stable). `npm run wasm` —
 builds the Lean runtime + Init for wasm32 from source on first run (~10 min, cached under
 `engine/toolchains/`), then links `apps/notebook/dist/engine-lean.{js,wasm}`; see `book/SPIKE-RESULTS.md`.
 Needs emsdk (`emcc`), elan, git.
+
+`cd proofs && lake exe cache get && lake build` — the theorems (Mathlib; the cache download is
+~5 GB, and Mathlib never enters the engine — `npm run check:engine` enforces that).

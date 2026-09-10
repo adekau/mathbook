@@ -41,6 +41,15 @@ differential test with zero mismatches.
   decreases a measure; `normalize` is well-founded on that measure and never `partial`. Where a
   rule set has no proven measure yet, the fallback is explicit fuel, recorded in
   `book/TRACKING.md` as debt to be paid in M5, never silently.
+- **Soundness is a fold, over whichever semantics you bring.** `RewriteSound.normalize_sound_for`
+  is stated for an abstract `Congruence` (reflexive, transitive, a congruence under `withChildren`,
+  invariant under `canon`). Supply those four facts for a new semantics and normalization's
+  soundness follows without touching the rewriter. The integer fragment and ℝ are two instances.
+- **A rule that needs a side condition says so.** Over ℝ, `simp.collect-powers` and part of
+  `simp.function` are only sound away from `0` (see `book/TRACKING.md`, M3). The engine keeps the
+  usual computer-algebra behaviour; `proofs/` states the hypothesis and *proves* that no
+  unconditional theorem exists. Silence is not an option: either a rule has an unconditional
+  theorem or its condition is written down.
 - **Two packages.** `engine/` is executable code and goes into the wasm build: it imports Init
   (Std/Batteries allowed) and never Mathlib. `proofs/` is theorems only, may be `noncomputable`,
   requires `engine/` and (from M3) Mathlib. `scripts/check-engine-deps.sh` enforces the split.
@@ -86,7 +95,13 @@ does not change.
 
 ## 7. Toolchain
 
-Lean is pinned in `engine/lean-toolchain` and `proofs/lean-toolchain` (kept equal). Policy: latest
-stable, bumped manually; from M3 the pin equals Mathlib's. The wasm runtime is built from source for
-the pinned tag (`scripts/build-lean-wasm-runtime.sh`, results in `book/SPIKE-RESULTS.md`), cached under
+Lean is pinned in `engine/lean-toolchain` and `proofs/lean-toolchain` (kept equal). Policy: the
+latest stable Lean for which a **Mathlib release tag** exists, bumped manually, with
+`proofs/lakefile.toml`'s Mathlib `rev` bumped in the same commit. Pin to the tag, not to `master`:
+Mathlib master tracks release candidates (it was on `v4.34.0-rc2` while stable was `v4.33.1`), and
+the tag `vX.Y.Z` is exactly the Mathlib that targets `leanprover/lean4:vX.Y.Z`.
+
+Mathlib lives only in `proofs/`. `lake exe cache get` there fetches prebuilt oleans (~5 GB;
+building from source takes hours). The wasm runtime is built from source for the pinned tag
+(`scripts/build-lean-wasm-runtime.sh`, results in `book/SPIKE-RESULTS.md`), cached under
 `engine/toolchains/<tag>` and keyed by tag.
