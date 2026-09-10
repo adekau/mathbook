@@ -2,14 +2,13 @@
 
 A Mathematica-like learning notebook (linear algebra → Calc IV) with "show work" mode, plus
 the zero-to-hero book written from building it. One math engine in Lean 4, verified, compiled
-to native (server / CLI) and wasm (web worker); a TypeScript reference engine kept only until
-the Lean engine reaches parity.
+to native (server / CLI) and wasm (web worker). The TypeScript reference engine it was ported
+from was deleted after M2; its answers live on in `engine/Tests/golden.tsv`.
 
 ```
 packages/protocol       JSON-RPC contract + Transport abstraction (the seam everything hangs on)
-packages/reference-ts   TS engine: traced rewriting, diff, simplify, linalg — 13 passing tests; oracle, not product
-packages/engine-host    transports (worker / HTTP / WebSocket / stdio), Node server, wasm worker glue
-engine/                 Lean engine: syntax, semantics, verified rules, JSON, RPC, C shim
+packages/engine-host    transports (worker / HTTP / WebSocket / stdio), HTTP host over the native engine, wasm worker glue
+engine/                 Lean engine: syntax, semantics, verified rewriter + rules, JSON, RPC, C shim, tests + golden
 apps/notebook           minimal shell (real design comes from the Claude Design export)
 book/                   SPIKE-RESULTS.md (milestone 0, done), M1-BRIEF.md (current), TRACKING.md
 scripts/                bundle.mjs (esbuild), build-wasm.sh (Lean → C → emcc), build-lean-wasm-runtime.sh (leanrt + Init for wasm32, from source)

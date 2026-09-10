@@ -13,7 +13,7 @@ async function connect() {
   client?.close();
   const mode = $<HTMLSelectElement>("#engine").value;
   $("#url").hidden = mode !== "http";
-  const workerFile = mode === "worker" ? "engine.worker.js" : mode === "lean-worker" ? "engine-lean.worker.js" : null;
+  const workerFile = mode === "lean-worker" ? "engine-lean.worker.js" : null;
   client = workerFile ? createClient(workerTransport(new Worker(workerFile))) : createClient(httpTransport($<HTMLInputElement>("#url").value));
   const t0 = performance.now();
   const caps = await client.call("engine.capabilities", {});

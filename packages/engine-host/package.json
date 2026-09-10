@@ -10,8 +10,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@mathbook/protocol": "0.1.0",
-    "@mathbook/reference-ts": "0.1.0"
+    "@mathbook/protocol": "0.1.0"
   },
   "exports": {
     ".": "./dist/index.js",

@@ -26,7 +26,10 @@ M1 Lean engine parity (book/M1-BRIEF.md) — IN PROGRESS.
       `handleS : Store → String → Store × String` is the entry point; the C shim keeps the store in a static,
       `Main.lean` threads it through the stdio loop. All 13 reference test groups pass in `lake test` (109 cases),
       plus the native stdio test and the wasm smoke test. M1 is complete; M2 (wire-level differential test) next.
-M2 wire-level differential test reference-ts ⇄ engine-lean; then delete reference-ts.
+M2 DONE 2026-09-10: wire-level differential test (scripts/difftest.mjs, 147 sources in one session, text + LaTeX with
+   paths + value trees + errors + bindings, zero mismatches) then reference-ts deleted. Its answers are `engine/Tests/golden.tsv`,
+   replayed by `lake test`. Found by the diff: matrix products must not be canonically sorted; `(ab)^n` and `(b^m)^n` with
+   symbolic `m` are parity rules in the fuel pipeline only. The HTTP host now fronts the native Lean engine.
 M3 Mathlib: semantics over ℝ (spec only, noncomputable); each `simp.*` rule gets a soundness theorem.
 M4 `HasDerivAt` proofs for each `diff.*` rule.
 M5 termination: measure-decreasing proof replaces the step budget (connects to the order-theory book).
