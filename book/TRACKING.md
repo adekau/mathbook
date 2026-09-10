@@ -16,10 +16,16 @@ M1 Lean engine parity (book/M1-BRIEF.md) — IN PROGRESS.
    3. DONE 2026-09-10: `MathEngine/SimpRules.lean` (seven `simp.*` rules as `Rule simpW`, termination proved per rule
       under weights num 2 / add,mul 4 / pow 5 / var,fn,matrix 8), `MathEngine/SimpSound.lean` (per-rule soundness on the
       integer fragment under the Option-valued `eval?`; `simplify_sound : Refines e (simplify0 e)` is the fold through
-      `normAt_sound` in `RewriteSound.lean`; axioms: propext, Quot.sound only). Derivations reach the work panel via
+      `normAt_sound` in `RewriteSound.lean`; axioms: propext, Classical.choice, Quot.sound). Derivations reach the work panel via
       `showWork`. Deviations from `simplify.ts`, all documented in the file header: bigBase guards on the collect rules,
       `(b^m)^n` only for numeric `m`, exact roots only with unit numerators, `(ab)^n` moved to the expand set.
-   4. `diff.*`, `la.*`, `rref`, session state through `handle`.
+   4. DONE 2026-09-10: `DiffRules.lean`, `LinAlg.lean` (matrix rules + step-recording `rref`), `ExpandRules.lean`,
+      `Numeric.lean` (`N`, `subst`; floats rounded to 15 significant digits like the reference), `Session.lean`
+      (commands as rules, `let` env, per-cell derivations, `explain` with the prefix heuristic). The pipeline
+      `cmd ++ diff ++ la ++ simp` runs on `normalizeFuel` (fuel 10 000, rule refusals become eval errors).
+      `handleS : Store → String → Store × String` is the entry point; the C shim keeps the store in a static,
+      `Main.lean` threads it through the stdio loop. All 13 reference test groups pass in `lake test` (109 cases),
+      plus the native stdio test and the wasm smoke test. M1 is complete; M2 (wire-level differential test) next.
 M2 wire-level differential test reference-ts ⇄ engine-lean; then delete reference-ts.
 M3 Mathlib: semantics over ℝ (spec only, noncomputable); each `simp.*` rule gets a soundness theorem.
 M4 `HasDerivAt` proofs for each `diff.*` rule.

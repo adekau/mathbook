@@ -6,6 +6,11 @@ import MathEngine.Rewrite
 import MathEngine.SimpRules
 import MathEngine.RewriteSound
 import MathEngine.SimpSound
+import MathEngine.ExpandRules
+import MathEngine.LinAlg
+import MathEngine.DiffRules
+import MathEngine.Numeric
+import MathEngine.Session
 import MathEngine.Json
 import MathEngine.Wire
 import MathEngine.Parser

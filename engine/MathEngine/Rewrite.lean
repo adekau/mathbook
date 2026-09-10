@@ -50,6 +50,9 @@ structure RuleResult where
   explanation : String
   /-- Steps taken inside this rewrite (e.g. the row operations behind an `rref` command). -/
   sub : Option Derivation := none
+  /-- A rule may refuse the whole evaluation (the reference throws, e.g. on a dimension mismatch).
+  Only `normalizeFuel` honours this; verified rule sets never set it. -/
+  error : Option String := none
 
 -- ---------------------------------------------------------------------------
 -- The measure
@@ -326,10 +329,12 @@ def fireP (rules : List PlainRule) (e : Expr) : Option (PlainRule × RuleResult)
   | [] => none
   | r :: rs => match r.apply e with | some res => some (r, res) | none => fireP rs e
 
-/-- Result of a fuel-bounded normalization. `exhausted` means a rule wanted to fire with no fuel left. -/
+/-- Result of a fuel-bounded normalization. `exhausted` means a rule wanted to fire with no fuel left;
+`error` is a rule's refusal (`RuleResult.error`). -/
 structure FuelState where
   steps : Array RawStep := #[]
   exhausted : Bool := false
+  error : Option String := none
 
 mutual
   def normAtF (rules : List PlainRule) (fuel : Nat) (e : Expr) (path : Path) (st : FuelState) : Expr × FuelState :=
@@ -337,9 +342,11 @@ mutual
     let e₀ := withChildren e cs
     let e₁ := canon e₀
     let st₁ := if equal e₁ e₀ then st₀ else { st₀ with steps := st₀.steps.push ⟨"simp.sort", true, "commutativity", path, e₁, none⟩ }
+    if st₁.error.isSome then (e₁, st₁) else
     match fireP rules e₁ with
     | none => (e₁, st₁)
     | some (rule, res) =>
+      if res.error.isSome then (e₁, { st₁ with error := res.error }) else
       match fuel with
       | 0 => (e₁, { st₁ with exhausted := true })
       | fuel' + 1 =>
@@ -363,12 +370,24 @@ mutual
     · exact Prod.Lex.right _ (Prod.Lex.left _ _ (by simp only [sizeList]; have := size_pos c; omega))
 end
 
-/-- Fuel-bounded normalization. Returns `none` if the fuel ran out. -/
-def normalizeFuel (rules : List PlainRule) (fuel : Nat) (e : Expr) : TraceM (Option Expr) := do
-  let (_, st) := normAtF rules fuel e [] {}
-  if st.exhausted then pure none else
-  let (steps, out) := buildSteps e st.steps
-  modify (· ++ steps)
-  pure (some out)
+/-- Fuel-bounded normalization. Fails if the fuel ran out or a rule refused. -/
+def normalizeFuel (rules : List PlainRule) (fuel : Nat) (e : Expr) : TraceM (Except String Expr) := do
+  let (out, st) := normAtF rules fuel e [] {}
+  match st.error with
+  | some msg => pure (.error msg)
+  | none =>
+    if st.exhausted then pure (.error s!"rewriting exceeded {fuel} steps (non-terminating rule set?)") else
+    let (steps, _) := buildSteps e st.steps
+    modify (· ++ steps)
+    pure (.ok out)
+
+/-- Run a nested normalization and package its steps as a sub-derivation (the reference's `trace.nested`). -/
+def nested (rules : List PlainRule) (fuel : Nat) (e : Expr) : Except String (Expr × Option Derivation) :=
+  match (normalizeFuel rules fuel e).run #[] with
+  | (.error msg, _) => .error msg
+  | (.ok out, steps) => .ok (out, if steps.isEmpty then none else some ⟨e, steps, out⟩)
+
+/-- A verified rule, forgetting its proof. -/
+def Rule.toPlain (r : Rule W) : PlainRule := { name := r.name, silent := r.silent, apply := r.apply }
 
 end MathEngine

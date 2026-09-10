@@ -20,6 +20,8 @@ for *all* inputs, not just normalized ones (`bigBase`), one case is dropped (`8^
 root with a non-unit numerator: same shape before and after), and `(ab)^n ⟶ a^n b^n` moves to the
 `expand` rule set because it duplicates the exponent and no additive measure can decrease.
 -/
+set_option linter.unusedSimpArgs false  -- the shared `rule_leaf` simp set is deliberately broad
+
 namespace MathEngine
 open Expr
 
@@ -183,8 +185,8 @@ def exactRoot (r : Rat) (n : Nat) : Option Rat :=
 -- ---------------------------------------------------------------------------
 
 def flattenApply : Expr → Option RuleResult
-  | .add es => if es.any isAdd then some ⟨.add (es.flatMap unAdd), "associativity", none⟩ else none
-  | .mul es => if es.any isMul then some ⟨.mul (es.flatMap unMul), "associativity", none⟩ else none
+  | .add es => if es.any isAdd then some ⟨.add (es.flatMap unAdd), "associativity", none, none⟩ else none
+  | .mul es => if es.any isMul then some ⟨.mul (es.flatMap unMul), "associativity", none, none⟩ else none
   | _ => none
 
 theorem ML_unAdd_le (e : Expr) : ML (unAdd e) ≤ M e := by
@@ -233,14 +235,14 @@ def flatten : Rule simpW where
 -- ---------------------------------------------------------------------------
 
 def identityApply : Expr → Option RuleResult
-  | .add [] => some ⟨Expr.zero, "An empty sum is 0.", none⟩
-  | .add [e] => some ⟨e, "A sum of one term is that term.", none⟩
-  | .add es => if es.any isZero then some ⟨addN (es.filter (fun e => !isZero e)), "$a + 0 = a$: zero is the additive identity.", none⟩ else none
-  | .mul [] => some ⟨Expr.one, "An empty product is 1.", none⟩
-  | .mul [e] => some ⟨e, "A product of one factor is that factor.", none⟩
+  | .add [] => some ⟨Expr.zero, "An empty sum is 0.", none, none⟩
+  | .add [e] => some ⟨e, "A sum of one term is that term.", none, none⟩
+  | .add es => if es.any isZero then some ⟨addN (es.filter (fun e => !isZero e)), "$a + 0 = a$: zero is the additive identity.", none, none⟩ else none
+  | .mul [] => some ⟨Expr.one, "An empty product is 1.", none, none⟩
+  | .mul [e] => some ⟨e, "A product of one factor is that factor.", none, none⟩
   | .mul es =>
-    if es.any isZero then some ⟨Expr.zero, "$a \\cdot 0 = 0$: zero annihilates products.", none⟩
-    else if es.any isOne then some ⟨mulN (es.filter (fun e => !isOne e)), "$a \\cdot 1 = a$: one is the multiplicative identity.", none⟩
+    if es.any isZero then some ⟨Expr.zero, "$a \\cdot 0 = 0$: zero annihilates products.", none, none⟩
+    else if es.any isOne then some ⟨mulN (es.filter (fun e => !isOne e)), "$a \\cdot 1 = a$: one is the multiplicative identity.", none, none⟩
     else none
   | _ => none
 
@@ -284,13 +286,13 @@ def foldApply : Expr → Option RuleResult
     let nums := es.filter isNum
     if 2 ≤ nums.length then
       some ⟨.add (.num (sumQ nums) :: es.filter (fun e => !isNum e)),
-        s!"Arithmetic on constants: {" + ".intercalate (nums.map Expr.toText)} = {(sumQ nums).toText}.", none⟩
+        s!"Arithmetic on constants: {" + ".intercalate (nums.map Expr.toText)} = {(sumQ nums).toText}.", none, none⟩
     else none
   | .mul es =>
     let nums := es.filter isNum
     if 2 ≤ nums.length then
       some ⟨.mul (.num (prodQ nums) :: es.filter (fun e => !isNum e)),
-        s!"Arithmetic on constants: {" × ".intercalate (nums.map Expr.toText)} = {(prodQ nums).toText}.", none⟩
+        s!"Arithmetic on constants: {" × ".intercalate (nums.map Expr.toText)} = {(prodQ nums).toText}.", none, none⟩
     else none
   | _ => none
 
@@ -329,21 +331,21 @@ def foldConstants : Rule simpW where
 -- ---------------------------------------------------------------------------
 
 def functionApply : Expr → Option RuleResult
-  | .fn "sqrt" [a] => some ⟨.pow a (.num (Q.ofRat (mkRat 1 2))), "$\\sqrt{a} = a^{1/2}$; we work with a single power form internally.", none⟩
+  | .fn "sqrt" [a] => some ⟨.pow a (.num (Q.ofRat (mkRat 1 2))), "$\\sqrt{a} = a^{1/2}$; we work with a single power form internally.", none, none⟩
   | .fn "ln" [a] =>
-    if isOne a then some ⟨Expr.zero, "$\\ln 1 = 0$.", none⟩ else
+    if isOne a then some ⟨Expr.zero, "$\\ln 1 = 0$.", none, none⟩ else
     match a with
-    | .fn "exp" [x] => some ⟨x, "$\\ln(e^x) = x$: ln and exp are inverses.", none⟩
-    | .pow b p => some ⟨.mul [p, .fn "ln" [b]], "$\\ln(b^p) = p \\ln b$.", none⟩
+    | .fn "exp" [x] => some ⟨x, "$\\ln(e^x) = x$: ln and exp are inverses.", none, none⟩
+    | .pow b p => some ⟨.mul [p, .fn "ln" [b]], "$\\ln(b^p) = p \\ln b$.", none, none⟩
     | _ => none
   | .fn "exp" [a] =>
-    if isZero a then some ⟨Expr.one, "$e^0 = 1$.", none⟩ else
+    if isZero a then some ⟨Expr.one, "$e^0 = 1$.", none, none⟩ else
     match a with
-    | .fn "ln" [x] => some ⟨x, "$e^{\\ln x} = x$: exp and ln are inverses.", none⟩
+    | .fn "ln" [x] => some ⟨x, "$e^{\\ln x} = x$: exp and ln are inverses.", none, none⟩
     | _ => none
-  | .fn "sin" [a] => if isZero a then some ⟨Expr.zero, "$\\sin 0 = 0$.", none⟩ else none
-  | .fn "cos" [a] => if isZero a then some ⟨Expr.one, "$\\cos 0 = 1$.", none⟩ else none
-  | .fn "abs" [.num q] => some ⟨.num q.abs, "Absolute value of a constant.", none⟩
+  | .fn "sin" [a] => if isZero a then some ⟨Expr.zero, "$\\sin 0 = 0$.", none, none⟩ else none
+  | .fn "cos" [a] => if isZero a then some ⟨Expr.one, "$\\cos 0 = 1$.", none, none⟩ else none
+  | .fn "abs" [.num q] => some ⟨.num q.abs, "Absolute value of a constant.", none, none⟩
   | _ => none
 
 /-- Closes a leaf of a rule proof: either the arm returned `none`, or substitute the result and
@@ -373,10 +375,10 @@ def functionRules : Rule simpW where
 
 /-- `p ^ q` for numerals: integer exponents evaluate; `p^(1/n)` evaluates when `p` is a perfect `n`-th power. -/
 def powNumeric (p q : Q) : Option RuleResult :=
-  if q.isInt then some ⟨.num (p.zpow q.val.num), s!"Evaluate the numeric power: {p.toText}^{q.toText} = {(p.zpow q.val.num).toText}.", none⟩
+  if q.isInt then some ⟨.num (p.zpow q.val.num), s!"Evaluate the numeric power: {p.toText}^{q.toText} = {(p.zpow q.val.num).toText}.", none, none⟩
   else if q.val.num == 1 then
     match exactRoot p.val q.val.den with
-    | some r => some ⟨.num (Q.ofRat r p.approx), s!"{p.toText} is a perfect {q.val.den}th power: ${p.toText}^\{1/{q.val.den}} = {r}$.", none⟩
+    | some r => some ⟨.num (Q.ofRat r p.approx), s!"{p.toText} is a perfect {q.val.den}th power: ${p.toText}^\{1/{q.val.den}} = {r}$.", none, none⟩
     | none => none
   else none
 
@@ -384,16 +386,16 @@ def powNumeric (p q : Q) : Option RuleResult :=
 def powerNum : Expr → Expr → Option RuleResult
   | .num p, .num q => powNumeric p q
   | .pow b' (.num m), .num n =>
-    if n.isInt && m.isInt then some ⟨.pow b' (.num (m * n)), "$(b^m)^n = b^{mn}$ for integer $n$.", none⟩ else none
+    if n.isInt && m.isInt then some ⟨.pow b' (.num (m * n)), "$(b^m)^n = b^{mn}$ for integer $n$.", none, none⟩ else none
   | _, _ => none
 
 def isPosNum : Expr → Bool | .num q => !q.isNeg && !q.isZero | _ => false
 
 def powerAt (b x : Expr) : Option RuleResult :=
-  if isZero x then some ⟨Expr.one, "$b^0 = 1$ (for the domain we work in, $b \\neq 0$).", none⟩
-  else if isOne x then some ⟨b, "$b^1 = b$.", none⟩
-  else if isOne b then some ⟨Expr.one, "$1^n = 1$.", none⟩
-  else if isZero b && isPosNum x then some ⟨Expr.zero, "$0^n = 0$ for $n > 0$.", none⟩
+  if isZero x then some ⟨Expr.one, "$b^0 = 1$ (for the domain we work in, $b \\neq 0$).", none, none⟩
+  else if isOne x then some ⟨b, "$b^1 = b$.", none, none⟩
+  else if isOne b then some ⟨Expr.one, "$1^n = 1$.", none, none⟩
+  else if isZero b && isPosNum x then some ⟨Expr.zero, "$0^n = 0$ for $n > 0$.", none, none⟩
   else powerNum b x
 
 def powerApply : Expr → Option RuleResult
@@ -429,7 +431,7 @@ def mergePowers : List Expr → Option (List Expr × Expr)
 def collectPowersApply : Expr → Option RuleResult
   | .mul es =>
     match mergePowers es with
-    | some (es', base) => some ⟨.mul es', s!"Same base ${base.toText}$: multiplying powers adds exponents, $b^m \\cdot b^n = b^\{m+n}$.", none⟩
+    | some (es', base) => some ⟨.mul es', s!"Same base ${base.toText}$: multiplying powers adds exponents, $b^m \\cdot b^n = b^\{m+n}$.", none, none⟩
     | none => none
   | _ => none
 
@@ -512,7 +514,7 @@ def mergeTerms : List Expr → Option (List Expr × Expr)
 def collectTermsApply : Expr → Option RuleResult
   | .add es =>
     match mergeTerms es with
-    | some (es', t) => some ⟨.add es', s!"Like terms share the same variable part, here ${t.toText}$; add their coefficients (distributive law $ax + bx = (a+b)x$).", none⟩
+    | some (es', t) => some ⟨.add es', s!"Like terms share the same variable part, here ${t.toText}$; add their coefficients (distributive law $ax + bx = (a+b)x$).", none, none⟩
     | none => none
   | _ => none
 

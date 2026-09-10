@@ -65,7 +65,7 @@ def parse (s : String) : Option Q := do
   | _ => none
 
 /-- `|q|` as `n × 10^(-k)` with exactly `p` significant digits in `n` (0 ↦ (0, 0)). -/
-private def sigDigits (a : Rat) (p : Nat) : Nat × Int := Id.run do
+def sigDigits (a : Rat) (p : Nat) : Nat × Int := Id.run do
   if a == 0 then return (0, 0)
   let tenPow (k : Int) : Rat := (10 : Rat) ^ k
   -- decimal exponent E of the leading digit: 10^E ≤ a < 10^(E+1)
@@ -114,6 +114,26 @@ def toDecimal (q : Q) (p : Nat := 15) : String :=
       let zeros := String.ofList (List.replicate (e.natAbs - 1) '0')
       "0." ++ zeros ++ trimFrac (str digits)
   sign ++ body
+
+/-- Round to `p` significant digits (exact rational result). -/
+def roundSig (q : Q) (p : Nat := 15) : Q :=
+  if q.val == 0 then q else
+  let (n, k) := sigDigits q.val.abs p
+  let r : Rat := (n : Rat) * (10 : Rat) ^ (-k)
+  ⟨if q.isNeg then -r else r, q.approx⟩
+
+/-- A float as an exact rational (doubles are dyadic), then rounded to 15 significant digits and
+flagged approximate — the reference's `floatToExpr` (`toPrecision(15)` then parse). -/
+def ofFloat (x : Float) : Option Q :=
+  if x.isNaN || x.isInf then none else
+  if x == 0 then some (ofRat 0 true) else
+  let a := x.abs
+  let (m, e) := a.frExp                       -- a = m · 2^e, m ∈ [0.5, 1)
+  let mant : Nat := (m * (2 : Float) ^ (53 : Float)).toUInt64.toNat
+  let r : Rat := (mant : Rat) * (2 : Rat) ^ (e - 53)
+  some (roundSig ⟨if x < 0 then -r else r, true⟩)
+
+def toFloat (q : Q) : Float := Float.ofInt q.val.num / Float.ofNat q.val.den
 
 def toText (q : Q) : String :=
   if q.approx then q.toDecimal

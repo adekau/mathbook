@@ -2,20 +2,21 @@ import MathEngine.Json
 import MathEngine.Wire
 import MathEngine.Parser
 import MathEngine.Print
-import MathEngine.SimpRules
+import MathEngine.Session
 /-!
 # JSON-RPC surface
 
-One pure function `handle : String → String`. Every host — the Emscripten worker, the
-native stdio server, a future HTTP server — is a shim around this function. Session
-state is threaded explicitly from M1 step 4; until then `evaluate` is stateless.
+One pure function `handleS : Store → String → Store × String`. Every host — the Emscripten worker,
+the native stdio server, a future HTTP server — is a shim around this function that keeps the
+`Store` between calls (the C shim holds it in a static; `Main.lean` threads it through its loop).
+The engine itself has no mutable state.
 -/
 namespace MathEngine
 open Json
 
 def capabilities : Json :=
   .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m1"), ("verified", .bool true),
-         ("features", .arr #[.str "simplify"])]
+         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric"])]
 
 def Rendered.toJson (e : Expr) (paths : Bool) : Json :=
   .obj #[("text", .str e.toText), ("latex", .str (e.toLatex paths))]
@@ -27,41 +28,62 @@ private def errorJson (code msg : String) (span : Option (Nat × Nat) := none) :
     | none => err
   .obj #[("ok", .bool false), ("error", .obj err)]
 
-def evaluate (params : Json) : Json :=
+private def pathOfJson : Json → Option Path
+  | .arr xs => xs.toList.mapM fun j => match j with | .num s => s.toNat? | _ => none
+  | _ => none
+
+def evaluate (st : Store) (params : Json) : Store × Json :=
   match params.getStr? "source" with
-  | none => errorJson "params" "missing source"
+  | none => (st, errorJson "params" "missing source")
   | some src =>
-    match parseStmt src with
-    | .error e => errorJson "syntax" e.message (some (e.start, e.stop))
-    | .ok stmt =>
-      let input := stmt.value
-      let (out, steps) := (simplify input).run #[]
+    let sessionId := (params.getStr? "sessionId").getD ""
+    let cellId := (params.getStr? "cellId").getD ""
+    let (s, r) := evaluateCell (st.get sessionId) cellId src
+    let st := st.set sessionId s
+    match r with
+    | .error (code, msg, span) => (st, errorJson code msg span)
+    | .ok (stmt, out, d) =>
       let paths := params.getBool "paths"
       let res := #[("ok", .bool true), ("value", out.toJson), ("rendered", Rendered.toJson out paths)]
-      let res := if params.getBool "showWork" then res.push ("derivation", (Derivation.mk input steps out).toJson) else res
+      let res := if params.getBool "showWork" then res.push ("derivation", d.toJson) else res
       let res := match stmt with
         | .«let» name _ => res.push ("bound", .arr #[.str name])
         | _ => res
-      .obj res
+      (st, .obj res)
 
-def dispatch (req : Json) : Json :=
+def explain (st : Store) (params : Json) : Except String Json := do
+  let sessionId := (params.getStr? "sessionId").getD ""
+  let cellId := (params.getStr? "cellId").getD ""
+  let path ← match params.get? "path" >>= pathOfJson with | some p => pure p | none => throw "missing or malformed path"
+  let (sub, steps) ← explainCell (st.get sessionId) cellId path
+  pure (.obj #[("subterm", sub.toJson), ("rendered", Rendered.toJson sub false), ("steps", .arr (steps.map Step.toJson))])
+
+def dispatch (st : Store) (req : Json) : Store × Json :=
   let id := (req.get? "id").getD .null
   let params := (req.get? "params").getD (.obj #[])
   let reply (r : Json) : Json := .obj #[("jsonrpc", .str "2.0"), ("id", id), ("result", r)]
   let fail (code : Int) (msg : String) : Json :=
     .obj #[("jsonrpc", .str "2.0"), ("id", id), ("error", .obj #[("code", .num (toString code)), ("message", .str msg)])]
   match req.getStr? "method" with
-  | some "engine.capabilities" => reply capabilities
-  | some "engine.evaluate" => reply (evaluate params)
-  | some "engine.resetSession" => reply (.obj #[("ok", .bool true)])
-  | some m => fail (-32601) s!"unknown method {m}"
-  | none => fail (-32600) "missing method"
+  | some "engine.capabilities" => (st, reply capabilities)
+  | some "engine.evaluate" => let (st, r) := evaluate st params; (st, reply r)
+  | some "engine.explain" =>
+    match explain st params with
+    | .ok r => (st, reply r)
+    | .error msg => (st, fail (-32000) msg)
+  | some "engine.resetSession" => (st.reset ((params.getStr? "sessionId").getD ""), reply (.obj #[("ok", .bool true)]))
+  | some m => (st, fail (-32601) s!"unknown method {m}")
+  | none => (st, fail (-32600) "missing method")
 
-/-- The single entry point. C symbol `mathengine_handle`, signature `lean_object* (lean_object*)`. -/
-@[export mathengine_handle]
-def handle (raw : String) : String :=
+/-- The single entry point. C symbol `mathengine_handle_state`: `lean_object* (lean_object* store, lean_object* request)`,
+returning the pair (new store, response). Both arguments are consumed. -/
+@[export mathengine_handle_state]
+def handleS (st : Store) (raw : String) : Store × String :=
   match Json.parse raw with
-  | .error msg => (Json.obj #[("jsonrpc", .str "2.0"), ("id", .null), ("error", .obj #[("code", .num "-32700"), ("message", .str msg)])]).render
-  | .ok req => (dispatch req).render
+  | .error msg => (st, (Json.obj #[("jsonrpc", .str "2.0"), ("id", .null), ("error", .obj #[("code", .num "-32700"), ("message", .str msg)])]).render)
+  | .ok req => let (st, r) := dispatch st req; (st, r.render)
+
+/-- Stateless convenience (fresh store) for tests. -/
+def handle (raw : String) : String := (handleS [] raw).2
 
 end MathEngine

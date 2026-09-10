@@ -48,14 +48,36 @@ def evalText (src : String) : String :=
 
 def qParse (s : String) : Q := (Q.parse s).getD default
 
+-- --- step 4: a stateful session for the engine tests -------------------------------------------
+/-- Evaluate in a persistent session through the RPC surface; returns the rendered text or the error. -/
+def sessionEval (st : Store) (src : String) (extra := "") : Store × String :=
+  let esc := src.replace "\\" "\\\\" |>.replace "\"" "\\\""
+  let (st, raw) := handleS st s!"\{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"engine.evaluate\",\"params\":\{\"sessionId\":\"t\",\"cellId\":\"{esc}\",\"source\":\"{esc}\"{extra}}}"
+  match Json.parse raw with
+  | .ok j =>
+    match j.get? "result" >>= (·.get? "rendered") >>= (·.getStr? "text") with
+    | some t => (st, t)
+    | none => match j.get? "result" >>= (·.get? "error") >>= (·.getStr? "message") with
+      | some m => (st, s!"<error: {m}>")
+      | none => match j.get? "error" >>= (·.getStr? "message") with
+        | some m => (st, s!"<rpc error: {m}>")
+        | none => (st, s!"<unexpected: {raw}>")
+  | .error m => (st, s!"<bad json: {m}>")
+
+/-- Rule names of a cell's derivation (needs `showWork`). -/
+def derivationRules (st : Store) (src : String) : List String :=
+  match (st.get "t").cells.lookup src with
+  | some cell => cell.derivation.steps.toList.map (·.rule)
+  | none => []
+
 -- --- step 2: the traced rewriter ---------------------------------------------------------
 /-- A toy verified rule: a one-element sum or product is that element. Under unit weights the
 node it removes weighs 1, so the obligation is immediate. -/
 def unwrap : Rule unitWeights where
   name := "test.unwrap"
   apply e := match e with
-    | .add [x] => some ⟨x, "A sum of one term is that term.", none⟩
-    | .mul [x] => some ⟨x, "A product of one factor is that factor.", none⟩
+    | .add [x] => some ⟨x, "A sum of one term is that term.", none, none⟩
+    | .mul [x] => some ⟨x, "A product of one factor is that factor.", none, none⟩
     | _ => none
   decreasing e r h := by
     cases e with
@@ -131,8 +153,8 @@ def tests : TestM Unit := do
     "test.unwrap@[0, 0] (x) -> (x), test.unwrap@[0] (x) -> x, test.unwrap@[] x -> x"
   check "rewrite: canonical order is silent" (derive [unwrap] (.add [y, x])).output.toText "x + y"
   check "rewrite: sums ordered by degree" (derive [unwrap] (.add [.ofInt 1, .pow x (.ofInt 2), .mul [.ofInt 3, x]])).output.toText "x^2 + 3*x + 1"
-  check "rewrite: fuel exhausted" (match (normalizeFuel [unwrapP] 0 (.add [x])).run' #[] with | some e => e.toText | none => "exhausted") "exhausted"
-  check "rewrite: fuel sufficient" (match (normalizeFuel [unwrapP] 5 (.mul [.add [.add [x]]])).run' #[] with | some e => e.toText | none => "exhausted") "x"
+  check "rewrite: fuel exhausted" (match (normalizeFuel [unwrapP] 0 (.add [x])).run' #[] with | .ok e => e.toText | .error _ => "exhausted") "exhausted"
+  check "rewrite: fuel sufficient" (match (normalizeFuel [unwrapP] 5 (.mul [.add [.add [x]]])).run' #[] with | .ok e => e.toText | .error _ => "exhausted") "x"
   -- step 3: simplify (rendered text after normalization, as the reference tests do)
   let simp (src : String) : String := match parse src with
     | .ok e => (simplify0 e).toText
@@ -167,6 +189,44 @@ def tests : TestM Unit := do
   let d := match parse "0*x + 1*y" with | .ok e => derive simpRules e | .error _ => default
   check "simp derivation rules" (", ".intercalate (d.steps.toList.map (·.rule))) "simp.identity, simp.identity, simp.identity"
   check "simp derivation before/after" (showSteps d) "simp.identity@[0] 0*x + 1*y -> 0 + 1*y, simp.identity@[1] 0 + 1*y -> 0 + y, simp.identity@[] y + 0 -> y"  -- canonical order (constants last) is silent
+  -- step 4: diff, linalg, session, show work, explain (through the stateful RPC surface)
+  let mut st : Store := []
+  let ev (st : Store) (src : String) : Store × String := sessionEval st src
+  let mut r := ""
+  (st, r) := ev st "diff(x^3, x)"; check "diff x^3" r "3*x^2"
+  (st, r) := ev st "diff(5, x)"; check "diff 5" r "0"
+  (st, r) := ev st "diff(sin(x^2), x)"; check "diff sin(x^2)" r "2*x*cos(x^2)"
+  (st, r) := ev st "diff(x*sin(x), x)"; check "diff x sin x" r "x*cos(x) + sin(x)"
+  (st, r) := ev st "diff(2^x, x)"; check "diff 2^x" r "2^x*ln(2)"
+  (st, r) := ev st "diff(x^x, x)"; check "diff x^x" r "x^x*(ln(x) + 1)"
+  (st, r) := ev st "diff(x^3, x, 2)"; check "diff x^3 twice" r "6*x"
+  (st, r) := ev st "diff(ln(x), x)"; check "diff ln x" r "1/x"
+  (st, r) := ev st "expand((x+1)^3)"; check "expand (x+1)^3" r "x^3 + 3*x^2 + 3*x + 1"
+  (st, r) := ev st "[1,2;3,4] * [5,6;7,8]"; check "la mul" r "[19, 22; 43, 50]"
+  (st, r) := ev st "det([1,2;3,4])"; check "la det 2" r "-2"
+  (st, r) := ev st "det([2,0,1;1,3,2;1,1,1])"; check "la det 3 zero" r "0"
+  (st, r) := ev st "det([1,2,3;4,5,6;7,8,10])"; check "la det 3" r "-3"
+  (st, r) := ev st "transpose([1,2,3;4,5,6])"; check "la transpose" r "[1, 4; 2, 5; 3, 6]"
+  (st, r) := ev st "rref([1,2,3;4,5,6;7,8,10])"; check "la rref" r "[1, 0, 0; 0, 1, 0; 0, 0, 1]"
+  (st, r) := ev st "rref([1,2;2,4])"; check "la rref rank 1" r "[1, 2; 0, 0]"
+  (st, r) := ev st "det([a,b;c,d])"; check "la det symbolic" r "a*d - b*c"
+  (st, r) := ev st "[1,2] * [1,2]"; check "la dimension error" r "<error: matrix product: 1×2 times 1×2 is undefined (inner dimensions must match)>"
+  (st, r) := ev st "let f = x^2 + 3x"; check "session let" r "x^2 + 3*x"
+  (st, r) := ev st "diff(f, x)"; check "session diff f" r "2*x + 3"
+  (st, r) := ev st "subst(f, x, 2)"; check "session subst" r "10"
+  (st, r) := ev st "N(pi)"; check "session N(pi)" r "3.14159265358979"
+  (st, r) := ev st "N(sqrt(2))"; check "N sqrt 2" r "1.4142135623731"
+  (st, r) := sessionEval st "diff(x^2 * sin(x), x)" ",\"showWork\":true"
+  let rules := derivationRules st "diff(x^2 * sin(x), x)"
+  checkTrue "show work: diff rules present" (rules.contains "diff.product" && rules.contains "diff.power" && rules.contains "diff.chain") (", ".intercalate rules)
+  (st, r) := sessionEval st "rref([1,2;3,4])" ",\"showWork\":true"
+  let rr := (st.get "t").cells.lookup "rref([1,2;3,4])"
+  check "show work: rref is a command step" ((rr.map fun c => (c.derivation.steps.toList.map (·.rule))).getD []).toString "[cmd.rref]"
+  checkTrue "show work: rref sub steps" ((rr.bind fun c => c.derivation.steps[0]? >>= (·.sub)).map (fun d => d.steps.toList.any (·.rule == "la.row-add")) |>.getD false)
+  let (st2, raw) := handleS st "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"engine.evaluate\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"source\":\"diff(x^3, x)\",\"showWork\":true,\"paths\":true}}"
+  checkTrue "show work: latex paths" ((raw.splitOn "\\htmlData{path=1.0}{x}").length > 1) raw
+  let (_, exraw) := handleS st2 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"engine.explain\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"path\":[1]}}"
+  checkTrue "explain: subterm x^2 with diff.power" ((exraw.splitOn "\"text\":\"x^2\"").length > 1 && (exraw.splitOn "diff.power").length > 1) exraw
   -- wire: RPC round trip
   checkTrue "capabilities" ((rpc "engine.capabilities" "{}").startsWith "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"engine\":\"engine-lean\"")
   check "rpc x + 0" (evalText "x + 0") "x"
