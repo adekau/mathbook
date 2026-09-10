@@ -47,6 +47,9 @@ def evalText (src : String) : String :=
       | none => s!"<unexpected: {raw}>"
   | .error m => s!"<bad json: {m}>"
 
+/-- Substring test, for assertions that should not depend on JSON field order. -/
+def contains (hay needle : String) : Bool := (hay.splitOn needle).length > 1
+
 def qParse (s : String) : Q := (Q.parse s).getD default
 
 -- --- step 4: a stateful session for the engine tests -------------------------------------------
@@ -231,8 +234,10 @@ def tests : TestM Unit := do
   -- wire: RPC round trip
   checkTrue "capabilities" ((rpc "engine.capabilities" "{}").startsWith "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"engine\":\"engine-lean\"")
   check "rpc x + 0" (evalText "x + 0") "x"
-  checkTrue "rpc derivation" ((rpc "engine.evaluate" "{\"source\":\"x + 0\",\"showWork\":true}").endsWith "\"derivation\":{\"input\":{\"k\":\"add\",\"args\":[{\"k\":\"var\",\"name\":\"x\"},{\"k\":\"num\",\"v\":{\"num\":\"0\",\"den\":\"1\"}}]},\"steps\":[{\"rule\":\"simp.identity\",\"explanation\":\"$a + 0 = a$: zero is the additive identity.\",\"path\":[],\"before\":{\"k\":\"add\",\"args\":[{\"k\":\"var\",\"name\":\"x\"},{\"k\":\"num\",\"v\":{\"num\":\"0\",\"den\":\"1\"}}]},\"after\":{\"k\":\"var\",\"name\":\"x\"}}],\"output\":{\"k\":\"var\",\"name\":\"x\"}}}}")
+  checkTrue "rpc derivation" (contains (rpc "engine.evaluate" "{\"source\":\"x + 0\",\"showWork\":true}") "\"derivation\":{\"input\":{\"k\":\"add\",\"args\":[{\"k\":\"var\",\"name\":\"x\"},{\"k\":\"num\",\"v\":{\"num\":\"0\",\"den\":\"1\"}}]},\"steps\":[{\"rule\":\"simp.identity\",\"explanation\":\"$a + 0 = a$: zero is the additive identity.\",\"path\":[],\"before\":{\"k\":\"add\",\"args\":[{\"k\":\"var\",\"name\":\"x\"},{\"k\":\"num\",\"v\":{\"num\":\"0\",\"den\":\"1\"}}]},\"after\":{\"k\":\"var\",\"name\":\"x\"}}],\"output\":{\"k\":\"var\",\"name\":\"x\"}}")
   check "rpc syntax error" (evalText "x +") "<error: unexpected end of input>"
+  checkTrue "rpc inputRendered" (contains (rpc "engine.evaluate" "{\"source\":\"x + 0\",\"showWork\":true}") "\"inputRendered\":{\"text\":\"x + 0\"")
+  checkTrue "rpc ruleStatus" (contains (rpc "engine.capabilities" "{}") "\"rule\":\"simp.collect-powers\",\"status\":\"conditional\"")
   checkTrue "rpc error span" ((rpc "engine.evaluate" "{\"source\":\"3 4\"}").endsWith "\"span\":{\"start\":2,\"end\":3}}}}")
   checkTrue "rpc value json" ((rpc "engine.evaluate" "{\"source\":\"2x\"}").startsWith "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"ok\":true,\"value\":{\"k\":\"mul\",\"args\":[{\"k\":\"num\",\"v\":{\"num\":\"2\",\"den\":\"1\"}},{\"k\":\"var\",\"name\":\"x\"}]}")
 

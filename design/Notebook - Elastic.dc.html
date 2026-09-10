@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap">
+<style>
+  html, body { height: 100%; overflow: hidden; margin: 0; }
+  body { background: #141519; color: #dfe5ef; font-family: Inter, system-ui, sans-serif; font-size: 14px; }
+  a { color: #36a2ef; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ::selection { background: rgba(54,162,239,0.3); }
+  :focus { outline: none; }
+  input.cellin::placeholder { color: #6a7076; }
+  *::-webkit-scrollbar { width: 12px; }
+  *::-webkit-scrollbar-thumb { background: #343741; border-radius: 6px; border: 3px solid transparent; background-clip: content-box; }
+  *::-webkit-scrollbar-track { background: transparent; }
+</style>
+</helmet>
+<div style="display:flex; flex-direction:column; height:100vh; background:#141519; color:#dfe5ef; font-family:Inter,system-ui,sans-serif; font-size:14px; overflow:hidden">
+
+  <div style="display:flex; align-items:center; gap:20px; height:48px; flex:0 0 48px; padding:0 16px; background:#1d1e24; border-bottom:1px solid #343741">
+    <div style="display:flex; align-items:center; gap:9px">
+      <span style="display:inline-block; width:16px; height:16px; border-radius:50%; background:#36a2ef"></span>
+      <span style="font-weight:700; font-size:14px; letter-spacing:-0.01em">Lemma</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:4px">
+      <sc-for list="{{ menus }}" as="m" hint-placeholder-count="5">
+        <span style-hover="background:#25262e; color:#dfe5ef" style="font-size:13px; color:#98a2b3; padding:5px 10px; border-radius:6px; cursor:default">{{ m }}</span>
+      </sc-for>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:#00bfb3; background:rgba(0,191,179,0.12); border-radius:6px; padding:4px 10px">
+      <span style="width:7px; height:7px; border-radius:50%; background:#00bfb3"></span>
+      <span style="white-space:nowrap">lemma-engine {{ kernelState }}</span>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:stretch; height:42px; flex:0 0 42px; padding:0 16px; background:#1d1e24; border-bottom:1px solid #343741; gap:22px">
+    <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="2">
+      <div onClick="{{ tb.onClick }}" style-hover="color:#dfe5ef" style="display:flex; align-items:center; cursor:pointer; font-size:13.5px; font-weight:{{ tb.weight }}; color:{{ tb.color }}; box-shadow:inset 0 -2px 0 {{ tb.mark }}">{{ tb.label }}</div>
+    </sc-for>
+    <div style="flex:1"></div>
+  </div>
+
+  <div style="flex:1; display:flex; align-items:stretch; min-height:0">
+
+    <div style="width:48px; flex:0 0 48px; background:#1d1e24; border-right:1px solid #343741; display:flex; flex-direction:column; align-items:center; padding-top:10px; gap:6px">
+      <sc-for list="{{ rails }}" as="rl" hint-placeholder-count="2">
+        <div onClick="{{ rl.onClick }}" title="{{ rl.label }}" style-hover="background:#25262e" style="width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600; color:{{ rl.color }}; background:{{ rl.bg }}">{{ rl.glyph }}</div>
+      </sc-for>
+    </div>
+
+    <div style="width:250px; flex:0 0 250px; background:#1d1e24; border-right:1px solid #343741; display:flex; flex-direction:column; min-height:0">
+      <div style="padding:16px 16px 10px; font-size:12px; font-weight:700; letter-spacing:0.02em; color:#dfe5ef">{{ sidebarTitle }}</div>
+      <div style="flex:1; overflow-y:auto; padding:0 8px 10px">
+        <sc-if value="{{ showOutline }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:1px">
+            <sc-for list="{{ outline }}" as="ol" hint-placeholder-count="4">
+              <div onClick="{{ ol.onClick }}" style-hover="background:#25262e" style="display:grid; grid-template-columns:38px minmax(0,1fr); gap:10px; align-items:center; padding:9px 10px; cursor:pointer; border-radius:6px; background:{{ ol.bg }}">
+                <span style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:11px; color:{{ ol.numColor }}">{{ ol.num }}</span>
+                <span style="min-width:0">
+                  <span style="display:block; font-size:13px; font-weight:{{ ol.weight }}; color:{{ ol.kindColor }}">{{ ol.kind }}</span>
+                  <span style="display:block; font-family:'Roboto Mono',ui-monospace,monospace; font-size:11px; color:#98a2b3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ ol.src }}</span>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showPalette }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:1px">
+            <sc-for list="{{ palette }}" as="pl" hint-placeholder-count="6">
+              <div onClick="{{ pl.onClick }}" style-hover="background:#25262e" style="padding:9px 10px; cursor:pointer; border-radius:6px">
+                <span style="display:block; font-size:13px; font-weight:600; color:#36a2ef">{{ pl.name }}</span>
+                <span style="display:block; font-family:'Roboto Mono',ui-monospace,monospace; font-size:11px; color:#98a2b3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ pl.sig }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div style="flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; background:#141519">
+
+      <sc-if value="{{ showToolbar }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:14px 20px 0">
+          <button onClick="{{ runActive }}" style-hover="background:#4db2f5" style="background:#36a2ef; border:0; border-radius:6px; color:#07101f; font-family:Inter,sans-serif; font-size:13px; font-weight:600; padding:8px 16px; cursor:pointer">Run</button>
+          <button onClick="{{ runAll }}" style-hover="background:rgba(54,162,239,0.1)" style="background:transparent; border:1px solid #36a2ef; border-radius:6px; color:#36a2ef; font-size:13px; font-weight:600; padding:8px 16px; cursor:pointer">Run all</button>
+          <button onClick="{{ clearOutputs }}" style-hover="background:rgba(152,162,179,0.1)" style="background:transparent; border:0; border-radius:6px; color:#98a2b3; font-size:13px; font-weight:600; padding:8px 12px; cursor:pointer">Clear outputs</button>
+          <button onClick="{{ addCell }}" style-hover="background:rgba(152,162,179,0.1)" style="background:transparent; border:0; border-radius:6px; color:#98a2b3; font-size:13px; font-weight:600; padding:8px 12px; cursor:pointer">+ Add cell</button>
+          <div style="flex:1"></div>
+          <span style="font-size:12px; color:#98a2b3">{{ toolbarHint }}</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showNotebook }}" hint-placeholder-val="{{ true }}">
+        <div ref="{{ scrollRef }}" onClick="{{ clearSel }}" style="flex:1; overflow-y:auto; min-height:0; padding:14px 20px 40px">
+          <div style="display:flex; flex-direction:column; gap:14px; max-width:1100px">
+            <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="3">
+              <div data-cell="{{ cell.i }}" onClick="{{ cell.onActivate }}" style="border-radius:6px; background:#1d1e24; border:1px solid {{ cell.border }}; box-shadow:0 0.7px 1.4px rgba(0,0,0,0.07), 0 1.9px 4px rgba(0,0,0,0.05), 0 4.5px 10px rgba(0,0,0,0.05); padding:18px 20px">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">
+                  <span style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:11.5px; color:#98a2b3">In [{{ cell.label }}]</span>
+                  <sc-if value="{{ cell.kindLabel }}" hint-placeholder-val="{{ true }}">
+                    <span onMouseEnter="{{ cell.onHoverKind }}" onMouseLeave="{{ leaveHover }}" onClick="{{ cell.onOpenDoc }}" style-hover="background:rgba(54,162,239,0.22)" style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:#7fc4f5; background:rgba(54,162,239,0.14); border:1px solid rgba(54,162,239,0.3); border-radius:999px; padding:2px 10px; cursor:help">{{ cell.kindLabel }}<span style="font-style:italic; opacity:0.8">i</span></span>
+                  </sc-if>
+                  <div style="flex:1"></div>
+                  <span style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:11px; color:#6a7076">{{ cell.timing }}</span>
+                  <span onClick="{{ cell.onRun }}" title="Run this cell" style-hover="background:rgba(54,162,239,0.14)" style="display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:6px; font-size:10px; color:#36a2ef; cursor:pointer">▶</span>
+                </div>
+
+                <input class="cellin" type="text" value="{{ cell.src }}" placeholder="{{ cell.placeholder }}" onChange="{{ cell.onChange }}" onKeyDown="{{ cell.onKey }}" onFocus="{{ cell.onFocus }}" onBlur="{{ blurCell }}" style="width:100%; box-sizing:border-box; background:#16171c; border:0; border-radius:6px; color:#dfe5ef; font-family:'Roboto Mono',ui-monospace,monospace; font-size:13.5px; padding:11px 13px; box-shadow:{{ cell.inputShadow }}" />
+
+                <sc-if value="{{ cell.inputEl }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-size:18px; color:#cdd4e0; margin-top:12px">{{ cell.inputEl }}</div>
+                </sc-if>
+
+                <sc-if value="{{ cell.err }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:14px; font-size:13px; line-height:1.6; color:#f7a5a5; background:rgba(255,102,102,0.1); border-left:2px solid #ff6666; border-radius:0 6px 6px 0; padding:11px 14px">{{ cell.err }}</div>
+                </sc-if>
+
+                <sc-if value="{{ cell.hasOut }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:16px; padding-top:16px; border-top:1px solid #343741">
+                    <div style="display:flex; align-items:baseline; gap:12px">
+                      <span style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:11.5px; color:#98a2b3">Out [{{ cell.label }}]</span>
+                      <span style="font-size:23px; color:#f5f7fa">{{ cell.resultEl }}</span>
+                    </div>
+                    <button onClick="{{ cell.toggleWork }}" style-hover="background:rgba(54,162,239,0.1)" style="margin-top:12px; background:transparent; border:0; border-radius:6px; color:#36a2ef; font-size:12.5px; font-weight:600; padding:4px 8px; margin-left:-8px; cursor:pointer">{{ cell.workLabel }}</button>
+                    <sc-if value="{{ cell.work }}" hint-placeholder-val="{{ true }}">
+                      <div style="margin-top:10px; border:1px solid #343741; border-radius:6px; overflow:hidden">
+                        <div style="display:grid; grid-template-columns:52px minmax(0,220px) minmax(0,1fr); gap:14px; padding:9px 14px; background:#25262e; font-size:11px; font-weight:700; letter-spacing:0.03em; text-transform:uppercase; color:#98a2b3">
+                          <span>Step</span><span>Rule</span><span>Expression</span>
+                        </div>
+                        <sc-for list="{{ cell.steps }}" as="st" hint-placeholder-count="3">
+                          <div onClick="{{ st.onSelectRow }}" style-hover="background:#212228" style="display:grid; grid-template-columns:52px minmax(0,220px) minmax(0,1fr); gap:14px; align-items:center; padding:11px 14px; border-top:1px solid #2c2e36; cursor:pointer; background:{{ st.bg }}">
+                            <span style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:11.5px; color:#98a2b3">{{ st.no }}</span>
+                            <span style="font-size:12.5px; font-weight:600; color:{{ st.ruleColor }}">{{ st.rule }}</span>
+                            <span style="font-size:17px; min-width:0; color:#cdd4e0">{{ st.el }}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showReference }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; overflow-y:auto; min-height:0; padding:18px 20px 40px">
+          <div style="max-width:1000px; display:flex; flex-direction:column; gap:12px">
+            <sc-for list="{{ reference }}" as="rf" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:minmax(0,210px) minmax(0,1fr); gap:22px; padding:18px 20px; border-radius:6px; background:#1d1e24; border:1px solid {{ rf.border }}">
+                <div>
+                  <div style="font-size:14px; font-weight:700; color:{{ rf.nameColor }}">{{ rf.name }}</div>
+                  <div style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:11.5px; color:#98a2b3; margin-top:5px">{{ rf.sig }}</div>
+                </div>
+                <div>
+                  <div style="font-size:13.5px; line-height:1.6; color:#cdd4e0; max-width:70ch">{{ rf.blurb }}</div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px">
+                    <sc-for list="{{ rf.examples }}" as="ex" hint-placeholder-count="2">
+                      <button onClick="{{ ex.onClick }}" style-hover="background:rgba(54,162,239,0.22)" style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:12px; color:#7fc4f5; background:rgba(54,162,239,0.14); border:0; border-radius:999px; padding:5px 12px; cursor:pointer">{{ ex.label }}</button>
+                    </sc-for>
+                  </div>
+                  <a href="{{ rf.ref }}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:12px; font-size:12.5px">Reference entry ↗</a>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="display:flex; flex-direction:column; flex:{{ panelFlex }}; min-height:0; background:#1d1e24; border-top:1px solid #343741">
+        <div style="display:flex; align-items:center; gap:22px; height:42px; flex:0 0 42px; padding:0 20px; border-bottom:1px solid #343741">
+          <sc-for list="{{ panelTabs }}" as="pt" hint-placeholder-count="2">
+            <div onClick="{{ pt.onClick }}" style-hover="color:#dfe5ef" style="display:flex; align-items:center; gap:8px; height:100%; cursor:pointer; font-size:13.5px; font-weight:{{ pt.weight }}; color:{{ pt.color }}; box-shadow:inset 0 -2px 0 {{ pt.mark }}">{{ pt.label }}<sc-if value="{{ pt.badge }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:600; color:#98a2b3; background:#25262e; border-radius:999px; padding:1px 8px">{{ pt.badge }}</span></sc-if></div>
+          </sc-for>
+          <div style="flex:1"></div>
+          <span onClick="{{ toggleExpand }}" style-hover="background:rgba(54,162,239,0.1)" style="cursor:pointer; color:#36a2ef; font-size:12.5px; font-weight:600; padding:5px 10px; border-radius:6px">{{ expandLabel }}</span>
+          <sc-if value="{{ showCollapse }}" hint-placeholder-val="{{ true }}">
+            <span onClick="{{ togglePanel }}" style-hover="background:rgba(152,162,179,0.1)" style="cursor:pointer; color:#98a2b3; font-size:12.5px; font-weight:600; padding:5px 10px; border-radius:6px">{{ panelToggleLabel }}</span>
+          </sc-if>
+        </div>
+
+        <div style="flex:{{ panelBodyFlex }}; height:{{ panelH }}; overflow-y:auto; transition:height 150ms ease">
+          <sc-if value="{{ showExplain }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr); gap:16px; padding:18px 20px">
+              <div>
+                <div style="font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#98a2b3; margin-bottom:12px">Selection</div>
+                <div style="font-size:24px; color:#f5f7fa; margin-bottom:14px">{{ selEl }}</div>
+                <div style="font-size:13px; font-weight:600; color:#36a2ef; margin-bottom:7px">{{ selKind }}</div>
+                <div style="font-size:13px; line-height:1.6; color:#cdd4e0">{{ selNote }}</div>
+                <sc-if value="{{ selRef }}" hint-placeholder-val="{{ false }}">
+                  <a href="{{ selRef }}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:11px; font-size:12.5px">Definition and identities ↗</a>
+                </sc-if>
+              </div>
+              <div>
+                <div style="font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#98a2b3; margin-bottom:12px">Derivation trail</div>
+                <sc-if value="{{ hasTrail }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; flex-direction:column; gap:5px; margin-bottom:13px">
+                    <sc-for list="{{ trail }}" as="tr" hint-placeholder-count="3">
+                      <div style="display:grid; grid-template-columns:18px minmax(0,1fr); gap:9px; align-items:baseline">
+                        <span style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:11px; color:#6a7076">{{ tr.no }}</span>
+                        <span style="font-size:13px; font-weight:{{ tr.weight }}; color:{{ tr.color }}">{{ tr.rule }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <div style="font-size:13px; line-height:1.6; color:#cdd4e0">{{ stepNote }}</div>
+              </div>
+              <div>
+                <div style="display:flex; align-items:center; gap:9px; margin-bottom:12px">
+                  <span style="font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:#98a2b3">{{ checkLabel }}</span>
+                  <sc-if value="{{ checkBadge }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:11px; font-weight:600; color:{{ checkBadgeColor }}; background:{{ checkBadgeBg }}; border-radius:999px; padding:2px 9px">{{ checkBadge }}</span>
+                  </sc-if>
+                </div>
+                <div style="font-size:13px; line-height:1.6; color:#cdd4e0; margin-bottom:12px">{{ checkText }}</div>
+                <sc-if value="{{ plotEl }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid #343741; border-radius:6px; padding:10px 12px; background:#16171c; display:inline-block">
+                    <div style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:10.5px; color:#98a2b3; margin-bottom:6px">{{ plotCaption }}</div>
+                    {{ plotEl }}
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ showHint }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:18px 20px; font-size:13px; color:#98a2b3; max-width:80ch; line-height:1.6">Click any symbol, factor, fraction, or whole line in a cell. This panel names the rule that produced it, the trail of rules leading up to it, and checks the result numerically.</div>
+          </sc-if>
+
+          <sc-if value="{{ showLog }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <sc-for list="{{ log }}" as="lg" hint-placeholder-count="3">
+                <div style="display:grid; grid-template-columns:84px 72px minmax(0,1fr); gap:14px; padding:9px 20px; border-bottom:1px solid #2c2e36; font-family:'Roboto Mono',ui-monospace,monospace; font-size:12px">
+                  <span style="color:#98a2b3">{{ lg.time }}</span>
+                  <span style="font-weight:600; color:{{ lg.tone }}">{{ lg.level }}</span>
+                  <span style="color:#cdd4e0; min-width:0">{{ lg.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:16px; height:28px; flex:0 0 28px; padding:0 16px; background:#1d1e24; border-top:1px solid #343741; color:#98a2b3; font-family:'Roboto Mono',ui-monospace,monospace; font-size:11.5px">
+    <span>{{ statusMode }}</span><span style="opacity:0.5">|</span>
+    <span>{{ statusCell }}</span><span style="opacity:0.5">|</span>
+    <span>{{ statusCells }}</span>
+    <div style="flex:1"></div>
+    <span style="color:#36a2ef">{{ statusRules }}</span><span style="opacity:0.5">|</span>
+    <span>exact arithmetic</span>
+  </div>
+
+  <sc-if value="{{ hoverDoc }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; left:{{ hoverX }}px; top:{{ hoverY }}px; width:340px; z-index:60; background:#25262e; border:1px solid #343741; border-radius:6px; box-shadow:0 12px 32px rgba(0,0,0,0.5); padding:16px 18px; pointer-events:none">
+      <div style="display:flex; align-items:center; gap:9px; margin-bottom:8px">
+        <span style="font-size:14px; font-weight:700">{{ hoverDoc.name }}</span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px; font-weight:600; color:#7fc4f5; background:rgba(54,162,239,0.14); border-radius:999px; padding:1px 8px">docs</span>
+      </div>
+      <div style="font-family:'Roboto Mono',ui-monospace,monospace; font-size:12px; color:#7fc4f5; margin-bottom:9px">{{ hoverDoc.sig }}</div>
+      <div style="font-size:13px; line-height:1.55; color:#cdd4e0">{{ hoverDoc.blurb }}</div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showTrail&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Explanation panel&quot;},&quot;plots&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Explanation panel&quot;}}">
+const THEME = { op:'rgba(223,229,239,0.7)', rule:'rgba(223,229,239,0.62)', fnColor:'#7fc4f5', bracket:'#6a7076',
+  selBg:'rgba(54,162,239,0.28)', selRing:'#36a2ef', hoverBg:'rgba(54,162,239,0.12)', plot:'#36a2ef', axis:'#3f434d', axis2:'#2c2e36' };
+
+const FNDOC = {
+  sin: { sig:'sin(x)', blurb:'Sine. Derivative cos x; antiderivative −cos x.', ref:'https://mathworld.wolfram.com/Sine.html' },
+  cos: { sig:'cos(x)', blurb:'Cosine. Derivative −sin x; antiderivative sin x.', ref:'https://mathworld.wolfram.com/Cosine.html' },
+  tan: { sig:'tan(x)', blurb:'Tangent. Derivative sec² x.', ref:'https://mathworld.wolfram.com/Tangent.html' },
+  exp: { sig:'exp(x)', blurb:'Its own derivative and its own antiderivative.', ref:'https://mathworld.wolfram.com/ExponentialFunction.html' },
+  ln: { sig:'ln(x)', blurb:'Natural logarithm. Derivative 1/x.', ref:'https://mathworld.wolfram.com/NaturalLogarithm.html' },
+  sqrt: { sig:'sqrt(x)', blurb:'Square root, i.e. x^(1/2).', ref:'https://mathworld.wolfram.com/SquareRoot.html' },
+  atan: { sig:'atan(x)', blurb:'Inverse tangent. Derivative 1/(1+x²).', ref:'https://mathworld.wolfram.com/InverseTangent.html' },
+};
+const SEEDS = [['integrate x sin(x) dx', true], ['d/dx sin(x) x^2', false], ['rref [[1,2,-1],[2,4,1],[3,6,2]]', false], ['eigen [[2,1],[1,2]]', false]];
+const REF_NAMES = ['Integrate', 'Derivative', 'Grad', 'RowReduce', 'Eigensystem', 'Det', 'MatrixRank', 'Simplify'];
+const MENUS = ['File', 'Edit', 'View', 'Run', 'Kernel', 'Help'];
+const INPUT_REST = 'inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 -2px 0 #343741';
+const INPUT_FOCUS = 'inset 0 0 0 1px rgba(54,162,239,0.4), inset 0 -2px 0 #36a2ef';
+
+class Component extends DCLogic {
+  state = { ready: false, cells: [], sel: null, hover: null, active: 0, mode: 'Command',
+    mainTab: 'notebook', panelTab: 'explain', panelOpen: true, panelExpanded: false, rail: 'outline', docFocus: null, log: [] };
+
+  componentDidMount() {
+    Promise.all([import('./engine.js'), import('./render.js')]).then(([E, R]) => {
+      this.E = E; this.R = R.makeRenderer(React, THEME); this.R.setEval(E.evalAt);
+      const log = [];
+      const cells = SEEDS.map(([src, work], i) => { const out = this.run(src); log.push(this.logLine(i + 1, out)); return { n: i + 1, src, work, ...out }; });
+      cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null, ms: null });
+      this.setState({ ready: true, cells, log: log.reverse(), active: 0 });
+    }).catch(e => this.setState({ ready: true, log: [{ time: this.now(), level: 'ERROR', tone: '#ff6666', text: String(e) }] }));
+  }
+  now() { const d = new Date(); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':'); }
+  logLine(n, out) {
+    if (out.err) return { time: this.now(), level: 'ERROR', tone: '#ff6666', text: 'In[' + n + '] ' + out.err };
+    if (!out.res) return { time: this.now(), level: 'INFO', tone: '#98a2b3', text: 'In[' + n + '] empty cell skipped' };
+    return { time: this.now(), level: 'OK', tone: '#00bfb3', text: 'In[' + n + '] ' + out.res.fnName + ' · ' + out.res.steps.length + ' rules · ' + out.ms + ' ms' };
+  }
+  run(src) {
+    if (!src.trim()) return { res: null, err: null, ms: null };
+    const t0 = performance.now();
+    try { return { res: this.E.evaluate(src), err: null, ms: (performance.now() - t0).toFixed(2) }; }
+    catch (e) { return { res: null, err: (e.message || String(e)) + ' — check the syntax, or open the reference tab.', ms: null }; }
+  }
+  setSrc(i, src) { this.setState(s => ({ cells: s.cells.map((c, j) => j === i ? { ...c, src } : c) })); }
+  evalCell(i) {
+    this.setState(s => {
+      const cells = s.cells.slice(); const c = cells[i]; if (!c) return {};
+      const out = this.run(c.src); const entry = this.logLine(c.n, out);
+      cells[i] = { ...c, ...out, work: out.res ? c.work : true };
+      if (cells[cells.length - 1].src.trim()) cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null, ms: null });
+      return { cells, sel: null, log: [entry, ...s.log].slice(0, 60), active: Math.min(i + 1, cells.length - 1) };
+    });
+  }
+  runAll() {
+    this.setState(s => {
+      const log = [];
+      const cells = s.cells.map(c => { if (!c.src.trim()) return c; const out = this.run(c.src); log.unshift(this.logLine(c.n, out)); return { ...c, ...out }; });
+      return { cells, sel: null, log: [...log.reverse(), ...s.log].slice(0, 60) };
+    });
+  }
+  insert(src) {
+    this.setState(s => {
+      const cells = s.cells.slice(); const i = cells.length - 1; const out = this.run(src);
+      cells[i] = { ...cells[i], src, ...out, work: true };
+      cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null, ms: null });
+      return { cells, sel: null, mainTab: 'notebook', panelExpanded: false, active: i, log: [this.logLine(cells[i].n, out), ...s.log].slice(0, 60) };
+    }, () => this.scrollToCell(this.state.cells.length - 2));
+  }
+  scrollToCell(i) { const box = this.scroller; if (!box) return; const el = box.querySelector('[data-cell="' + i + '"]'); if (el) box.scrollTop = Math.max(0, el.offsetTop - 20); }
+  hoverAt(name, el) { const r = el.getBoundingClientRect(); this.setState({ hover: { name, x: Math.min(r.left, window.innerWidth - 360), y: Math.max(8, r.top - 170) } }); }
+  mkOpts(key, cellIdx, stepIdx, meta) {
+    const sel = this.state.sel;
+    return { selected: sel && sel.key === key ? sel.mid : null,
+      onSelect: (mid, node) => this.setState({ sel: { key, mid, node, cellIdx, stepIdx, meta }, panelTab: 'explain', panelOpen: true, active: cellIdx }),
+      onHoverFn: (name, el) => { if (FNDOC[name]) this.hoverAt(name, el); },
+      onLeaveFn: () => this.setState({ hover: null }) };
+  }
+
+  renderVals() {
+    const S = this.state, R = this.R, E = this.E;
+    const clearSel = () => this.setState({ sel: null, hover: null });
+    const base = {
+      menus: MENUS, clearSel,
+      scrollRef: (el) => { this.scroller = el; },
+      leaveHover: () => this.setState({ hover: null }),
+      blurCell: () => this.setState({ mode: 'Command' }),
+      runActive: (e) => { e.stopPropagation(); this.evalCell(S.active); },
+      runAll: (e) => { e.stopPropagation(); this.runAll(); },
+      clearOutputs: (e) => { e.stopPropagation(); this.setState(s => ({ cells: s.cells.map(c => ({ ...c, res: null, err: null, ms: null })), sel: null })); },
+      addCell: (e) => { e.stopPropagation(); this.setState(s => ({ cells: [...s.cells, { n: s.cells.length + 1, src: '', work: true, res: null, err: null, ms: null }], active: s.cells.length })); },
+      togglePanel: () => this.setState(s => ({ panelOpen: !s.panelOpen })),
+      panelToggleLabel: S.panelOpen ? 'Collapse' : 'Expand',
+      showCollapse: !S.panelExpanded,
+      toggleExpand: () => this.setState(s => ({ panelExpanded: !s.panelExpanded, panelOpen: true })),
+      expandLabel: S.panelExpanded ? 'Restore' : 'Maximize',
+      toolbarHint: 'Enter runs the focused cell',
+      kernelState: 'idle',
+      rails: [{ label: 'Outline', glyph: '≡', key: 'outline' }, { label: 'Commands', glyph: 'ƒ', key: 'palette' }].map(r => ({
+        ...r, color: S.rail === r.key ? '#36a2ef' : '#98a2b3',
+        bg: S.rail === r.key ? 'rgba(54,162,239,0.14)' : 'transparent',
+        onClick: () => this.setState({ rail: r.key }) })),
+      sidebarTitle: S.rail === 'outline' ? 'Notebook outline' : 'Engine commands',
+      showOutline: S.rail === 'outline', showPalette: S.rail === 'palette',
+      tabs: [{ key: 'notebook', label: 'lesson-04.lemma' }, { key: 'reference', label: 'Reference' }].map(t => ({
+        label: t.label, weight: S.mainTab === t.key ? 700 : 500,
+        color: S.mainTab === t.key ? '#dfe5ef' : '#98a2b3',
+        mark: S.mainTab === t.key ? '#36a2ef' : 'transparent',
+        onClick: () => this.setState({ mainTab: t.key }) })),
+      showToolbar: !S.panelExpanded,
+      showNotebook: S.mainTab === 'notebook' && !S.panelExpanded,
+      showReference: S.mainTab === 'reference' && !S.panelExpanded,
+      panelFlex: S.panelExpanded ? '1 1 auto' : '0 0 auto',
+      panelBodyFlex: S.panelExpanded ? '1 1 auto' : '0 0 auto',
+      panelH: S.panelExpanded ? 'auto' : (S.panelOpen ? '236px' : '0px'),
+      log: S.log,
+      statusMode: 'Mode: ' + S.mode, statusCell: 'Cell ' + (S.active + 1), statusCells: S.cells.length + ' cells',
+    };
+    if (!S.ready || !R) return { ...base, cells: [], outline: [], palette: [], reference: [], panelTabs: [], showHint: true, statusRules: '0 rules applied', hoverDoc: null, hoverX: 0, hoverY: 0 };
+
+    const totalRules = S.cells.reduce((n, c) => n + (c.res ? c.res.steps.length : 0), 0);
+
+    const cells = S.cells.map((c, i) => {
+      const key = 'c' + i; const isActive = S.active === i;
+      let spec = c.res, inputEl = null, kindLabel = null;
+      if (!spec && c.src.trim()) { try { spec = E.interpret(c.src); } catch (e) { spec = null; } }
+      if (spec) { kindLabel = spec.fnName; try { inputEl = R.render(spec.input || spec.body, this.mkOpts(key + 'in', i, -1, null), key + 'in'); } catch (e) { inputEl = null; } }
+      const steps = c.res ? c.res.steps.map((st, k) => {
+        const sk = key + 's' + k; const selHere = S.sel && S.sel.key === sk;
+        return { no: k + 1, rule: st.rule, el: R.render(st.expr, this.mkOpts(sk, i, k, st), sk),
+          bg: selHere ? 'rgba(54,162,239,0.12)' : 'transparent',
+          ruleColor: selHere ? '#7fc4f5' : '#dfe5ef',
+          onSelectRow: (e) => { e.stopPropagation(); this.setState({ sel: { key: sk, mid: sk, node: st.expr, cellIdx: i, stepIdx: k, meta: st }, panelTab: 'explain', panelOpen: true, active: i }); } };
+      }) : [];
+      return { i, label: c.res ? String(c.n) : ' ', src: c.src, work: !!c.work, err: c.err,
+        placeholder: i === S.cells.length - 1 ? 'integrate x exp(x) dx' : '',
+        hasOut: !!c.res, kindLabel, inputEl, steps,
+        border: isActive ? '#36a2ef' : '#343741',
+        inputShadow: isActive ? INPUT_FOCUS : INPUT_REST,
+        timing: c.ms ? c.res.steps.length + ' rules · ' + c.ms + ' ms' : '',
+        resultEl: c.res ? R.render(c.res.result, this.mkOpts(key + 'out', i, c.res.steps.length - 1, c.res.steps[c.res.steps.length - 1]), key + 'out') : null,
+        workLabel: c.work ? 'Hide work' : 'Show work (' + steps.length + ' steps)',
+        onChange: (e) => this.setSrc(i, e.target.value),
+        onKey: (e) => { if (e.key === 'Enter') { e.preventDefault(); this.evalCell(i); } },
+        onFocus: () => this.setState({ active: i, mode: 'Edit' }),
+        onActivate: () => this.setState({ active: i }),
+        onRun: (e) => { e.stopPropagation(); this.evalCell(i); },
+        onHoverKind: (e) => { if (kindLabel && E.docFor(kindLabel)) this.hoverAt(kindLabel, e.currentTarget); },
+        onOpenDoc: (e) => { e.stopPropagation(); this.setState({ mainTab: 'reference', docFocus: kindLabel, hover: null, sel: null, panelExpanded: false }); },
+        toggleWork: (e) => { e.stopPropagation(); this.setState(s => ({ cells: s.cells.map((x, j) => j === i ? { ...x, work: !x.work } : x) })); } };
+    });
+
+    const outline = S.cells.map((c, i) => {
+      let kind = 'Empty cell';
+      if (c.res) kind = c.res.fnName; else if (c.err) kind = 'Error';
+      else if (c.src.trim()) { try { kind = E.interpret(c.src).fnName + ' (unrun)'; } catch (e) { kind = 'Unparsed'; } }
+      const on = S.active === i;
+      return { num: c.res ? '[' + c.n + ']' : '[ ]', kind, src: c.src || '—',
+        bg: on ? 'rgba(54,162,239,0.14)' : 'transparent', weight: on ? 700 : 500,
+        numColor: c.err ? '#ff8080' : c.res ? '#36a2ef' : '#98a2b3',
+        kindColor: c.err ? '#ff8080' : '#dfe5ef',
+        onClick: () => { this.setState({ active: i, mainTab: 'notebook', panelExpanded: false }); setTimeout(() => this.scrollToCell(i), 30); } };
+    });
+
+    const docs = REF_NAMES.map(n => E.docFor(n)).filter(Boolean);
+    const palette = docs.map(d => ({ name: d.name, sig: d.sig, onClick: () => this.insert(d.also[0]) }));
+    const reference = docs.map(d => ({ name: d.name, sig: d.sig, blurb: d.blurb, ref: d.ref,
+      border: S.docFocus === d.name ? '#36a2ef' : '#343741',
+      nameColor: S.docFocus === d.name ? '#7fc4f5' : '#dfe5ef',
+      examples: d.also.map(s => ({ label: s, onClick: () => this.insert(s) })) }));
+
+    let hoverDoc = null;
+    if (S.hover) { const d = E.docFor(S.hover.name) || (FNDOC[S.hover.name] && { name: S.hover.name, ...FNDOC[S.hover.name] }); if (d) hoverDoc = { name: d.name, sig: d.sig, blurb: d.blurb }; }
+
+    const panelTabs = [{ key: 'explain', label: 'Explanation' }, { key: 'log', label: 'Kernel log', badge: String(S.log.length) }].map(t => ({
+      label: t.label, badge: t.badge || null, weight: S.panelTab === t.key ? 700 : 500,
+      color: S.panelTab === t.key ? '#dfe5ef' : '#98a2b3',
+      mark: S.panelTab === t.key ? '#36a2ef' : 'transparent',
+      onClick: () => this.setState({ panelTab: t.key, panelOpen: true }) }));
+
+    const out = { ...base, cells, outline, palette, reference, panelTabs, hoverDoc,
+      hoverX: S.hover ? S.hover.x : 0, hoverY: S.hover ? S.hover.y : 0,
+      statusRules: totalRules + ' rules applied', showExplain: false, showLog: S.panelTab === 'log', showHint: false };
+
+    if (S.panelTab === 'log') return out;
+    const sel = S.sel;
+    if (!sel) return { ...out, showHint: true };
+
+    const cell = S.cells[sel.cellIdx]; const v = (cell && cell.res && cell.res.v) || 'x';
+    const desc = E.describe(sel.node, v) || {}; const res = cell && cell.res;
+    const trail = res ? res.steps.slice(0, Math.max(0, sel.stepIdx + 1)).map((st, k) => ({
+      no: k + 1, rule: st.rule, weight: k === sel.stepIdx ? 700 : 400,
+      color: k === sel.stepIdx ? '#7fc4f5' : '#98a2b3' })) : [];
+    const chk = res && res.check;
+    let plotEl = null, plotCaption = '';
+    if (this.props.plots === false) { /* off */ }
+    else if (E.hasVar(sel.node, v)) { try { plotEl = R.plot({ f: sel.node, v }, 240, 76); } catch (e) {} plotCaption = 'selection · ' + v + ' ∈ [−3, 3]'; }
+    else if (chk && chk.plot) { try { plotEl = R.plot({ f: chk.plot.fp || chk.plot.f, v }, 240, 76); } catch (e) {} plotCaption = 'result · ' + v + ' ∈ [−3, 3]'; }
+    let selNote = desc.note || '';
+    if (!E.hasVar(sel.node, v)) { const val = E.evalAt(sel.node, {}); if (isFinite(val) && sel.node.t !== 'num') selNote += ' Numerically it is ' + val + '.'; }
+    return { ...out, showExplain: true,
+      selEl: R.render(sel.node, { selected: null }, 'sel'),
+      selKind: desc.kind || 'Expression', selNote, selRef: desc.ref || null,
+      trail, hasTrail: (this.props.showTrail ?? true) && trail.length > 0,
+      stepNote: sel.meta ? sel.meta.note : 'This is the input line as the engine parsed it.',
+      checkLabel: chk ? chk.label : 'Sanity check',
+      checkText: chk ? chk.text : 'No numeric check applies to this result.',
+      checkBadge: chk && chk.ok !== undefined ? (chk.ok ? 'verified' : 'mismatch') : null,
+      checkBadgeColor: chk && chk.ok ? '#00bfb3' : '#f5a700',
+      checkBadgeBg: chk && chk.ok ? 'rgba(0,191,179,0.14)' : 'rgba(245,167,0,0.14)',
+      plotEl, plotCaption };
+  }
+}
+</script>
+</body>
+</html>

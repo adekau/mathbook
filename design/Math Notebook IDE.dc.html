@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  html, body { height: 100%; overflow: hidden; margin: 0; }
+  body { background: #0e0f14; color: #e3e4ec; font-family: Inter, system-ui, sans-serif; font-size: 13px; }
+  a { color: #b9a3ff; text-decoration: none; border-bottom: 1px solid rgba(185,163,255,0.35); }
+  a:hover { color: #d3c4ff; border-bottom-color: #d3c4ff; }
+  ::selection { background: rgba(124,92,252,0.32); }
+  :focus { outline: none; }
+  :focus-visible { outline: 1px solid #8a70ff; outline-offset: 1px; }
+  input.cellin::placeholder { color: #6e6e82; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb { background: #34374a; border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+  *::-webkit-scrollbar-thumb:hover { background: #464a63; background-clip: content-box; }
+  *::-webkit-scrollbar-track { background: transparent; }
+</style>
+</helmet>
+<div style="display:flex; flex-direction:column; height:100vh; background:#0e0f14; color:#e3e4ec; font-family:Inter,system-ui,sans-serif; font-size:13px; overflow:hidden">
+
+  <div style="display:flex; align-items:center; gap:16px; height:32px; flex:0 0 32px; padding:0 10px; background:#14151d; border-bottom:1px solid #2a2d3d">
+    <div style="display:flex; align-items:center; gap:7px">
+      <span style="display:inline-block; width:12px; height:12px; border-radius:3px; background:linear-gradient(140deg,#8a70ff,#5a3ecf)"></span>
+      <span style="font-weight:600; font-size:12.5px; letter-spacing:0.01em">Lemma · Datadog</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:1px">
+      <sc-for list="{{ menus }}" as="m" hint-placeholder-count="5">
+        <span style-hover="background:#1e2030; color:#e3e4ec" style="font-size:12px; color:#9b9bb0; padding:4px 9px; border-radius:4px; cursor:default">{{ m }}</span>
+      </sc-for>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:#9b9bb0; padding:3px 9px; border-radius:12px; background:#1a1c28; border:1px solid #2a2d3d">
+      <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:{{ kernelDot }}"></span>
+      <span>lemma-engine</span>
+      <span style="color:#5c5c72">·</span>
+      <span style="color:{{ kernelDot }}">{{ kernelState }}</span>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:stretch; height:34px; flex:0 0 34px; background:#14151d; border-bottom:1px solid #2a2d3d">
+    <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="2">
+      <div onClick="{{ tb.onClick }}" style-hover="background:{{ tb.hoverBg }}" style="display:flex; align-items:center; gap:9px; padding:0 15px; cursor:pointer; font-size:12px; background:{{ tb.bg }}; color:{{ tb.color }}; border-right:1px solid #2a2d3d; box-shadow:inset 0 -2px 0 {{ tb.mark }}">
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11.5px">{{ tb.label }}</span>
+        <span style-hover="color:#c7c7d6" style="color:#5c5c72; font-size:13px">×</span>
+      </div>
+    </sc-for>
+    <div style-hover="background:#1a1c28; color:#c7c7d6" style="display:flex; align-items:center; padding:0 12px; color:#7d7d92; font-size:15px; border-right:1px solid #2a2d3d; cursor:pointer">+</div>
+    <div style="flex:1"></div>
+  </div>
+
+  <div style="flex:1; display:flex; align-items:stretch; min-height:0">
+
+    <div style="width:40px; flex:0 0 40px; background:#14151d; border-right:1px solid #2a2d3d; display:flex; flex-direction:column; align-items:center; padding-top:8px; gap:4px">
+      <sc-for list="{{ rails }}" as="rl" hint-placeholder-count="2">
+        <div onClick="{{ rl.onClick }}" title="{{ rl.label }}" style-hover="background:{{ rl.hoverBg }}" style="width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; background:{{ rl.bg }}; color:{{ rl.color }}; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:12.5px; font-weight:600; border:1px solid {{ rl.border }}">{{ rl.glyph }}</div>
+      </sc-for>
+    </div>
+
+    <div style="width:232px; flex:0 0 232px; background:#131319; border-right:1px solid #2a2d3d; display:flex; flex-direction:column; min-height:0">
+      <div style="display:flex; align-items:center; height:30px; flex:0 0 30px; padding:0 13px; font-size:10.5px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#8a8aa0; background:#181a24; border-bottom:1px solid #2a2d3d">{{ sidebarTitle }}</div>
+      <div style="flex:1; overflow-y:auto; padding:7px 0">
+        <sc-if value="{{ showOutline }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <sc-for list="{{ outline }}" as="ol" hint-placeholder-count="4">
+              <div onClick="{{ ol.onClick }}" style-hover="background:#1c1e2c" style="display:grid; grid-template-columns:44px minmax(0,1fr); gap:8px; align-items:baseline; padding:5px 13px; cursor:pointer; background:{{ ol.bg }}; border-left:2px solid {{ ol.mark }}">
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px; color:{{ ol.numColor }}">{{ ol.num }}</span>
+                <span style="min-width:0">
+                  <span style="display:block; font-size:11px; color:{{ ol.kindColor }}; letter-spacing:0.02em">{{ ol.kind }}</span>
+                  <span style="display:block; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px; color:#8a8aa0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ ol.src }}</span>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showPalette }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <sc-for list="{{ palette }}" as="pl" hint-placeholder-count="6">
+              <div onClick="{{ pl.onClick }}" style-hover="background:#1c1e2c; border-left-color:#4a3fa0" style="padding:6px 13px; cursor:pointer; border-left:2px solid transparent">
+                <span style="display:block; font-size:11.5px; color:#b9a3ff; font-weight:500">{{ pl.name }}</span>
+                <span style="display:block; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px; color:#8a8aa0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ pl.sig }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div style="flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; background:#1a1b23">
+
+      <sc-if value="{{ showToolbar }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; align-items:center; gap:4px; height:36px; flex:0 0 36px; padding:0 10px; background:#181a24; border-bottom:1px solid #2a2d3d">
+          <button onClick="{{ runActive }}" style-hover="background:#7c4fe0; border-color:#7c4fe0" style="display:flex; align-items:center; gap:6px; background:#6c3fd1; border:1px solid #6c3fd1; border-radius:4px; color:#ffffff; font-family:Inter,sans-serif; font-size:11.5px; font-weight:500; padding:5px 10px; cursor:pointer">▶ Run</button>
+          <button onClick="{{ runAll }}" style-hover="background:#1e202e" style="background:transparent; border:1px solid #363a4d; border-radius:4px; color:#c7c7d6; font-size:11.5px; padding:5px 10px; cursor:pointer">▶▶ Run all</button>
+          <button onClick="{{ clearOutputs }}" style-hover="background:#1e202e" style="background:transparent; border:1px solid #363a4d; border-radius:4px; color:#9b9bb0; font-size:11.5px; padding:5px 10px; cursor:pointer">Clear outputs</button>
+          <div style="width:1px; height:18px; background:#2a2d3d; margin:0 6px"></div>
+          <button onClick="{{ addCell }}" style-hover="background:#1e202e" style="background:transparent; border:1px solid #363a4d; border-radius:4px; color:#9b9bb0; font-size:11.5px; padding:5px 10px; cursor:pointer">+ Cell</button>
+          <div style="flex:1"></div>
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px; color:#8a8aa0">{{ toolbarHint }}</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showNotebook }}" hint-placeholder-val="{{ true }}">
+        <div ref="{{ scrollRef }}" onClick="{{ clearSel }}" style="flex:1; overflow-y:auto; overflow-x:hidden; position:relative; min-height:0">
+          <div style="padding:18px 0 60px">
+            <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="3">
+              <div data-cell="{{ cell.i }}" onClick="{{ cell.onActivate }}" style="display:grid; grid-template-columns:4px 76px minmax(0,1fr) 28px; align-items:start; padding:9px 6px; background:{{ cell.bg }}; border-bottom:1px solid #22242f">
+                <div style="align-self:stretch; background:{{ cell.mark }}; border-radius:1px"></div>
+                <div style="text-align:right; padding:8px 10px 0 0; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px; color:{{ cell.promptColor }}">In [{{ cell.label }}]:</div>
+                <div style="min-width:0">
+                  <div style="display:flex; align-items:stretch; border:1px solid {{ cell.inputBorder }}; border-radius:5px; background:#101117; overflow:hidden; box-shadow:{{ cell.inputShadow }}">
+                    <div style="width:3px; background:{{ cell.langMark }}"></div>
+                    <input class="cellin" type="text" value="{{ cell.src }}" placeholder="{{ cell.placeholder }}" onChange="{{ cell.onChange }}" onKeyDown="{{ cell.onKey }}" onFocus="{{ cell.onFocus }}" onBlur="{{ blurCell }}" style="flex:1; min-width:0; background:transparent; border:0; color:#eef0f6; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:13px; line-height:1.5; padding:8px 11px" />
+                  </div>
+                  <div style="display:flex; align-items:center; gap:12px; min-height:24px; margin-top:8px; flex-wrap:wrap">
+                    <sc-if value="{{ cell.kindLabel }}" hint-placeholder-val="{{ true }}">
+                      <span onMouseEnter="{{ cell.onHoverKind }}" onMouseLeave="{{ leaveHover }}" onClick="{{ cell.onOpenDoc }}" style-hover="background:#24262e; border-color:#454854" style="display:inline-flex; align-items:center; gap:5px; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:#c3aeff; background:#1c1e26; border:1px solid #34363f; border-radius:3px; padding:2px 7px; cursor:help; flex:0 0 auto">{{ cell.kindLabel }}<span style="display:inline-flex; align-items:center; justify-content:center; width:12px; height:12px; border-radius:50%; border:1px solid #8a70ff; font-size:8px; font-style:italic; line-height:1">i</span></span>
+                    </sc-if>
+                    <div style="font-size:17px; color:#d6d7e4; min-width:0">{{ cell.inputEl }}</div>
+                  </div>
+
+                  <sc-if value="{{ cell.err }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:8px; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11.5px; line-height:1.6; color:#ff9aa4; background:#271219; border:1px solid #5c2530; border-left:3px solid #e5484d; border-radius:0 4px 4px 0; padding:7px 11px">{{ cell.err }}</div>
+                  </sc-if>
+
+                  <sc-if value="{{ cell.hasOut }}" hint-placeholder-val="{{ true }}">
+                    <div style="margin-top:11px; border:1px solid #262a38; border-radius:5px; background:#12131b; padding:10px 12px">
+                      <div style="display:flex; align-items:baseline; gap:10px">
+                        <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px; font-weight:600; color:#9d84ff; padding-top:4px">Out[{{ cell.label }}]:</span>
+                        <span style="font-size:21px; color:#eef0f6">{{ cell.resultEl }}</span>
+                      </div>
+                      <div style="display:flex; align-items:center; gap:10px; margin-top:9px">
+                        <button onClick="{{ cell.toggleWork }}" style-hover="background:#1e202e; color:#c7c7d6" style="background:transparent; border:1px solid #363a4d; border-radius:3px; color:#9b9bb0; font-size:10.5px; font-weight:500; letter-spacing:0.04em; text-transform:uppercase; padding:3px 8px; cursor:pointer">{{ cell.workLabel }}</button>
+                        <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:#6e6e82">{{ cell.timing }}</span>
+                      </div>
+                      <sc-if value="{{ cell.work }}" hint-placeholder-val="{{ true }}">
+                        <div style="margin-top:10px; border:1px solid #262a38; border-radius:4px; background:#0f1016; overflow:hidden">
+                          <sc-for list="{{ cell.steps }}" as="st" hint-placeholder-count="3">
+                            <div onClick="{{ st.onSelectRow }}" style-hover="background:#191b28" style="display:grid; grid-template-columns:34px minmax(0,210px) minmax(0,1fr); gap:12px; align-items:baseline; padding:8px 12px; border-top:1px solid {{ st.sep }}; background:{{ st.bg }}; cursor:pointer">
+                              <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:#8a8aa0; text-align:right">{{ st.no }}</span>
+                              <span style="font-size:11.5px; font-weight:500; color:{{ st.ruleColor }}; line-height:1.4">{{ st.rule }}</span>
+                              <span style="font-size:16px; min-width:0; color:#d6d7e4">{{ st.el }}</span>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                </div>
+                <div style="display:flex; justify-content:center; padding-top:8px">
+                  <span onClick="{{ cell.onRun }}" title="Run this cell" style-hover="color:#c3aeff" style="font-size:10px; color:#7d7d92; cursor:pointer">▶</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showReference }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; overflow-y:auto; min-height:0; padding:20px 26px 50px">
+          <div style="max-width:900px">
+            <div style="font-size:16px; font-weight:600; margin-bottom:4px">Engine reference</div>
+            <div style="font-size:12px; color:#9b9bb0; margin-bottom:18px; max-width:70ch">Every form the notebook's rule engine accepts. The engine is exact where it can be and says so plainly when a problem falls outside its rule set.</div>
+            <sc-for list="{{ reference }}" as="rf" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:minmax(0,200px) minmax(0,1fr); gap:20px; padding:15px; border:1px solid #262a38; border-radius:5px; margin-bottom:8px; background:{{ rf.bg }}">
+                <div>
+                  <div style="font-size:13px; font-weight:600; color:{{ rf.nameColor }}">{{ rf.name }}</div>
+                  <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:#9b9bb0; margin-top:3px">{{ rf.sig }}</div>
+                </div>
+                <div>
+                  <div style="font-size:12.5px; line-height:1.6; color:#c7c7d6; max-width:70ch">{{ rf.blurb }}</div>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:9px">
+                    <sc-for list="{{ rf.examples }}" as="ex" hint-placeholder-count="2">
+                      <button onClick="{{ ex.onClick }}" style-hover="background:#24262e; border-color:#454854" style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:#c3aeff; background:#1c1e26; border:1px solid #34363f; border-radius:3px; padding:3px 8px; cursor:pointer">{{ ex.label }}</button>
+                    </sc-for>
+                  </div>
+                  <a href="{{ rf.ref }}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:9px; font-size:11.5px">Reference entry ↗</a>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="display:flex; flex-direction:column; flex:{{ panelFlex }}; min-height:0; background:#131319; border-top:1px solid #2a2d3d">
+        <div style="display:flex; align-items:stretch; height:31px; flex:0 0 31px; background:#181a24; border-bottom:1px solid #2a2d3d">
+          <sc-for list="{{ panelTabs }}" as="pt" hint-placeholder-count="2">
+            <div onClick="{{ pt.onClick }}" style-hover="background:{{ pt.hoverBg }}" style="display:flex; align-items:center; gap:7px; padding:0 14px; cursor:pointer; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:{{ pt.color }}; box-shadow:inset 0 -2px 0 {{ pt.mark }}; background:{{ pt.bg }}">{{ pt.label }}<sc-if value="{{ pt.badge }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; color:#9b9bb0; background:#262a38; border-radius:8px; padding:1px 6px">{{ pt.badge }}</span></sc-if></div>
+          </sc-for>
+          <div style="flex:1"></div>
+          <div onClick="{{ toggleExpand }}" style-hover="background:#1e202e; color:#c7c7d6" style="display:flex; align-items:center; padding:0 13px; cursor:pointer; color:#9b9bb0; font-size:11px; font-family:'JetBrains Mono',ui-monospace,monospace">{{ expandLabel }}</div>
+          <sc-if value="{{ showCollapse }}" hint-placeholder-val="{{ true }}">
+            <div onClick="{{ togglePanel }}" style-hover="background:#1e202e; color:#c7c7d6" style="display:flex; align-items:center; padding:0 13px; cursor:pointer; color:#9b9bb0; font-size:11px; border-left:1px solid #2a2d3d">{{ panelToggleLabel }}</div>
+          </sc-if>
+        </div>
+
+        <div style="flex:{{ panelBodyFlex }}; height:{{ panelH }}; overflow-y:auto; background:#15161e; transition:height 150ms ease">
+          <sc-if value="{{ showExplain }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr); gap:0; min-height:100%">
+              <div style="padding:14px 17px; border-right:1px solid #262a38">
+                <div style="font-size:10px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:#8a8aa0; margin-bottom:10px">Selection</div>
+                <div style="font-size:22px; color:#eef0f6; margin-bottom:12px">{{ selEl }}</div>
+                <div style="font-size:12px; font-weight:500; color:#c3aeff; margin-bottom:6px">{{ selKind }}</div>
+                <div style="font-size:12px; line-height:1.6; color:#c7c7d6">{{ selNote }}</div>
+                <sc-if value="{{ selRef }}" hint-placeholder-val="{{ false }}">
+                  <a href="{{ selRef }}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:10px; font-size:11.5px">Definition and identities ↗</a>
+                </sc-if>
+              </div>
+              <div style="padding:14px 17px; border-right:1px solid #262a38">
+                <div style="font-size:10px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:#8a8aa0; margin-bottom:10px">Derivation trail</div>
+                <sc-if value="{{ hasTrail }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:11px">
+                    <sc-for list="{{ trail }}" as="tr" hint-placeholder-count="3">
+                      <div style="display:grid; grid-template-columns:16px 6px minmax(0,1fr); gap:7px; align-items:baseline">
+                        <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:#8a8aa0">{{ tr.no }}</span>
+                        <span style="width:5px; height:5px; border-radius:50%; background:{{ tr.dot }}; align-self:center"></span>
+                        <span style="font-size:12px; color:{{ tr.color }}">{{ tr.rule }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <div style="font-size:12px; line-height:1.6; color:#c7c7d6">{{ stepNote }}</div>
+              </div>
+              <div style="padding:14px 17px">
+                <div style="display:flex; align-items:center; gap:7px; margin-bottom:10px">
+                  <span style="font-size:10px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:#8a8aa0">{{ checkLabel }}</span>
+                  <sc-if value="{{ checkBadge }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:{{ checkBadgeColor }}; background:{{ checkBadgeBg }}; border:1px solid {{ checkBadgeColor }}; border-radius:3px; padding:1px 6px">{{ checkBadge }}</span>
+                  </sc-if>
+                </div>
+                <div style="font-size:12px; line-height:1.6; color:#c7c7d6; margin-bottom:11px">{{ checkText }}</div>
+                <sc-if value="{{ plotEl }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid #262a38; border-radius:4px; padding:8px 10px; background:#0f1016; display:inline-block">
+                    <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; color:#8a8aa0; margin-bottom:5px">{{ plotCaption }}</div>
+                    {{ plotEl }}
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ showHint }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:15px 17px; font-size:12px; color:#9b9bb0; max-width:80ch; line-height:1.6">Click any symbol, factor, fraction, or whole line in a cell. This panel names the rule that produced it, the trail of rules leading up to it, and checks the result numerically.</div>
+          </sc-if>
+
+          <sc-if value="{{ showLog }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:6px 0">
+              <sc-for list="{{ log }}" as="lg" hint-placeholder-count="3">
+                <div style="display:grid; grid-template-columns:76px 64px minmax(0,1fr); gap:12px; padding:4px 17px; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; border-bottom:1px solid #1c1e28">
+                  <span style="color:#9b9bb0">{{ lg.time }}</span>
+                  <span style="font-weight:600; color:{{ lg.tone }}">{{ lg.level }}</span>
+                  <span style="color:#c7c7d6; min-width:0">{{ lg.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:14px; height:24px; flex:0 0 24px; padding:0 12px; background:#14151d; color:#9b9bb0; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px; border-top:1px solid #2a2d3d">
+    <span>{{ statusMode }}</span>
+    <span style="opacity:0.55">|</span>
+    <span>{{ statusCell }}</span>
+    <span style="opacity:0.55">|</span>
+    <span>{{ statusCells }}</span>
+    <div style="flex:1"></div>
+    <span style="color:#c3aeff">{{ statusRules }}</span>
+    <span style="opacity:0.55">|</span>
+    <span>exact arithmetic</span>
+    <span style="opacity:0.55">|</span>
+    <span>Lemma 0.4</span>
+  </div>
+
+  <sc-if value="{{ hoverDoc }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; left:{{ hoverX }}px; top:{{ hoverY }}px; width:330px; z-index:60; background:#1c1d28; border:1px solid #3a3d52; border-radius:6px; box-shadow:0 14px 36px rgba(0,0,0,0.65); padding:13px 15px; pointer-events:none">
+      <div style="display:flex; align-items:center; gap:9px; margin-bottom:7px">
+        <span style="font-size:13px; font-weight:600">{{ hoverDoc.name }}</span>
+        <span style="flex:1"></span>
+        <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; border:1px solid #8a70ff; color:#8a70ff; font-size:10px; font-style:italic">i</span>
+      </div>
+      <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:#c3aeff; margin-bottom:8px">{{ hoverDoc.sig }}</div>
+      <div style="font-size:12px; line-height:1.55; color:#c7c7d6">{{ hoverDoc.blurb }}</div>
+      <div style="font-size:10.5px; color:#8a8aa0; margin-top:8px">Click the badge to open the reference tab</div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showTrail&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Explanation panel&quot;},&quot;plots&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Explanation panel&quot;}}">
+const THEME = {
+  op: 'rgba(227,228,236,0.68)',
+  rule: 'rgba(227,228,236,0.62)',
+  fnColor: '#c3aeff',
+  bracket: '#6f6f8a',
+  selBg: 'rgba(138,112,255,0.30)',
+  selRing: '#8a70ff',
+  hoverBg: 'rgba(138,112,255,0.15)',
+  plot: '#8a70ff',
+  axis: '#3a3d4e',
+  axis2: '#2a2d3a',
+};
+
+const FNDOC = {
+  sin: { sig: 'sin(x)', blurb: 'Sine. Derivative cos x; antiderivative −cos x. Periodic with period 2π and bounded by 1.', ref: 'https://mathworld.wolfram.com/Sine.html', also: ['d/dx sin(2x)', 'integrate sin(x) dx'] },
+  cos: { sig: 'cos(x)', blurb: 'Cosine. Derivative −sin x; antiderivative sin x.', ref: 'https://mathworld.wolfram.com/Cosine.html', also: ['d/dx cos(x)^2', 'integrate x cos(x) dx'] },
+  tan: { sig: 'tan(x)', blurb: 'Tangent, sin x / cos x. Derivative sec² x. Undefined at odd multiples of π/2.', ref: 'https://mathworld.wolfram.com/Tangent.html', also: ['d/dx tan(x)'] },
+  exp: { sig: 'exp(x)', blurb: 'The exponential function. It is its own derivative and its own antiderivative — the reason it appears in every solution of y′ = ky.', ref: 'https://mathworld.wolfram.com/ExponentialFunction.html', also: ['d/dx exp(3x)', 'integrate x exp(x) dx'] },
+  ln: { sig: 'ln(x)', blurb: 'Natural logarithm. Derivative 1/x, which is why ln|x| fills the gap the power rule leaves at n = −1.', ref: 'https://mathworld.wolfram.com/NaturalLogarithm.html', also: ['d/dx ln(x)/x', 'integrate 1/x dx'] },
+  sqrt: { sig: 'sqrt(x)', blurb: 'Square root, i.e. x^(1/2), so the power rule handles it directly.', ref: 'https://mathworld.wolfram.com/SquareRoot.html', also: ['d/dx sqrt(x)'] },
+  atan: { sig: 'atan(x)', blurb: 'Inverse tangent. Derivative 1/(1+x²), the standard form behind that integral.', ref: 'https://mathworld.wolfram.com/InverseTangent.html', also: ['integrate 1/(1+x^2) dx'] },
+  sec: { sig: 'sec(x)', blurb: 'Secant, 1/cos x. Appears as sec² x in the derivative of the tangent.', ref: 'https://mathworld.wolfram.com/Secant.html', also: ['d/dx tan(x)'] },
+};
+
+const SEEDS = [
+  ['integrate x sin(x) dx', true],
+  ['d/dx sin(x) x^2', false],
+  ['rref [[1,2,-1],[2,4,1],[3,6,2]]', false],
+  ['eigen [[2,1],[1,2]]', false],
+];
+
+const REF_NAMES = ['Integrate', 'Derivative', 'Grad', 'RowReduce', 'Eigensystem', 'Det', 'MatrixRank', 'Simplify'];
+const MENUS = ['File', 'Edit', 'View', 'Run', 'Kernel', 'Help'];
+
+class Component extends DCLogic {
+  state = { ready: false, cells: [], sel: null, hover: null, active: 0, mode: 'Command',
+    mainTab: 'notebook', panelTab: 'explain', panelOpen: true, panelExpanded: false, rail: 'outline', docFocus: null, log: [] };
+
+  componentDidMount() {
+    Promise.all([import('./engine.js'), import('./render.js')]).then(([E, R]) => {
+      this.E = E;
+      this.R = R.makeRenderer(React, THEME);
+      this.R.setEval(E.evalAt);
+      const log = [];
+      const cells = SEEDS.map(([src, work], i) => {
+        const out = this.run(src);
+        log.push(this.logLine(i + 1, src, out));
+        return { n: i + 1, src, work, ...out };
+      });
+      cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null, ms: null });
+      log.reverse();
+      this.setState({ ready: true, cells, log, active: 0 });
+    }).catch(e => this.setState({ ready: true, log: [{ time: this.now(), level: 'ERROR', tone: '#f0576a', text: String(e) }] }));
+  }
+
+  now() {
+    const d = new Date();
+    return [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':');
+  }
+
+  logLine(n, src, out) {
+    if (out.err) return { time: this.now(), level: 'ERROR', tone: '#f0576a', text: 'In[' + n + '] ' + out.err };
+    if (!out.res) return { time: this.now(), level: 'INFO', tone: '#8a8aa0', text: 'In[' + n + '] empty cell skipped' };
+    return { time: this.now(), level: 'OK', tone: '#3ddc84',
+      text: 'In[' + n + '] ' + out.res.fnName + ' · ' + out.res.steps.length + ' rule' + (out.res.steps.length === 1 ? '' : 's') + ' applied · ' + out.ms + ' ms' };
+  }
+
+  run(src) {
+    if (!src.trim()) return { res: null, err: null, ms: null };
+    const t0 = performance.now();
+    try {
+      const res = this.E.evaluate(src);
+      return { res, err: null, ms: (performance.now() - t0).toFixed(2) };
+    } catch (e) {
+      return { res: null, err: (e.message || String(e)) + ' — check the syntax, or open the reference tab for accepted forms.', ms: null };
+    }
+  }
+
+  setSrc(i, src) { this.setState(s => ({ cells: s.cells.map((c, j) => j === i ? { ...c, src } : c) })); }
+
+  evalCell(i) {
+    this.setState(s => {
+      const cells = s.cells.slice();
+      const c = cells[i];
+      if (!c) return {};
+      const out = this.run(c.src);
+      const entry = this.logLine(c.n, c.src, out);
+      cells[i] = { ...c, ...out, work: out.res ? c.work : true };
+      const last = cells[cells.length - 1];
+      if (last.src.trim()) cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null, ms: null });
+      return { cells, sel: null, log: [entry, ...s.log].slice(0, 60), active: Math.min(i + 1, cells.length - 1) };
+    });
+  }
+
+  runAll() {
+    this.setState(s => {
+      const log = [];
+      const cells = s.cells.map(c => {
+        if (!c.src.trim()) return c;
+        const out = this.run(c.src);
+        log.unshift(this.logLine(c.n, c.src, out));
+        return { ...c, ...out };
+      });
+      return { cells, sel: null, log: [...log.reverse(), ...s.log].slice(0, 60) };
+    });
+  }
+
+  insert(src) {
+    this.setState(s => {
+      const cells = s.cells.slice();
+      const i = cells.length - 1;
+      const out = this.run(src);
+      cells[i] = { ...cells[i], src, ...out, work: true };
+      cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null, ms: null });
+      return { cells, sel: null, mainTab: 'notebook', panelExpanded: false, active: i,
+        log: [this.logLine(cells[i].n, src, out), ...s.log].slice(0, 60) };
+    }, () => this.scrollToCell(this.state.cells.length - 2));
+  }
+
+  scrollToCell(i) {
+    const box = this.scroller;
+    if (!box) return;
+    const el = box.querySelector('[data-cell="' + i + '"]');
+    if (el) box.scrollTop = Math.max(0, el.offsetTop - 24);
+  }
+
+  hoverAt(name, el) {
+    const r = el.getBoundingClientRect();
+    this.setState({ hover: { name, x: Math.min(r.left, window.innerWidth - 350), y: Math.max(8, r.top - 170) } });
+  }
+
+  mkOpts(key, cellIdx, stepIdx, meta) {
+    const sel = this.state.sel;
+    return {
+      selected: sel && sel.key === key ? sel.mid : null,
+      onSelect: (mid, node) => this.setState({ sel: { key, mid, node, cellIdx, stepIdx, meta }, panelTab: 'explain', panelOpen: true, active: cellIdx }),
+      onHoverFn: (name, el) => { if (FNDOC[name]) this.hoverAt(name, el); },
+      onLeaveFn: () => this.setState({ hover: null }),
+    };
+  }
+
+  renderVals() {
+    const S = this.state;
+    const R = this.R, E = this.E;
+    const clearSel = () => this.setState({ sel: null, hover: null });
+    const base = {
+      menus: MENUS,
+      clearSel,
+      scrollRef: (el) => { this.scroller = el; },
+      leaveHover: () => this.setState({ hover: null }),
+      blurCell: () => this.setState({ mode: 'Command' }),
+      runActive: (e) => { e.stopPropagation(); this.evalCell(S.active); },
+      runAll: (e) => { e.stopPropagation(); this.runAll(); },
+      clearOutputs: (e) => { e.stopPropagation(); this.setState(s => ({ cells: s.cells.map(c => ({ ...c, res: null, err: null, ms: null })), sel: null, log: [{ time: this.now(), level: 'INFO', tone: '#8a8aa0', text: 'All outputs cleared' }, ...s.log] })); },
+      addCell: (e) => { e.stopPropagation(); this.setState(s => ({ cells: [...s.cells, { n: s.cells.length + 1, src: '', work: true, res: null, err: null, ms: null }], active: s.cells.length })); },
+      togglePanel: () => this.setState(s => ({ panelOpen: !s.panelOpen })),
+      panelToggleLabel: S.panelOpen ? '▾ Collapse' : '▴ Expand',
+      showCollapse: !S.panelExpanded,
+      toggleExpand: () => this.setState(s => ({ panelExpanded: !s.panelExpanded, panelOpen: true })),
+      expandLabel: S.panelExpanded ? '⤡ Restore' : '⤢ Maximize',
+      toolbarHint: 'Enter runs the focused cell',
+      kernelState: 'idle', kernelDot: '#3ddc84',
+      rails: [
+        { label: 'Outline', glyph: '≡', key: 'outline' },
+        { label: 'Commands', glyph: 'ƒ', key: 'palette' },
+      ].map(r => ({ ...r,
+        bg: S.rail === r.key ? '#1e2028' : 'transparent',
+        color: S.rail === r.key ? '#c3aeff' : '#8a8aa0',
+        border: 'transparent',
+        hoverBg: S.rail === r.key ? '#1e2028' : '#1c1e2c',
+        onClick: () => this.setState({ rail: r.key }) })),
+      sidebarTitle: S.rail === 'outline' ? 'Notebook outline' : 'Engine commands',
+      showOutline: S.rail === 'outline', showPalette: S.rail === 'palette',
+      tabs: [
+        { key: 'notebook', label: 'lesson-04.lemma' },
+        { key: 'reference', label: 'reference' },
+      ].map(t => ({ label: t.label,
+        bg: S.mainTab === t.key ? '#1a1b23' : 'transparent',
+        color: S.mainTab === t.key ? '#eef0f6' : '#9b9bb0',
+        mark: S.mainTab === t.key ? '#8a70ff' : 'transparent',
+        hoverBg: S.mainTab === t.key ? '#1a1b23' : '#1a1c28',
+        onClick: () => this.setState({ mainTab: t.key }) })),
+      showToolbar: !S.panelExpanded,
+      showNotebook: S.mainTab === 'notebook' && !S.panelExpanded,
+      showReference: S.mainTab === 'reference' && !S.panelExpanded,
+      panelFlex: S.panelExpanded ? '1 1 auto' : '0 0 auto',
+      panelBodyFlex: S.panelExpanded ? '1 1 auto' : '0 0 auto',
+      panelH: S.panelExpanded ? 'auto' : (S.panelOpen ? '220px' : '0px'),
+      log: S.log.map(l => ({ time: l.time, level: l.level, tone: l.tone, text: l.text })),
+      statusMode: 'Mode: ' + S.mode,
+      statusCell: 'Cell ' + (S.active + 1),
+      statusCells: S.cells.length + ' cells',
+    };
+    if (!S.ready || !R) {
+      return { ...base, cells: [], outline: [], palette: [], reference: [], panelTabs: [], showHint: true,
+        statusRules: '0 rules applied', hoverDoc: null, hoverX: 0, hoverY: 0 };
+    }
+
+    const totalRules = S.cells.reduce((n, c) => n + (c.res ? c.res.steps.length : 0), 0);
+
+    const cells = S.cells.map((c, i) => {
+      const key = 'c' + i;
+      const isActive = S.active === i;
+      let spec = c.res, inputEl = null, kindLabel = null;
+      if (!spec && c.src.trim()) { try { spec = E.interpret(c.src); } catch (e) { spec = null; } }
+      if (spec) {
+        kindLabel = spec.fnName;
+        try { inputEl = R.render(spec.input || spec.body, this.mkOpts(key + 'in', i, -1, null), key + 'in'); } catch (e) { inputEl = null; }
+      }
+      const steps = c.res ? c.res.steps.map((st, k) => {
+        const sk = key + 's' + k;
+        const selHere = S.sel && S.sel.key === sk;
+        return {
+          no: k + 1, rule: st.rule,
+          el: R.render(st.expr, this.mkOpts(sk, i, k, st), sk),
+          sep: k === 0 ? 'transparent' : '#262a38',
+          bg: selHere ? '#241c40' : 'transparent',
+          ruleColor: selHere ? '#c3aeff' : '#9b9bb0',
+          onSelectRow: (e) => { e.stopPropagation(); this.setState({ sel: { key: sk, mid: sk, node: st.expr, cellIdx: i, stepIdx: k, meta: st }, panelTab: 'explain', panelOpen: true, active: i }); },
+        };
+      }) : [];
+      return {
+        i, label: c.res ? String(c.n) : ' ', src: c.src, work: !!c.work, err: c.err,
+        placeholder: i === S.cells.length - 1 ? 'integrate x exp(x) dx' : '',
+        hasOut: !!c.res, kindLabel, inputEl, steps,
+        bg: isActive ? '#1c1d2c' : 'transparent',
+        mark: isActive ? '#8a70ff' : 'transparent',
+        promptColor: c.res ? '#c3aeff' : '#8a8aa0',
+        inputBorder: isActive ? '#5a4fb8' : '#2a2d3d',
+        inputShadow: isActive ? '0 0 0 1px rgba(138,112,255,0.25)' : 'none',
+        langMark: c.err ? '#e5484d' : c.res ? '#8a70ff' : '#2e3040',
+        timing: c.ms ? c.res.steps.length + ' rules · ' + c.ms + ' ms' : '',
+        resultEl: c.res ? R.render(c.res.result, this.mkOpts(key + 'out', i, c.res.steps.length - 1, c.res.steps[c.res.steps.length - 1]), key + 'out') : null,
+        workLabel: c.work ? '▾ Work' : '▸ Work (' + steps.length + ')',
+        onChange: (e) => this.setSrc(i, e.target.value),
+        onKey: (e) => { if (e.key === 'Enter') { e.preventDefault(); this.evalCell(i); } },
+        onFocus: () => this.setState({ active: i, mode: 'Edit' }),
+        onActivate: () => this.setState({ active: i }),
+        onRun: (e) => { e.stopPropagation(); this.evalCell(i); },
+        onHoverKind: (e) => { if (kindLabel && E.docFor(kindLabel)) this.hoverAt(kindLabel, e.currentTarget); },
+        onOpenDoc: (e) => { e.stopPropagation(); this.setState({ mainTab: 'reference', docFocus: kindLabel, hover: null, sel: null, panelExpanded: false }); },
+        toggleWork: (e) => { e.stopPropagation(); this.setState(s => ({ cells: s.cells.map((x, j) => j === i ? { ...x, work: !x.work } : x) })); },
+      };
+    });
+
+    const outline = S.cells.map((c, i) => {
+      let kind = 'Empty cell';
+      if (c.res) kind = c.res.fnName;
+      else if (c.err) kind = 'Error';
+      else if (c.src.trim()) { try { kind = E.interpret(c.src).fnName + ' (unrun)'; } catch (e) { kind = 'Unparsed'; } }
+      return {
+        num: c.res ? '[' + c.n + ']' : '[ ]', kind,
+        src: c.src || '—',
+        bg: S.active === i ? '#1c1d2c' : 'transparent',
+        mark: S.active === i ? '#8a70ff' : 'transparent',
+        numColor: c.err ? '#ff9aa4' : c.res ? '#c3aeff' : '#8a8aa0',
+        kindColor: c.err ? '#ff9aa4' : '#e3e4ec',
+        onClick: () => { this.setState({ active: i, mainTab: 'notebook', panelExpanded: false }); setTimeout(() => this.scrollToCell(i), 30); },
+      };
+    });
+
+    const docs = REF_NAMES.map(n => E.docFor(n)).filter(Boolean);
+    const palette = docs.map(d => ({ name: d.name, sig: d.sig, onClick: () => this.insert(d.also[0]) }));
+    const reference = docs.map(d => ({
+      name: d.name, sig: d.sig, blurb: d.blurb, ref: d.ref,
+      bg: S.docFocus === d.name ? '#1c1e28' : 'transparent',
+      nameColor: S.docFocus === d.name ? '#c3aeff' : '#eef0f6',
+      examples: d.also.map(s => ({ label: s, onClick: () => this.insert(s) })),
+    }));
+
+    let hoverDoc = null;
+    if (S.hover) {
+      const d = E.docFor(S.hover.name) || (FNDOC[S.hover.name] && { name: S.hover.name, ...FNDOC[S.hover.name] });
+      if (d) hoverDoc = { name: d.name, sig: d.sig, blurb: d.blurb };
+    }
+
+    const panelTabs = [
+      { key: 'explain', label: 'Explanation' },
+      { key: 'log', label: 'Kernel log', badge: String(S.log.length) },
+    ].map(t => ({ label: t.label, badge: t.badge || null,
+      bg: S.panelTab === t.key ? '#15161e' : 'transparent',
+      color: S.panelTab === t.key ? '#eef0f6' : '#9b9bb0',
+      mark: S.panelTab === t.key ? '#8a70ff' : 'transparent',
+      hoverBg: S.panelTab === t.key ? '#15161e' : '#1e202e',
+      onClick: () => this.setState({ panelTab: t.key, panelOpen: true }) }));
+
+    const out = {
+      ...base, cells, outline, palette, reference, panelTabs, hoverDoc,
+      hoverX: S.hover ? S.hover.x : 0, hoverY: S.hover ? S.hover.y : 0,
+      statusRules: totalRules + ' rules applied',
+      showExplain: false, showLog: S.panelTab === 'log', showHint: false,
+    };
+
+    if (S.panelTab === 'log') return out;
+
+    const sel = S.sel;
+    if (!sel) return { ...out, showHint: true };
+
+    const cell = S.cells[sel.cellIdx];
+    const v = (cell && cell.res && cell.res.v) || 'x';
+    const desc = E.describe(sel.node, v) || {};
+    const res = cell && cell.res;
+    const trail = res ? res.steps.slice(0, Math.max(0, sel.stepIdx + 1)).map((st, k) => ({
+      no: k + 1, rule: st.rule,
+      color: k === sel.stepIdx ? '#eef0f6' : '#9b9bb0',
+      dot: k === sel.stepIdx ? '#8a70ff' : '#363a4d',
+    })) : [];
+    const chk = res && res.check;
+    let plotEl = null, plotCaption = '';
+    if (this.props.plots === false) { /* plots off */ }
+    else if (E.hasVar(sel.node, v)) {
+      try { plotEl = R.plot({ f: sel.node, v }, 230, 72); } catch (e) { plotEl = null; }
+      plotCaption = 'selection · ' + v + ' ∈ [−3, 3]';
+    } else if (chk && chk.plot) {
+      try { plotEl = R.plot({ f: chk.plot.fp || chk.plot.f, v }, 230, 72); } catch (e) { plotEl = null; }
+      plotCaption = 'result · ' + v + ' ∈ [−3, 3]';
+    }
+    let selNote = desc.note || '';
+    if (!E.hasVar(sel.node, v)) {
+      const val = E.evalAt(sel.node, {});
+      if (isFinite(val) && sel.node.t !== 'num') selNote += ' Numerically it is ' + val + '.';
+    }
+    return { ...out, showExplain: true,
+      selEl: R.render(sel.node, { selected: null }, 'sel'),
+      selKind: desc.kind || 'Expression', selNote, selRef: desc.ref || null,
+      trail, hasTrail: (this.props.showTrail ?? true) && trail.length > 0,
+      stepNote: sel.meta ? sel.meta.note : (res ? 'This is the input line as the engine parsed it. Every step below transforms it by exactly one named rule.' : ''),
+      checkLabel: chk ? chk.label : 'Sanity check',
+      checkText: chk ? chk.text : 'No numeric check applies to this result.',
+      checkBadge: chk && chk.ok !== undefined ? (chk.ok ? 'verified' : 'mismatch') : null,
+      checkBadgeColor: chk && chk.ok ? '#3ddc84' : '#f0a63d',
+      checkBadgeBg: chk && chk.ok ? 'rgba(61,220,132,0.12)' : 'rgba(240,166,61,0.12)',
+      plotEl, plotCaption };
+  }
+}
+</script>
+</body>
+</html>

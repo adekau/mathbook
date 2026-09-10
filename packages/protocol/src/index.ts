@@ -65,11 +65,23 @@ export interface Rendered {
 // Requests / responses (the RPC surface). Keep this small; grow it deliberately.
 // ---------------------------------------------------------------------------
 
+/** Proof status of one rewrite rule, as reported by the engine. */
+export interface RuleStatus {
+  rule: string;
+  /** "verified": unconditional soundness theorem. "conditional": theorem with a side condition,
+   *  whose necessity is itself proved. "unverified": no theorem yet. Rules the engine omits are
+   *  unverified. */
+  status: "verified" | "conditional" | "unverified";
+  note: string;
+}
+
 export interface EngineCapabilities {
   engine: string;              // "engine-ts" | "engine-lean" | ...
   version: string;
   verified: boolean;           // true iff the implementation has machine-checked proofs
   features: string[];          // "simplify", "diff", "linalg", "integrate", ...
+  /** Per-rule proof status, so a frontend can mark derivation steps. Optional; absent means unknown. */
+  ruleStatus?: RuleStatus[];
 }
 
 export interface EvaluateParams {
@@ -98,6 +110,8 @@ export interface EvaluateResult {
   bound?: string[];
   /** Visual specs for this result. Reserved; empty until a module emits one. */
   visuals?: VisualSpec[];
+  /** The parsed input, rendered by the engine (the frontend owns no printer). Sent with `showWork`. */
+  inputRendered?: Rendered;
 }
 
 export interface EvaluateError {

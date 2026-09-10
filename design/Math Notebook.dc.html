@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-cde7e03e-f77e-4fab-a7bd-064ed88c1a0d/styles.css">
+<script src="_ds/nocturne-cde7e03e-f77e-4fab-a7bd-064ed88c1a0d/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  a:hover { color: var(--color-accent-300); }
+  input.nbin::placeholder { color: color-mix(in srgb, var(--color-text) 48%, transparent); }
+</style>
+</helmet>
+<div style="display:flex; flex-direction:column; height:100vh; background:var(--color-bg); color:var(--color-text); font-family:var(--font-body)">
+
+  <header style="display:flex; align-items:center; gap:var(--space-6); padding:var(--space-3) var(--space-8); borderBottom:1px solid var(--color-divider); background:var(--color-bg); flex:0 0 auto">
+    <div style="display:flex; align-items:baseline; gap:var(--space-3)">
+      <span style="font-family:var(--font-heading); font-weight:500; letter-spacing:-0.01em; font-size:15px">Lemma</span>
+      <span style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:color-mix(in srgb, var(--color-text) 60%, transparent)">Notebook</span>
+    </div>
+    <div style="width:1px; height:18px; background:var(--color-divider)"></div>
+    <div style="font-size:13px; color:color-mix(in srgb, var(--color-text) 70%, transparent)">Techniques of Integration — class notes</div>
+    <div style="flex:1"></div>
+    <div style="display:flex; align-items:center; gap:var(--space-2); font-size:12px; color:color-mix(in srgb, var(--color-text) 60%, transparent)">
+      <span>Select any part of a line to see how it got there</span>
+    </div>
+  </header>
+
+  <div onClick="{{ clearSel }}" style="flex:1; overflow-y:auto; overflow-x:hidden; padding:var(--space-8) var(--space-8) 120px">
+    <div style="max-width:900px">
+      <h2 style="font-size:22px; margin:0 0 var(--space-2)">Antiderivatives, row reduction, and where the rules come from</h2>
+      <p style="font-size:13px; color:color-mix(in srgb, var(--color-text) 55%, transparent); max-width:60ch; margin:0 0 var(--space-8)">Every line is evaluated by the notebook's own rule engine, so each step names the rule that produced it. Type in a cell and press Enter.</p>
+
+      <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="3">
+        <div style="display:grid; grid-template-columns:66px minmax(0,1fr) 14px; column-gap:var(--space-4); margin-bottom:var(--space-8)">
+
+          <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; padding-top:9px; color:var(--color-accent-400); text-align:right; letter-spacing:0.02em">In[{{ cell.n }}]</div>
+          <div style="min-width:0">
+            <input class="nbin" type="text" value="{{ cell.src }}" placeholder="{{ cell.placeholder }}" onChange="{{ cell.onChange }}" onKeyDown="{{ cell.onKey }}" onFocus="{{ cell.onFocus }}" style="width:100%; box-sizing:border-box; background:var(--color-neutral-900); color:var(--color-text); border:1px solid var(--color-neutral-800); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); font-family:'JetBrains Mono',ui-monospace,monospace; font-size:13.5px; line-height:1.4" />
+            <div style="display:flex; align-items:center; gap:var(--space-4); min-height:26px; margin-top:var(--space-3); flex-wrap:wrap">
+              <sc-if value="{{ cell.kindLabel }}" hint-placeholder-val="{{ true }}">
+                <span onMouseEnter="{{ cell.onHoverKind }}" onMouseLeave="{{ leaveHover }}" onClick="{{ cell.onOpenDoc }}" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; letter-spacing:0.04em; text-transform:uppercase; color:var(--color-accent-300); border:1px solid var(--color-accent-800); background:var(--color-accent-900); border-radius:999px; padding:2px 9px; cursor:help; flex:0 0 auto">{{ cell.kindLabel }}<span style="display:inline-flex; align-items:center; justify-content:center; width:13px; height:13px; border-radius:50%; border:1px solid var(--color-accent-600); font-size:9px; font-style:italic; line-height:1">i</span></span>
+              </sc-if>
+              <div style="font-size:18px; color:color-mix(in srgb, var(--color-text) 88%, transparent); min-width:0">{{ cell.inputEl }}</div>
+            </div>
+          </div>
+          <div style="justify-self:end; width:8px; align-self:stretch; border:1px solid var(--color-neutral-800); border-left:0; border-radius:0 3px 3px 0; opacity:0.7"></div>
+
+          <sc-if value="{{ cell.hasOut }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid; grid-column:1 / -1; grid-template-columns:66px minmax(0,1fr) 14px; column-gap:var(--space-4); margin-top:var(--space-6)">
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:color-mix(in srgb, var(--color-text) 58%, transparent); text-align:right; padding-top:4px">Out[{{ cell.n }}]</div>
+              <div style="min-width:0">
+                <div style="font-size:22px; padding-bottom:var(--space-3)">{{ cell.resultEl }}</div>
+                <button onClick="{{ cell.toggleWork }}" class="btn btn-ghost" style="font-size:11px; letter-spacing:0.05em; text-transform:uppercase; padding:2px 0; color:color-mix(in srgb, var(--color-text) 55%, transparent)">{{ cell.workLabel }}</button>
+                <sc-if value="{{ cell.work }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:var(--space-4); border-left:1px solid var(--color-neutral-800); padding-left:var(--space-6); display:flex; flex-direction:column; gap:var(--space-6)">
+                    <sc-for list="{{ cell.steps }}" as="st" hint-placeholder-count="3">
+                      <div style="display:grid; grid-template-columns:minmax(0,200px) minmax(0,1fr); column-gap:var(--space-6); align-items:baseline">
+                        <div style="text-align:right">
+                          <div style="font-size:11.5px; color:var(--color-accent-300); line-height:1.35">{{ st.rule }}</div>
+                          <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:color-mix(in srgb, var(--color-text) 58%, transparent)">step {{ st.no }}</div>
+                        </div>
+                        <div style="font-size:17px; min-width:0">{{ st.el }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="justify-self:end; width:8px; align-self:stretch; border:1px solid var(--color-neutral-800); border-left:0; border-radius:0 3px 3px 0; opacity:0.35"></div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ cell.err }}" hint-placeholder-val="{{ false }}">
+            <div style="grid-column:2; margin-top:var(--space-3); font-size:12.5px; color:var(--color-accent-300); background:var(--color-accent-900); border:1px solid var(--color-accent-800); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4)">{{ cell.err }}</div>
+          </sc-if>
+        </div>
+      </sc-for>
+
+      <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap; padding-left:66px; margin-left:var(--space-4)">
+        <span style="font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:color-mix(in srgb, var(--color-text) 58%, transparent); margin-right:var(--space-2)">Try</span>
+        <sc-for list="{{ suggestions }}" as="sg" hint-placeholder-count="4">
+          <button onClick="{{ sg.onClick }}" style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11.5px; color:color-mix(in srgb, var(--color-text) 65%, transparent); background:transparent; border:1px solid var(--color-neutral-800); border-radius:999px; padding:3px 10px; cursor:pointer">{{ sg.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ hoverDoc }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; left:{{ hoverX }}px; top:{{ hoverY }}px; width:320px; z-index:40; background:var(--color-surface); border-radius:var(--radius-md); box-shadow:var(--shadow-md); padding:var(--space-6); pointer-events:none">
+      <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-2)">
+        <span style="font-family:var(--font-heading); font-size:14px">{{ hoverDoc.name }}</span>
+        <span style="flex:1"></span>
+        <span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; border:1px solid var(--color-accent); color:var(--color-accent); font-size:11px; font-style:italic">i</span>
+      </div>
+      <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; color:var(--color-accent-300); margin-bottom:var(--space-3)">{{ hoverDoc.sig }}</div>
+      <p style="font-size:12.5px; line-height:1.5; color:color-mix(in srgb, var(--color-text) 72%, transparent); margin:0 0 var(--space-3)">{{ hoverDoc.blurb }}</p>
+      <div style="font-size:11px; color:color-mix(in srgb, var(--color-text) 58%, transparent)">Click the badge to open the full entry below</div>
+    </div>
+  </sc-if>
+
+  <div style="position:relative; flex:0 0 auto; background:var(--color-surface); box-shadow:var(--shadow-md); z-index:30">
+    <div style="display:flex; align-items:center; gap:var(--space-4); padding:var(--space-3) var(--space-8); border-bottom:1px solid var(--color-divider)">
+      <span style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:color-mix(in srgb, var(--color-text) 62%, transparent)">{{ drawerTitle }}</span>
+      <div style="flex:1"></div>
+      <button onClick="{{ togglePin }}" class="btn btn-ghost" style="font-size:11px; letter-spacing:0.05em; text-transform:uppercase; color:{{ pinColor }}">{{ pinLabel }}</button>
+      <button onClick="{{ closeDrawer }}" class="btn btn-ghost" style="font-size:11px; letter-spacing:0.05em; text-transform:uppercase; color:color-mix(in srgb, var(--color-text) 62%, transparent)">Clear</button>
+    </div>
+
+    <div style="height:{{ drawerH }}; overflow-y:auto; transition:height 180ms ease">
+      <sc-if value="{{ showExplain }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1.2fr) minmax(0,1fr); gap:var(--space-8); padding:var(--space-6) var(--space-8)">
+          <div>
+            <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:color-mix(in srgb, var(--color-text) 58%, transparent); margin-bottom:var(--space-3)">Selection</div>
+            <div style="font-size:24px; margin-bottom:var(--space-4)">{{ selEl }}</div>
+            <div style="font-size:13px; color:var(--color-accent-300); margin-bottom:var(--space-2)">{{ selKind }}</div>
+            <p style="font-size:12.5px; line-height:1.55; color:color-mix(in srgb, var(--color-text) 72%, transparent); margin:0">{{ selNote }}</p>
+            <sc-if value="{{ selRef }}" hint-placeholder-val="{{ false }}">
+              <a href="{{ selRef }}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:var(--space-3); font-size:12px">Definition and identities →</a>
+            </sc-if>
+          </div>
+          <div>
+            <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:color-mix(in srgb, var(--color-text) 58%, transparent); margin-bottom:var(--space-3)">How we got here</div>
+            <sc-if value="{{ hasTrail }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:var(--space-2); margin-bottom:var(--space-4)">
+                <sc-for list="{{ trail }}" as="tr" hint-placeholder-count="3">
+                  <div style="display:grid; grid-template-columns:20px minmax(0,1fr); gap:var(--space-3); align-items:baseline">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:{{ tr.dim }}">{{ tr.no }}</span>
+                    <span style="font-size:12.5px; color:{{ tr.color }}">{{ tr.rule }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <p style="font-size:12.5px; line-height:1.55; color:color-mix(in srgb, var(--color-text) 72%, transparent); margin:0">{{ stepNote }}</p>
+          </div>
+          <div>
+            <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:color-mix(in srgb, var(--color-text) 58%, transparent); margin-bottom:var(--space-3)">{{ checkLabel }}</div>
+            <p style="font-size:12.5px; line-height:1.55; color:color-mix(in srgb, var(--color-text) 72%, transparent); margin:0 0 var(--space-3)">{{ checkText }}</p>
+            <sc-if value="{{ plotEl }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px solid var(--color-neutral-800); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4)">
+                <div style="font-size:10px; font-family:'JetBrains Mono',ui-monospace,monospace; color:color-mix(in srgb, var(--color-text) 58%, transparent); margin-bottom:var(--space-2)">{{ plotCaption }}</div>
+                {{ plotEl }}
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showDoc }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:var(--space-8); padding:var(--space-6) var(--space-8)">
+          <div>
+            <div style="display:flex; align-items:baseline; gap:var(--space-4); margin-bottom:var(--space-3)">
+              <h3 style="font-size:18px; margin:0">{{ docName }}</h3>
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11.5px; color:var(--color-accent-300)">{{ docSig }}</span>
+            </div>
+            <p style="font-size:13px; line-height:1.6; color:color-mix(in srgb, var(--color-text) 78%, transparent); max-width:62ch; margin:0 0 var(--space-4)">{{ docBlurb }}</p>
+            <a href="{{ docRef }}" target="_blank" rel="noreferrer" style="font-size:12px">Reference entry →</a>
+          </div>
+          <div>
+            <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:color-mix(in srgb, var(--color-text) 58%, transparent); margin-bottom:var(--space-3)">Examples</div>
+            <div style="display:flex; flex-direction:column; gap:var(--space-2); align-items:flex-start">
+              <sc-for list="{{ docExamples }}" as="ex" hint-placeholder-count="2">
+                <button onClick="{{ ex.onClick }}" style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11.5px; color:color-mix(in srgb, var(--color-text) 70%, transparent); background:transparent; border:1px solid var(--color-neutral-800); border-radius:var(--radius-sm); padding:3px 9px; cursor:pointer; text-align:left">{{ ex.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showEmpty }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:var(--space-6) var(--space-8); font-size:12.5px; color:color-mix(in srgb, var(--color-text) 60%, transparent)">Click any symbol, factor, or whole line above. The drawer names the rule that produced it, the steps leading to it, and checks the result numerically.</div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showTrail&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Explanation drawer&quot;},&quot;plots&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Explanation drawer&quot;}}">
+const FNDOC = {
+  sin: { sig: 'sin(x)', blurb: 'Sine. Derivative cos x; antiderivative −cos x. Periodic with period 2π and bounded by 1.', ref: 'https://mathworld.wolfram.com/Sine.html', also: ['d/dx sin(2x)', 'integrate sin(x) dx'] },
+  cos: { sig: 'cos(x)', blurb: 'Cosine. Derivative −sin x; antiderivative sin x.', ref: 'https://mathworld.wolfram.com/Cosine.html', also: ['d/dx cos(x)^2', 'integrate x cos(x) dx'] },
+  tan: { sig: 'tan(x)', blurb: 'Tangent, sin x / cos x. Derivative sec² x. Undefined at odd multiples of π/2.', ref: 'https://mathworld.wolfram.com/Tangent.html', also: ['d/dx tan(x)'] },
+  exp: { sig: 'exp(x)', blurb: 'The exponential function. It is its own derivative and its own antiderivative — the reason it appears in every solution of y′ = ky.', ref: 'https://mathworld.wolfram.com/ExponentialFunction.html', also: ['d/dx exp(3x)', 'integrate x exp(x) dx'] },
+  ln: { sig: 'ln(x)', blurb: 'Natural logarithm. Derivative 1/x, which is why ln|x| fills the gap the power rule leaves at n = −1.', ref: 'https://mathworld.wolfram.com/NaturalLogarithm.html', also: ['d/dx ln(x)/x', 'integrate 1/x dx'] },
+  sqrt: { sig: 'sqrt(x)', blurb: 'Square root, i.e. x^(1/2), so the power rule handles it directly.', ref: 'https://mathworld.wolfram.com/SquareRoot.html', also: ['d/dx sqrt(x)'] },
+  atan: { sig: 'atan(x)', blurb: 'Inverse tangent. Derivative 1/(1+x²), the standard form behind that integral.', ref: 'https://mathworld.wolfram.com/InverseTangent.html', also: ['integrate 1/(1+x^2) dx'] },
+  sec: { sig: 'sec(x)', blurb: 'Secant, 1/cos x. Appears as sec² x in the derivative of the tangent.', ref: 'https://mathworld.wolfram.com/Secant.html', also: ['d/dx tan(x)'] },
+};
+
+const SEEDS = [
+  ['integrate x sin(x) dx', true],
+  ['d/dx sin(x) x^2', false],
+  ['rref [[1,2,-1],[2,4,1],[3,6,2]]', false],
+  ['eigen [[2,1],[1,2]]', false],
+];
+
+const SUGGESTIONS = [
+  'integrate 1/(1+x^2) dx',
+  'd/dx ln(x)/x',
+  'grad x^2 y + sin(y)',
+  'det [[3,1,0],[2,4,1],[0,1,2]]',
+  'integrate exp(2x) dx',
+];
+
+class Component extends DCLogic {
+  state = { ready: false, cells: [], sel: null, doc: null, pinned: false, hover: null, fatal: null };
+
+  componentDidMount() {
+    Promise.all([import('./engine.js'), import('./render.js')]).then(([E, R]) => {
+      this.E = E;
+      this.R = R.makeRenderer(React);
+      this.R.setEval(E.evalAt);
+      const cells = SEEDS.map(([src, work], i) => ({ n: i + 1, src, work, ...this.run(src) }));
+      cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null });
+      this.setState({ ready: true, cells });
+    }).catch(e => this.setState({ ready: true, fatal: String(e) }));
+  }
+
+  run(src) {
+    if (!src.trim()) return { res: null, err: null };
+    try { return { res: this.E.evaluate(src), err: null }; }
+    catch (e) { return { res: null, err: (e.message || String(e)) + ' — check the syntax, or hover a badge for accepted forms.' }; }
+  }
+
+  setSrc(i, src) {
+    this.setState(s => ({ cells: s.cells.map((c, j) => j === i ? { ...c, src } : c) }));
+  }
+
+  evalCell(i) {
+    this.setState(s => {
+      const cells = s.cells.slice();
+      const c = cells[i];
+      const out = this.run(c.src);
+      cells[i] = { ...c, ...out, work: out.res ? c.work : true };
+      const last = cells[cells.length - 1];
+      if (last.src.trim()) cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null });
+      return { cells, sel: null };
+    });
+  }
+
+  insert(src) {
+    this.setState(s => {
+      const cells = s.cells.slice();
+      const i = cells.length - 1;
+      cells[i] = { ...cells[i], src, ...this.run(src), work: true };
+      cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null });
+      return { cells, sel: null, doc: null };
+    });
+  }
+
+  hoverAt(name, el) {
+    const r = el.getBoundingClientRect();
+    const x = Math.min(r.left, window.innerWidth - 340);
+    this.setState({ hover: { name, x, y: Math.max(8, r.top - 12 - 150) } });
+  }
+
+  mkOpts(key, cellIdx, stepIdx, meta) {
+    const sel = this.state.sel;
+    return {
+      selected: sel && sel.key === key ? sel.mid : null,
+      onSelect: (mid, node) => this.setState({ sel: { key, mid, node, cellIdx, stepIdx, meta }, doc: null }),
+      onHoverFn: (name, el) => { if (FNDOC[name]) this.hoverAt(name, el); },
+      onLeaveFn: () => this.setState({ hover: null }),
+    };
+  }
+
+  renderVals() {
+    const { cells, sel, doc, pinned, hover, ready } = this.state;
+    const R = this.R, E = this.E;
+    const clearSel = () => this.setState({ sel: null, doc: null, hover: null });
+    const base = {
+      clearSel,
+      leaveHover: () => this.setState({ hover: null }),
+      togglePin: () => this.setState(s => ({ pinned: !s.pinned })),
+      closeDrawer: clearSel,
+      pinLabel: pinned ? 'Pinned' : 'Pin open',
+      pinColor: pinned ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-text) 62%, transparent)',
+      suggestions: SUGGESTIONS.map(s => ({ label: s, onClick: () => this.insert(s) })),
+    };
+    if (!ready || !R) return { ...base, cells: [], drawerH: '64px', showEmpty: true, drawerTitle: 'Explanation' };
+
+    const displayCells = cells.map((c, i) => {
+      const key = 'c' + i;
+      let inputEl = null, kindLabel = null, docName = null;
+      let spec = c.res;
+      if (!spec && c.src.trim()) { try { spec = E.interpret(c.src); } catch (e) { spec = null; } }
+      if (spec) {
+        kindLabel = spec.fnName;
+        docName = spec.fnName;
+        try { inputEl = R.render(spec.input || spec.body, this.mkOpts(key + 'in', i, -1, null), key + 'in'); } catch (e) { inputEl = null; }
+      }
+      const steps = c.res ? c.res.steps.map((st, k) => ({
+        no: k + 1, rule: st.rule,
+        el: R.render(st.expr, this.mkOpts(key + 's' + k, i, k, st), key + 's' + k),
+      })) : [];
+      return {
+        n: c.n, src: c.src, work: !!c.work, err: c.err,
+        placeholder: i === cells.length - 1 ? 'integrate x exp(x) dx' : '',
+        hasOut: !!c.res, kindLabel, inputEl,
+        resultEl: c.res ? R.render(c.res.result, this.mkOpts(key + 'out', i, c.res.steps.length - 1, c.res.steps[c.res.steps.length - 1]), key + 'out') : null,
+        steps, workLabel: c.work ? '— Hide work' : '+ Show work (' + steps.length + ' steps)',
+        onChange: (e) => this.setSrc(i, e.target.value),
+        onKey: (e) => { if (e.key === 'Enter') { e.preventDefault(); this.evalCell(i); } },
+        onFocus: () => {},
+        onHoverKind: (e) => { if (docName && E.docFor(docName)) this.hoverAt(docName, e.currentTarget); },
+        onOpenDoc: (e) => { e.stopPropagation(); this.setState({ doc: docName, sel: null, hover: null, pinned: true }); },
+        toggleWork: (e) => { e.stopPropagation(); this.setState(s => ({ cells: s.cells.map((x, j) => j === i ? { ...x, work: !x.work } : x) })); },
+      };
+    });
+
+    let hoverDoc = null;
+    if (hover) {
+      const d = E.docFor(hover.name) || (FNDOC[hover.name] && { name: hover.name, ...FNDOC[hover.name] });
+      if (d) hoverDoc = { name: d.name, sig: d.sig, blurb: d.blurb };
+    }
+
+    const out = {
+      ...base, cells: displayCells,
+      hoverDoc, hoverX: hover ? hover.x : 0, hoverY: hover ? hover.y : 0,
+      showExplain: false, showDoc: false, showEmpty: false,
+      drawerH: (sel || doc || pinned) ? '236px' : '54px',
+      drawerTitle: doc ? 'Function reference' : 'Explanation',
+    };
+
+    if (doc) {
+      const d = E.docFor(doc) || (FNDOC[doc] && { name: doc, ...FNDOC[doc] });
+      if (d) {
+        return { ...out, showDoc: true, docName: d.name, docSig: d.sig, docBlurb: d.blurb, docRef: d.ref,
+          docExamples: (d.also || []).map(s => ({ label: s, onClick: () => this.insert(s) })) };
+      }
+    }
+
+    if (sel) {
+      const cell = cells[sel.cellIdx];
+      const v = (cell && cell.res && cell.res.v) || 'x';
+      const desc = E.describe(sel.node, v) || {};
+      const res = cell && cell.res;
+      const trail = res ? res.steps.slice(0, Math.max(0, sel.stepIdx + 1)).map((st, k) => ({
+        no: k + 1, rule: st.rule,
+        color: k === sel.stepIdx ? 'var(--color-accent-200)' : 'color-mix(in srgb, var(--color-text) 62%, transparent)',
+        dim: k === sel.stepIdx ? 'var(--color-accent-300)' : 'color-mix(in srgb, var(--color-text) 58%, transparent)',
+      })) : [];
+      const meta = sel.meta;
+      let checkLabel = 'Sanity check', checkText = '';
+      const chk = res && res.check;
+      if (chk) { checkLabel = chk.label; checkText = chk.text; }
+      let plotEl = null, plotCaption = '';
+      if (this.props.plots === false) { /* plots turned off */ }
+      else if (E.hasVar(sel.node, v)) {
+        try { plotEl = R.plot({ f: sel.node, v }, 240, 76); } catch (e) { plotEl = null; }
+        plotCaption = 'selection, ' + v + ' from −3 to 3';
+      } else if (chk && chk.plot) {
+        try { plotEl = R.plot({ f: chk.plot.fp || chk.plot.f, v }, 240, 76); } catch (e) { plotEl = null; }
+        plotCaption = 'result, ' + v + ' from −3 to 3';
+      }
+      let selNote = desc.note || '';
+      if (!E.hasVar(sel.node, v)) {
+        const val = E.evalAt(sel.node, {});
+        if (isFinite(val) && sel.node.t !== 'num') selNote += ' Numerically it is ' + val + '.';
+      }
+      return { ...out, showExplain: true,
+        selEl: R.render(sel.node, { selected: null }, 'sel'),
+        selKind: desc.kind || 'Expression', selNote, selRef: desc.ref || null,
+        trail, hasTrail: (this.props.showTrail ?? true) && trail.length > 0,
+        stepNote: meta ? meta.note : (res ? 'This is the input line as the notebook parsed it. Every step below transforms it by one named rule.' : ''),
+        checkLabel, checkText, plotEl, plotCaption };
+    }
+
+    return { ...out, showEmpty: true };
+  }
+}
+</script>
+</body>
+</html>

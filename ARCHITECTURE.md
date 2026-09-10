@@ -70,6 +70,19 @@ with `children`/`withChildren`. What a module brings is:
 Explanations are Markdown with `$latex$`, carried on every step. A module that cannot explain a
 rule in one sentence has the rule at the wrong granularity.
 
+## 4a. The notebook shell
+
+`apps/notebook` implements the "Notebook - GitHub" artboard's structure and typography with the
+"Notebook - Cloud9" artboard's colour palette; both are checked in under `design/`, exported from
+the Claude Design canvas. Every colour is a token in `index.html`'s `:root`, annotated with the
+GitHub value it replaces, so re-skinning to another artboard is a change to that one block.
+
+The page owns no mathematics. It does not parse, print, or simplify: every expression on screen is
+LaTeX the engine produced, every rule name and explanation is the engine's, and the proof status
+beside each step comes from `engine.capabilities.ruleStatus` rather than a list in the frontend
+that could drift from `proofs/`. The one thing the page derives from source text is a cell's *kind*
+label, which is presentation only.
+
 ## 5. Visuals
 
 The engine never draws. It emits **visual specs**: declarative JSON next to `rendered`

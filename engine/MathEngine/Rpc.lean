@@ -14,9 +14,27 @@ The engine itself has no mutable state.
 namespace MathEngine
 open Json
 
+/-- Proof status of each rewrite rule, so a frontend can say which steps of a derivation are
+machine-checked instead of guessing. Kept next to the rules it describes: `verified` means an
+unconditional soundness theorem over ℝ (`proofs/Proofs/SimpReal.lean`), `conditional` means the
+theorem needs a side condition *and* the necessity of that condition is itself proved, `unverified`
+means no theorem yet (M4 covers `diff.*`, M7 `la.*`). Rules absent from this list are unverified. -/
+def ruleStatus : Json :=
+  let entry (name status note : String) : Json :=
+    .obj #[("rule", .str name), ("status", .str status), ("note", .str note)]
+  .arr #[
+    entry "simp.flatten" "verified" "Associativity of + and ·.",
+    entry "simp.identity" "verified" "The additive and multiplicative identities and the annihilator.",
+    entry "simp.fold-constants" "verified" "Exact rational arithmetic; ℚ embeds in ℝ.",
+    entry "simp.collect-like-terms" "verified" "Distributivity: a·t + b·t = (a+b)·t.",
+    entry "simp.power" "verified" "Includes exact roots; the root search returns only checked roots.",
+    entry "simp.collect-powers" "conditional" "b^m·b^n = b^(m+n) needs a positive base: at b = 0 it turns 0 into 1.",
+    entry "simp.function" "conditional" "exp(ln x) = x needs 0 < x: at x = -1 it turns -1 into 1."]
+
 def capabilities : Json :=
-  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m1"), ("verified", .bool true),
-         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric"])]
+  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m3"), ("verified", .bool true),
+         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric"]),
+         ("ruleStatus", ruleStatus)]
 
 def Rendered.toJson (e : Expr) (paths : Bool) : Json :=
   .obj #[("text", .str e.toText), ("latex", .str (e.toLatex paths))]
@@ -45,7 +63,9 @@ def evaluate (st : Store) (params : Json) : Store × Json :=
     | .ok (stmt, out, d) =>
       let paths := params.getBool "paths"
       let res := #[("ok", .bool true), ("value", out.toJson), ("rendered", Rendered.toJson out paths)]
-      let res := if params.getBool "showWork" then res.push ("derivation", d.toJson) else res
+      let res := if params.getBool "showWork" then
+          (res.push ("derivation", d.toJson)).push ("inputRendered", Rendered.toJson d.input false)
+        else res
       let res := match stmt with
         | .«let» name _ => res.push ("bound", .arr #[.str name])
         | _ => res

@@ -10,7 +10,8 @@ packages/protocol       JSON-RPC contract + Transport abstraction (the seam ever
 packages/engine-host    transports (worker / HTTP / WebSocket / stdio), HTTP host over the native engine, wasm worker glue
 engine/                 Lean engine: syntax, semantics, verified rewriter + rules, JSON, RPC, C shim, tests + golden
 proofs/                 separate Lake package, Mathlib only here: ℝ semantics and the rules' real soundness theorems
-apps/notebook           minimal shell (real design comes from the Claude Design export)
+apps/notebook           the notebook: "Notebook - GitHub" structure with the "Notebook - Cloud9" palette
+design/                 the Claude Design export the shell is built from (.dc.html artboards)
 book/                   SPIKE-RESULTS.md (milestone 0, done), M1-BRIEF.md (current), TRACKING.md
 scripts/                bundle.mjs (esbuild), build-wasm.sh (Lean → C → emcc), build-lean-wasm-runtime.sh (leanrt + Init for wasm32, from source)
 ```
