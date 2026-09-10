@@ -4,6 +4,8 @@ import MathEngine.Semantics
 import MathEngine.Simp
 import MathEngine.Rewrite
 import MathEngine.SimpRules
+import MathEngine.RewriteSound
+import MathEngine.SimpSound
 import MathEngine.Json
 import MathEngine.Wire
 import MathEngine.Parser

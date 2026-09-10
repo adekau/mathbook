@@ -144,6 +144,15 @@ def fire (rules : List (Rule W)) (e : Expr) : Option {p : Rule W × RuleResult /
     | some res => some ⟨(r, res), h⟩
     | none => fire rs e
 
+theorem fire_mem (rules : List (Rule W)) (e : Expr) (p) (h : fire rules e = some p) : p.1.1 ∈ rules := by
+  induction rules with
+  | nil => simp [fire] at h
+  | cons r rs ih =>
+    simp only [fire] at h
+    split at h
+    · simp only [Option.some.injEq] at h; subst h; exact List.mem_cons_self
+    · exact List.mem_cons_of_mem _ (ih h)
+
 -- ---------------------------------------------------------------------------
 -- Canonical argument order (silent, measure-preserving)
 -- ---------------------------------------------------------------------------
@@ -285,12 +294,18 @@ def buildSteps (input : Expr) (raw : Array RawStep) : Array Step × Expr :=
 
 abbrev TraceM := StateM (Array Step)
 
-/-- Rewrite `e` to a normal form under `rules`, appending the steps to the trace. -/
+/-- Rewrite `e` to a normal form under `rules`, appending the steps to the trace. The result is the
+normalizer's own (the replay in `buildSteps` reconstructs the same term for the step snapshots). -/
 def normalize (rules : List (Rule W)) (e : Expr) : TraceM Expr := do
-  let ⟨(_, raw), _⟩ := normAt rules e [] #[]
-  let (steps, out) := buildSteps e raw
+  let ⟨(out, raw), _⟩ := normAt rules e [] #[]
+  let (steps, _) := buildSteps e raw
   modify (· ++ steps)
   pure out
+
+theorem normalize_run (rules : List (Rule W)) (e : Expr) (s : Array Step) :
+    ((normalize rules e).run' s) = (normAt rules e [] #[]).1.1 := by
+  simp only [normalize, StateT.run', bind, StateT.bind, modify, pure, StateT.pure, MonadStateOf.modifyGet, StateT.modifyGet, Id.run]
+  rfl
 
 /-- Rewrite and package the whole derivation. -/
 def derive (rules : List (Rule W)) (e : Expr) : Derivation :=

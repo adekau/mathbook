@@ -13,7 +13,12 @@ M1 Lean engine parity (book/M1-BRIEF.md) — IN PROGRESS.
       notebook pipeline (`diff.*` duplicates subterms — product/chain rules — and commands like `expand` grow
       terms). Those rule sets run on `normalizeFuel` (total, explicit fuel, reports exhaustion) until M5 replaces
       it with a polynomial/RPO ordering. The `simp.*` set gets a proven measure in step 3.
-   3. `simp.*` rules with per-rule soundness; derivations reach the work panel.
+   3. DONE 2026-09-10: `MathEngine/SimpRules.lean` (seven `simp.*` rules as `Rule simpW`, termination proved per rule
+      under weights num 2 / add,mul 4 / pow 5 / var,fn,matrix 8), `MathEngine/SimpSound.lean` (per-rule soundness on the
+      integer fragment under the Option-valued `eval?`; `simplify_sound : Refines e (simplify0 e)` is the fold through
+      `normAt_sound` in `RewriteSound.lean`; axioms: propext, Quot.sound only). Derivations reach the work panel via
+      `showWork`. Deviations from `simplify.ts`, all documented in the file header: bigBase guards on the collect rules,
+      `(b^m)^n` only for numeric `m`, exact roots only with unit numerators, `(ab)^n` moved to the expand set.
    4. `diff.*`, `la.*`, `rref`, session state through `handle`.
 M2 wire-level differential test reference-ts ⇄ engine-lean; then delete reference-ts.
 M3 Mathlib: semantics over ℝ (spec only, noncomputable); each `simp.*` rule gets a soundness theorem.
