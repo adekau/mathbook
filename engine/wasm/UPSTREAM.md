@@ -1,6 +1,6 @@
 # Upstream notes for leanprover/lean4 (not yet reported)
 
-Findings from building the Lean runtime for wasm32 on v4.33.1 (see `book/SPIKE.md`). Each item is
+Findings from building the Lean runtime for wasm32 on v4.33.1 (see `book/SPIKE-RESULTS.md`). Each item is
 patched locally in `lean-runtime-emscripten.patch` or worked around in `../c/uv-stubs.c`. Nothing here
 has been filed; review the project's contribution guidelines (`CONTRIBUTING.md`, RFC/issue templates,
 `stage0` update rules) before opening anything.

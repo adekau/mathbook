@@ -1,0 +1,13 @@
+{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "mathengine",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../engine",
+   "configFile": "lakefile.toml"}],
+ "name": "mathproofs",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

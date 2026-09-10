@@ -8,25 +8,39 @@ import MathEngine.Simp
 
 One pure function `handle : String → String`. Every host — the Emscripten worker, the
 native stdio server, a future HTTP server — is a shim around this function. Session
-state is threaded explicitly in M1; the spike is stateless.
+state is threaded explicitly from M1 step 4; until then `evaluate` is stateless.
 -/
 namespace MathEngine
 open Json
 
 def capabilities : Json :=
-  .obj #[("engine", .str "engine-lean"), ("version", .str "0.0.1-spike"), ("verified", .bool true),
-         ("features", .arr #[.str "parse", .str "simp.identity"])]
+  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m1"), ("verified", .bool true),
+         ("features", .arr #[.str "parse", .str "print", .str "simp.identity"])]
+
+def Rendered.toJson (e : Expr) (paths : Bool) : Json :=
+  .obj #[("text", .str e.toText), ("latex", .str (e.toLatex paths))]
+
+private def errorJson (code msg : String) (span : Option (Nat × Nat) := none) : Json :=
+  let err := #[("code", .str code), ("message", .str msg)]
+  let err := match span with
+    | some (s, e) => err.push ("span", .obj #[("start", .num (toString s)), ("end", .num (toString e))])
+    | none => err
+  .obj #[("ok", .bool false), ("error", .obj err)]
 
 def evaluate (params : Json) : Json :=
   match params.getStr? "source" with
-  | none => .obj #[("ok", .bool false), ("error", .obj #[("code", .str "params"), ("message", .str "missing source")])]
+  | none => errorJson "params" "missing source"
   | some src =>
-    match parse src with
-    | .error msg => .obj #[("ok", .bool false), ("error", .obj #[("code", .str "syntax"), ("message", .str msg)])]
-    | .ok e =>
-      let out := simpTop e
-      .obj #[("ok", .bool true), ("value", out.toJson),
-             ("rendered", .obj #[("text", .str out.toText), ("latex", .str out.toText)])]
+    match parseStmt src with
+    | .error e => errorJson "syntax" e.message (some (e.start, e.stop))
+    | .ok stmt =>
+      let out := simpTop stmt.value
+      let paths := params.getBool "paths"
+      let res := #[("ok", .bool true), ("value", out.toJson), ("rendered", Rendered.toJson out paths)]
+      let res := match stmt with
+        | .«let» name _ => res.push ("bound", .arr #[.str name])
+        | _ => res
+      .obj res
 
 def dispatch (req : Json) : Json :=
   let id := (req.get? "id").getD .null

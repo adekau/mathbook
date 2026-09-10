@@ -1,7 +1,7 @@
 /**
  * @mathbook/protocol — the contract between a notebook frontend and a math engine.
  *
- * Design rules (see ARCHITECTURE.md §2):
+ * Design rules (see ARCHITECTURE.md §2; rule 5: new capabilities are optional fields, never changes):
  *  1. Everything crossing the boundary is plain JSON. No classes, no functions, no BigInt.
  *  2. Transport is abstract. A Transport moves JSON-RPC 2.0 messages; it does not know what they mean.
  *  3. Expressions are trees with *paths* (child-index lists). Paths are the provenance key that
@@ -82,6 +82,13 @@ export interface EvaluateParams {
   paths?: boolean;
 }
 
+/**
+ * A declarative picture the frontend may draw (ARCHITECTURE.md §5). The engine never renders;
+ * it describes. `kind` is namespaced by the math module that produced it (e.g. "linalg.heatmap",
+ * "group.cayley-table", "plot.samples"); `data` is that kind's own JSON schema.
+ */
+export interface VisualSpec { kind: string; title?: string; data: unknown }
+
 export interface EvaluateResult {
   ok: true;
   value: WireExpr;
@@ -89,6 +96,8 @@ export interface EvaluateResult {
   derivation?: Derivation;
   /** Names bound by this cell (e.g. `let f = x^2`). */
   bound?: string[];
+  /** Visual specs for this result. Reserved; empty until a module emits one. */
+  visuals?: VisualSpec[];
 }
 
 export interface EvaluateError {

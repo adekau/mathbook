@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Lean runtime + Init for wasm32 from source ("Road B" in book/SPIKE.md).
+# Build the Lean runtime + Init for wasm32 from source ("Road B" in book/SPIKE-RESULTS.md).
 #
 # Lean stopped shipping a prebuilt linux_wasm32 runtime after v4.15.0, so for a current toolchain
 # we build the two static libraries a Lean program needs ourselves:

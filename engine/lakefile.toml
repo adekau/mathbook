@@ -1,6 +1,7 @@
 name = "mathengine"
 version = "0.1.0"
 defaultTargets = ["mathengine"]
+testDriver = "tests"
 
 # Milestone M3 (book/TRACKING.md) adds Mathlib here for ℝ-valued semantics and HasDerivAt proofs:
 # [[require]]
@@ -14,3 +15,7 @@ name = "MathEngine"
 [[lean_exe]]
 name = "mathengine"
 root = "Main"
+
+[[lean_exe]]
+name = "tests"
+root = "Tests.Main"

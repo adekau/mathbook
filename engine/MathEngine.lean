@@ -1,3 +1,4 @@
+import MathEngine.Q
 import MathEngine.Expr
 import MathEngine.Semantics
 import MathEngine.Simp

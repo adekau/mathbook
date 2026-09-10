@@ -4,7 +4,7 @@ import MathEngine.Json
 namespace MathEngine
 
 partial def Expr.toJson : Expr → Json
-  | .num q => .obj #[("k", .str "num"), ("v", .obj #[("num", .str (toString q.num)), ("den", .str (toString q.den))])]
+  | .num q => .obj #[("k", .str "num"), ("v", .obj #[("num", .str (toString q.val.num)), ("den", .str (toString q.val.den))])]
   | .var x => .obj #[("k", .str "var"), ("name", .str x)]
   | .add es => .obj #[("k", .str "add"), ("args", .arr (es.toArray.map toJson))]
   | .mul es => .obj #[("k", .str "mul"), ("args", .arr (es.toArray.map toJson))]

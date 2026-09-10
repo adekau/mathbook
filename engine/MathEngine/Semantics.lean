@@ -12,14 +12,16 @@ open Expr
 
 abbrev Env := String → Int
 
+/-- The integer a numeral denotes, or `none` outside the fragment. -/
+def Q.asInt? (q : Q) : Option Int := if q.val.den = 1 then some q.val.num else none
+
 def Expr.asNat : Expr → Nat
-  | .num ⟨n, 1⟩ => n.toNat
+  | .num q => ((q.asInt?).map Int.toNat).getD 0
   | _ => 0
 
 mutual
   def evalZ (ρ : Env) : Expr → Int
-    | .num ⟨n, 1⟩ => n
-    | .num _      => 0
+    | .num q      => (q.asInt?).getD 0
     | .var x      => ρ x
     | .add es     => evalSum ρ es
     | .mul es     => evalProd ρ es

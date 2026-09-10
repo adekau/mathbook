@@ -1,0 +1,20 @@
+name = "mathproofs"
+version = "0.1.0"
+defaultTargets = ["Proofs"]
+
+# Theorems only. `engine/` is executable code and must never depend on this package or on
+# Mathlib (scripts/check-engine-deps.sh enforces it). ℝ-valued semantics and HasDerivAt
+# proofs land here in M3/M4; until then this package just checks that the split builds.
+
+[[require]]
+name = "mathengine"
+path = "../engine"
+
+# M3: uncomment and pin `lean-toolchain` (both packages) to Mathlib's toolchain.
+# [[require]]
+# name = "mathlib"
+# git = "https://github.com/leanprover-community/mathlib4"
+# rev = "master"
+
+[[lean_lib]]
+name = "Proofs"
