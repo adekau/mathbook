@@ -33,7 +33,7 @@ def Store.reset (st : Store) (id : String) : Store := st.filter (·.1 != id)
 def maxSteps : Nat := 10000
 
 def simpPlain : List PlainRule := simpRules.map Rule.toPlain
-def expandSet : List PlainRule := expandRules ++ simpPlain
+def expandSet : List PlainRule := expandRules ++ simpPlain ++ parityRules
 
 /-- Notebook commands: `simplify`, `expand`, `rref`, `N`, `subst`. -/
 def commandRules : List PlainRule := [
@@ -69,7 +69,7 @@ def commandRules : List PlainRule := [
       | _ => none }
 ]
 
-def pipelineRules : List PlainRule := commandRules ++ diffRules ++ matrixRules ++ simpPlain
+def pipelineRules : List PlainRule := commandRules ++ diffRules ++ matrixRules ++ simpPlain ++ parityRules
 
 /-- Evaluate one cell: parse, substitute the session's bindings, normalize with a trace, record the
 cell. Returns the updated session and either an error or the output with its derivation. -/

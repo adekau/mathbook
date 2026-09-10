@@ -186,10 +186,11 @@ private def leAdd (a b : Expr) : Bool :=
     ((Ord.compare (kindRank rb) (kindRank ra)).then ((compare ra rb).then (compare a b)))
   o != Ordering.gt
 
-/-- Sort the arguments of a sum or product; other nodes are unchanged. -/
+/-- Sort the arguments of a sum or product; other nodes are unchanged. Products containing a matrix
+are not commutative and are left in place (the reference gets this by trying `la.mul` before its sort rule). -/
 def canon : Expr → Expr
   | .add es => .add (es.mergeSort leAdd)
-  | .mul es => .mul (es.mergeSort leMul)
+  | .mul es => if es.any isMatrix then .mul es else .mul (es.mergeSort leMul)
   | e => e
 
 theorem measure_canon (W : Weights) (e : Expr) : measure W (canon e) = measure W e := by
@@ -199,7 +200,10 @@ theorem measure_canon (W : Weights) (e : Expr) : measure W (canon e) = measure W
     simp only [canon, measure, hw, measureList_perm W (List.mergeSort_perm es leAdd)]
   | mul es =>
     have hw : W.w (.mul (es.mergeSort leMul)) = W.w (.mul es) := W.head (.mul es) _
-    simp only [canon, measure, hw, measureList_perm W (List.mergeSort_perm es leMul)]
+    simp only [canon]
+    split
+    · rfl
+    · simp only [measure, hw, measureList_perm W (List.mergeSort_perm es leMul)]
   | _ => rfl
 
 -- ---------------------------------------------------------------------------

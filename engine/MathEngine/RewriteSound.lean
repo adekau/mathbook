@@ -16,7 +16,11 @@ theorem canon_refines (e : Expr) : Refines e (canon e) := by
   intro ρ v h
   cases e with
   | add es => simp only [canon, eval?] at h ⊢; rwa [evalSum?_perm ρ (List.mergeSort_perm es _)]
-  | mul es => simp only [canon, eval?] at h ⊢; rwa [evalProd?_perm ρ (List.mergeSort_perm es _)]
+  | mul es =>
+    simp only [canon]
+    split
+    · exact h
+    · simp only [eval?] at h ⊢; rwa [evalProd?_perm ρ (List.mergeSort_perm es _)]
   | _ => exact h
 
 theorem normAt_sound (rules : List (Rule W)) (hs : ∀ r ∈ rules, RuleSound r) :

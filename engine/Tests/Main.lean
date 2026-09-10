@@ -235,8 +235,25 @@ def tests : TestM Unit := do
   checkTrue "rpc error span" ((rpc "engine.evaluate" "{\"source\":\"3 4\"}").endsWith "\"span\":{\"start\":2,\"end\":3}}}}")
   checkTrue "rpc value json" ((rpc "engine.evaluate" "{\"source\":\"2x\"}").startsWith "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"ok\":true,\"value\":{\"k\":\"mul\",\"args\":[{\"k\":\"num\",\"v\":{\"num\":\"2\",\"den\":\"1\"}},{\"k\":\"var\",\"name\":\"x\"}]}")
 
+/-- M2 golden test: `Tests/golden.tsv` holds the reference engine's rendered text for a corpus of
+sources, evaluated in one session in file order (so `let` bindings carry over). It was produced by the
+wire-level differential test that ran both engines (`scripts/difftest.mjs`, last present in commit
+`20dc501`'s successor) with zero mismatches, and it is what stands in for the deleted reference. -/
+def goldenTests : TestM Unit := do
+  let lines ← (IO.FS.lines "Tests/golden.tsv").toBaseIO >>= fun r => match r with
+    | .ok ls => pure ls.toList
+    | .error e => do modify (·.push ⟨"golden file", "readable", toString e⟩); pure []
+  let mut st : Store := []
+  for line in lines do
+    match line.splitOn "\t" with
+    | [source, expected] =>
+      let (st', actual) := sessionEval st source
+      st := st'
+      check s!"golden: {source}" actual expected
+    | _ => pure ()
+
 def main : IO UInt32 := do
-  let ((), failures) ← tests.run #[]
+  let ((), failures) ← (do tests; goldenTests).run #[]
   for f in failures do
     IO.println s!"FAIL {f.name}\n  expected: {f.expected}\n  actual:   {f.actual}"
   IO.println s!"{failures.size} failures"

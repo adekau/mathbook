@@ -15,6 +15,7 @@
   },
   "exports": {
     ".": "./dist/index.js",
-    "./server": "./dist/server.js"
+    "./server": "./dist/server.js",
+    "./lean-native": "./dist/lean-native.js"
   }
 }
