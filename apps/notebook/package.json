@@ -1,0 +1,2 @@
+{ "name": "@mathbook/notebook", "version": "0.1.0", "private": true, "type": "module",
+  "dependencies": { "@mathbook/protocol": "0.1.0", "@mathbook/engine-host": "0.1.0" } }

@@ -1,0 +1,16 @@
+name = "mathengine"
+version = "0.1.0"
+defaultTargets = ["mathengine"]
+
+# Milestone M3 (book/TRACKING.md) adds Mathlib here for ℝ-valued semantics and HasDerivAt proofs:
+# [[require]]
+# name = "mathlib"
+# git = "https://github.com/leanprover-community/mathlib4"
+# rev = "master"
+
+[[lean_lib]]
+name = "MathEngine"
+
+[[lean_exe]]
+name = "mathengine"
+root = "Main"

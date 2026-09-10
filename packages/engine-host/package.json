@@ -1,0 +1,19 @@
+{
+  "name": "@mathbook/engine-host",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p .",
+    "serve": "node dist/server.js"
+  },
+  "dependencies": {
+    "@mathbook/protocol": "0.1.0",
+    "@mathbook/reference-ts": "0.1.0"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./server": "./dist/server.js"
+  }
+}

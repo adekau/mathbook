@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>mathbook — notebook prototype</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
+<style>
+  /* Placeholder styling. The real look comes from the Claude Design file (Notebook - Datadog Tactile). */
+  :root { --bg:#fafafa; --fg:#1b1b1b; --muted:#6b6b6b; --accent:#3b5bdb; --card:#fff; --line:#e6e6e6; --sel:#fff3bf; }
+  body { margin:0; font: 15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); display:grid; grid-template-columns: 1fr 380px; height:100vh; }
+  main { overflow:auto; padding:24px; }
+  aside { border-left:1px solid var(--line); background:var(--card); overflow:auto; padding:16px; }
+  header { display:flex; gap:12px; align-items:center; margin-bottom:16px; color:var(--muted); font-size:13px; }
+  header select, header input { font:inherit; }
+  .cell { background:var(--card); border:1px solid var(--line); border-radius:8px; margin-bottom:12px; }
+  .cell textarea { width:100%; box-sizing:border-box; border:0; padding:12px; font:14px/1.4 ui-monospace, monospace; background:transparent; resize:none; outline:none; }
+  .cell .out { padding:8px 12px 12px; border-top:1px dashed var(--line); min-height:1.6em; }
+  .cell .err { color:#c92a2a; font-family: ui-monospace, monospace; font-size:13px; }
+  .katex [data-path] { cursor:pointer; border-radius:3px; }
+  .katex [data-path]:hover { background:#e7f5ff; }
+  .katex [data-path].sel { background:var(--sel); }
+  .step { padding:8px 0; border-bottom:1px solid var(--line); }
+  .step .rule { font: 11px ui-monospace, monospace; color:var(--muted); }
+  .step .expl { font-size:13px; margin:4px 0; }
+  .step .sub { margin-left:12px; border-left:2px solid var(--line); padding-left:8px; }
+  .kbd { color:var(--muted); font-size:12px; }
+  h3 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:8px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <strong>mathbook</strong>
+    <label>engine <select id="engine"><option value="worker">in-browser (web worker)</option><option value="http">self-hosted (HTTP)</option></select></label>
+    <input id="url" value="http://localhost:8787" size="26" hidden />
+    <span id="caps"></span>
+    <span class="kbd">Shift+Enter evaluates · click any subterm of a result to see how it was derived</span>
+  </header>
+  <div id="cells"></div>
+</main>
+<aside>
+  <h3>Show work</h3>
+  <div id="work"><span class="kbd">Evaluate a cell to see its derivation.</span></div>
+</aside>
+<script type="module" src="app.js"></script>
+</body>
+</html>

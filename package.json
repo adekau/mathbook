@@ -1,0 +1,19 @@
+{
+  "name": "mathbook",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -ws --if-present",
+    "test": "npm test -ws --if-present",
+    "bundle": "node scripts/bundle.mjs",
+    "wasm": "scripts/build-wasm.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}
