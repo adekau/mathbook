@@ -39,6 +39,13 @@ def applyFn (f : String) (x : ℝ) : ℝ :=
   | "abs" => |x|
   | _ => 0
 
+@[simp] theorem applyFn_sin (x : ℝ) : applyFn "sin" x = Real.sin x := by simp [applyFn]
+@[simp] theorem applyFn_cos (x : ℝ) : applyFn "cos" x = Real.cos x := by simp [applyFn]
+@[simp] theorem applyFn_exp (x : ℝ) : applyFn "exp" x = Real.exp x := by simp [applyFn]
+@[simp] theorem applyFn_ln (x : ℝ) : applyFn "ln" x = Real.log x := by simp [applyFn]
+@[simp] theorem applyFn_sqrt (x : ℝ) : applyFn "sqrt" x = Real.sqrt x := by simp [applyFn]
+@[simp] theorem applyFn_abs (x : ℝ) : applyFn "abs" x = |x| := by simp [applyFn]
+
 mutual
   /-- Meaning of an expression in ℝ. Exponentiation is `Real.rpow`, which agrees with integer and
   natural powers (`Real.rpow_intCast`) and gives `Real.sqrt` its `x ^ (1/2)` reading. -/

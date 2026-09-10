@@ -44,7 +44,23 @@ M3 DONE 2026-09-10: Mathlib pinned at release tag v4.33.1 in `proofs/` — its l
    now written down. The other five rules are unconditionally sound and `normalizeR_sound` folds them.
    Engine change: `RewriteSound`'s fold is now stated for an abstract `Congruence`, so ℝ (and M4's derivatives, and any
    future module) reuse the M1 theorem instead of re-proving it. Axioms: propext, Classical.choice, Quot.sound only.
-M4 `HasDerivAt` proofs for each `diff.*` rule (in `proofs/`, against `evalR`; expect side conditions like M3's).
+M4 DONE 2026-09-10: `proofs/Proofs/Deriv.lean`. `evalR` could not take the `diff` case: a `diff` node's second child is a
+   *binder*, and `Expr` does not mark binder positions, so `.var x` and `.add [.var x]` denote the same real while only one
+   reads as "the variable we differentiate along" — a semantics interpreting `diff` cannot satisfy `SemEqR.congr`, the law
+   M3's fold rests on. So M4 *extends* instead: `evalD` reads `diff` via Mathlib's `deriv`, and `evalD_eq_evalR` proves the
+   two agree on every diff-free term. Third layer of the same pattern: eval? ⊂ evalR ⊂ evalD, each shown a restriction of
+   the next. Supporting lemmas: `upd`/`upd_self`/`upd_comm` and `evalD_upd_not_free` (rebinding a variable a term does not
+   mention changes nothing).
+   Unconditional: `diff.constant`, `diff.variable`, `diff.constant-multiple` (`deriv_const_mul_field` needs no
+   differentiability). Conditional, hypothesis stated: `diff.sum` (every summand), `diff.product` (two factors),
+   `diff.power` (natural exponent, differentiable base — `Real.rpow_natCast` avoids any positivity), `diff.chain` for sin,
+   cos, exp. `not_diff_sum_sound` *proves* the sum rule is not unconditional: at 0, `|x| + x` gives 1 where the derivative
+   does not exist — the `diff.*` analogue of M3's `not_collectPowers_soundR`.
+   Not claimed: `diff.higher-order` is an abbreviation (it eliminates the three-argument form, so there is nothing to
+   prove); `diff.matrix` is proved but vacuous while matrices carry no ℝ value — real content is M7. `ln`/`tan` chain
+   cases need a domain condition and are open, as is `diff.power` for real exponents.
+   The engine reports all of this through `engine.capabilities.ruleStatus`, so the notebook's proof-status panel now says
+   "conditional" with the actual hypothesis instead of "no soundness theorem yet". Axioms: the three standard ones.
 M5 termination: measure-decreasing proof replaces the step budget (connects to the order-theory book).
 M6 origin tracking for `explain` (van Deursen–Klint–Tip 1993); current path-prefix heuristic over-approximates.
 M7 linear algebra over ℚ verified (elimination preserves solution set).

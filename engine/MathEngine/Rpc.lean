@@ -29,10 +29,19 @@ def ruleStatus : Json :=
     entry "simp.collect-like-terms" "verified" "Distributivity: a·t + b·t = (a+b)·t.",
     entry "simp.power" "verified" "Includes exact roots; the root search returns only checked roots.",
     entry "simp.collect-powers" "conditional" "b^m·b^n = b^(m+n) needs a positive base: at b = 0 it turns 0 into 1.",
-    entry "simp.function" "conditional" "exp(ln x) = x needs 0 < x: at x = -1 it turns -1 into 1."]
+    entry "simp.function" "conditional" "exp(ln x) = x needs 0 < x: at x = -1 it turns -1 into 1.",
+    entry "diff.constant" "verified" "A term the variable does not occur in has derivative 0.",
+    entry "diff.variable" "verified" "The identity function has slope 1 everywhere.",
+    entry "diff.constant-multiple" "verified" "Constant factors pull out; no differentiability needed.",
+    entry "diff.sum" "conditional" "Needs every summand differentiable: for |x| + x at 0 the rule gives 1 where the derivative does not exist.",
+    entry "diff.product" "conditional" "Needs both factors differentiable at the point.",
+    entry "diff.power" "conditional" "Proved for a natural exponent with a differentiable base; real exponents still open.",
+    entry "diff.chain" "conditional" "Needs the inner function differentiable; proved for sin, cos and exp, while ln and tan also need a domain condition.",
+    entry "diff.matrix" "unverified" "Proved, but matrices carry no value in the ℝ semantics yet, so the theorem has no content until M7.",
+    entry "diff.higher-order" "unverified" "An abbreviation: it eliminates the three-argument form, so there is nothing to prove."]
 
 def capabilities : Json :=
-  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m3"), ("verified", .bool true),
+  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m4"), ("verified", .bool true),
          ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric"]),
          ("ruleStatus", ruleStatus)]
 

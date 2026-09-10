@@ -45,6 +45,11 @@ differential test with zero mismatches.
   is stated for an abstract `Congruence` (reflexive, transitive, a congruence under `withChildren`,
   invariant under `canon`). Supply those four facts for a new semantics and normalization's
   soundness follows without touching the rewriter. The integer fragment and ℝ are two instances.
+- **Semantics are added in layers, never edited.** `eval?` (integer fragment, M1) ⊂ `evalR` (ℝ, M3) ⊂ `evalD` (ℝ with
+  derivatives, M4), each with a theorem that the previous one is a restriction of it. A new layer extends rather than
+  replaces because the earlier theorems are stated against the earlier semantics; widening in place would silently
+  restate them. It is also forced here: `evalR` cannot interpret `diff`, whose second child is a binder that `Expr`
+  does not distinguish from a value, and a semantics reading it breaks the congruence M3's fold needs.
 - **A rule that needs a side condition says so.** Over ℝ, `simp.collect-powers` and part of
   `simp.function` are only sound away from `0` (see `book/TRACKING.md`, M3). The engine keeps the
   usual computer-algebra behaviour; `proofs/` states the hypothesis and *proves* that no

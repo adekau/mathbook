@@ -2,6 +2,7 @@ import MathEngine
 import Proofs.Q
 import Proofs.Semantics
 import Proofs.SimpReal
+import Proofs.Deriv
 /-!
 # Proofs about the engine (skeleton)
 
