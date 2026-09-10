@@ -2,8 +2,9 @@ import MathEngine
 /-!
 # Engine tests (`lake test`)
 
-The cases are ported from `packages/reference-ts/test/engine.test.mjs`, which is the spec until
-M2 deletes it. Each `check` compares a string; failures are listed and the exit code is 1.
+The cases were ported from the TypeScript reference engine's `engine.test.mjs` (deleted in M2, commit
+c18b367); `Tests/golden.tsv` holds its answers on a larger corpus. Each `check` compares a string;
+failures are listed and the exit code is 1.
 -/
 open MathEngine
 
@@ -238,7 +239,7 @@ def tests : TestM Unit := do
 /-- M2 golden test: `Tests/golden.tsv` holds the reference engine's rendered text for a corpus of
 sources, evaluated in one session in file order (so `let` bindings carry over). It was produced by the
 wire-level differential test that ran both engines (`scripts/difftest.mjs`, last present in commit
-`20dc501`'s successor) with zero mismatches, and it is what stands in for the deleted reference. -/
+680e360) with zero mismatches, and it is what stands in for the deleted reference. -/
 def goldenTests : TestM Unit := do
   let lines ← (IO.FS.lines "Tests/golden.tsv").toBaseIO >>= fun r => match r with
     | .ok ls => pure ls.toList

@@ -10,7 +10,7 @@ One math engine, written in Lean 4, compiled to native (CLI, stdio server) and t
 `packages/protocol` and never learns which one beyond `engine.capabilities`.
 
 The TypeScript reference engine the Lean engine was ported from was deleted after M2 (last present
-in commit `20dc501`'s successor `M2:` commit). Its test suite lives on in `engine/Tests/Main.lean`
+in commit 680e360). Its test suite lives on in `engine/Tests/Main.lean`
 and its answers on a 147-source corpus in `engine/Tests/golden.tsv`, produced by a wire-level
 differential test with zero mismatches.
 

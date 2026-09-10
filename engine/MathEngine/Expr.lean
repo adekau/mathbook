@@ -2,8 +2,7 @@ import MathEngine.Q
 /-!
 # Expression syntax
 
-Mirrors `packages/reference-ts/src/ast.ts` node for node; `Wire.lean` serializes to the
-same JSON. No subtraction/division/negation constructors — fewer cases in every proof:
+Node for node the same tree as the protocol's `WireExpr` (`Wire.lean` serializes to it). No subtraction/division/negation constructors — fewer cases in every proof:
 `a - b` is `add [a, mul [-1, b]]`, `a / b` is `mul [a, pow b (-1)]`, `-a` is `mul [-1, a]`.
 The printer recovers the human notation.
 -/
