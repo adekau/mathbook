@@ -180,6 +180,21 @@ end
 instance : BEq Expr := ⟨beq⟩
 def equal (a b : Expr) : Bool := beq a b
 
+/-- Elementwise lifting of a relation on expressions to argument lists. Used to say "these children
+were each rewritten soundly", which is the induction hypothesis every congruence proof needs. -/
+def RelList (R : Expr → Expr → Prop) : List Expr → List Expr → Prop
+  | [], [] => True
+  | a :: as, b :: bs => R a b ∧ RelList R as bs
+  | _, _ => False
+
+theorem RelList_length {R : Expr → Expr → Prop} : ∀ {as bs : List Expr}, RelList R as bs → as.length = bs.length
+  | [], [], _ => rfl
+  | _ :: as, _ :: bs, ⟨_, h⟩ => by simp [RelList_length h]
+
+theorem RelList_refl {R : Expr → Expr → Prop} (h : ∀ e, R e e) : ∀ l : List Expr, RelList R l l
+  | [] => trivial
+  | e :: es => ⟨h e, RelList_refl h es⟩
+
 mutual
   theorem beq_eq : ∀ a b : Expr, beq a b = true → a = b
     | .num p, b, h => by cases b <;> simp [beq] at h; rw [h]

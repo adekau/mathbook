@@ -79,10 +79,7 @@ theorem Refines.trans {a b c : Expr} (h₁ : Refines a b) (h₂ : Refines b c) :
   fun ρ v h => h₂ ρ v (h₁ ρ v h)
 
 /-- Elementwise refinement of argument lists. -/
-def RefinesList : List Expr → List Expr → Prop
-  | [], [] => True
-  | a :: as, b :: bs => Refines a b ∧ RefinesList as bs
-  | _, _ => False
+abbrev RefinesList : List Expr → List Expr → Prop := RelList Refines
 
 theorem evalSum?_refines (ρ : Env) : ∀ {as bs : List Expr}, RefinesList as bs →
     ∀ v, evalSum? ρ as = some v → evalSum? ρ bs = some v
@@ -100,13 +97,9 @@ theorem evalProd?_refines (ρ : Env) : ∀ {as bs : List Expr}, RefinesList as b
     obtain ⟨x, hx, s, hs, rfl⟩ := h
     exact ⟨x, hab ρ x hx, s, evalProd?_refines ρ hrest s hs, rfl⟩
 
-theorem RefinesList_length : ∀ {as bs : List Expr}, RefinesList as bs → as.length = bs.length
-  | [], [], _ => rfl
-  | _ :: as, _ :: bs, ⟨_, h⟩ => by simp [RefinesList_length h]
-
 theorem RefinesList_flatten_regroup (rows : List (List Expr)) (cs : List Expr)
     (h : RefinesList rows.flatten cs) : RefinesList rows.flatten (regroup rows cs).flatten := by
-  rw [flatten_regroup rows cs (RefinesList_length h).symm]; exact h
+  rw [flatten_regroup rows cs (RelList_length h).symm]; exact h
 
 /-- Refinement is a congruence: refine the children, refine the node. -/
 theorem Refines.congr (e : Expr) (cs : List Expr) (h : RefinesList (children e) cs) :
