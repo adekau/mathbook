@@ -279,3 +279,9 @@ Renamed (2026-09-14, Alex: "ChalkMath, chalkmath.com is available"): the noteboo
    ones read as a fallback; the engine selector says "kernel · wasm / http". Toolbar trimmed to the Enter hint;
    cell counts moved to the status bar; the "exact arithmetic · verified engine · termination proven" line is gone
    (the statuses on the steps say it where it matters). Light-theme button edges darkened.
+Notebook tabs (2026-09-14): several notebooks open at once, one tab each, each with its own engine session (so `%`
+   and `let` bindings are per notebook); `+` opens a new one, `×` closes one (an unsaved notebook asks first; the
+   last tab closing leaves a fresh one); File › Open goes into a new tab unless the current one is untouched. A tab
+   is italic with a `*` while the notebook differs from its last save or open; the browser autosave keeps every open
+   tab, which is current, and the unsaved marks; a restored notebook re-runs its cells when its tab is first shown
+   and, if it was clean, stays clean.

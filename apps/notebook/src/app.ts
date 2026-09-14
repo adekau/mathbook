@@ -174,7 +174,23 @@ interface Scene { id: number; name: string; shots: Shot[] }
 
 type Tab = "notebook" | "studio" | "reference";
 
+/** One open notebook: its cells, its studio scenes and its own engine session. The globals below
+ *  (`S.cells`, `S.docName`, `ST.scenes`, `sessionId`) are views of the current one; `stashDoc` and
+ *  `loadDoc` swap them. */
+interface Nb {
+  id: string; name: string; sessionId: string;
+  cells: Cell[]; scenes: Scene[]; studioActive: number; active: number; nextLabel: number;
+  /** The serialized notebook at the last save or open; the tab shows `*` while the live state differs. */
+  savedText: string;
+  /** The serialized notebook at the last stash, for the dirty mark of a document that is not current. */
+  text: string;
+  /** Whether the engine session has been rebuilt from the cells since the document was restored. */
+  hydrated: boolean;
+}
+
 const S = {
+  docs: [] as Nb[],
+  doc: 0,
   cells: [] as Cell[],
   active: 0,
   rail: "outline" as "outline" | "palette",
@@ -201,7 +217,7 @@ const S = {
 };
 
 let client: EngineClient | null = null;
-const sessionId = crypto.randomUUID();
+let sessionId: string = crypto.randomUUID();
 let nextLabel = 1;
 let cellSeq = 0;
 let shotSeq = 0;
@@ -375,6 +391,110 @@ function wireTerm(host: HTMLElement, cell: Cell, term: TermRef) {
 }
 
 // ---------------------------------------------------------------------------
+// Documents: several notebooks open as tabs, each with its own engine session
+// ---------------------------------------------------------------------------
+
+const currentDoc = () => S.docs[S.doc];
+
+/** Copy the live globals back into the current document. */
+function stashDoc() {
+  const d = currentDoc(); if (!d) return;
+  d.name = S.docName; d.cells = S.cells; d.scenes = ST.scenes; d.studioActive = ST.active; d.active = S.active;
+  d.nextLabel = nextLabel; d.sessionId = sessionId; d.text = serializeNotebook();
+}
+
+/** Make document `i` current: its cells, scenes and session become the live ones. A document whose
+ *  session has not been rebuilt since it was restored is re-run once the engine is up. */
+function loadDoc(i: number) {
+  stashDoc();
+  const d = S.docs[i]; if (!d) return;
+  S.doc = i;
+  S.docName = d.name; S.cells = d.cells; ST.scenes = d.scenes; ST.active = d.studioActive; ST.t = 0; stopPlayback();
+  S.active = Math.min(d.active, Math.max(0, d.cells.length - 1)); nextLabel = d.nextLabel; sessionId = d.sessionId;
+  S.sel = null; hideCompletions(); hideHover();
+  renderChrome(); renderCells(); renderSidebar(); renderPanelHead(); renderPanel();
+  if (S.tab === "studio") renderStudio();
+  if (!d.hydrated && client) hydrate(d);
+}
+
+/** Rebuild a restored document's engine session by re-running its cells. Re-running renumbers the
+ *  cells, so a document that was clean stays clean: its saved baseline moves to the re-run state. */
+function hydrate(d: Nb) {
+  d.hydrated = true;
+  const wasClean = !docDirty(d);
+  void runAll().then(() => { if (wasClean && d === currentDoc()) { d.savedText = serializeNotebook(); renderTabs(); autosave(); } });
+}
+
+function makeDoc(name: string, cells: Cell[] = [], scenes: Scene[] = []): Nb {
+  return { id: `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name, sessionId: crypto.randomUUID(),
+    cells, scenes, studioActive: 0, active: 0, nextLabel: Math.max(0, ...cells.map((c) => c.label ?? 0)) + 1,
+    savedText: "", text: "", hydrated: true };
+}
+
+/** Open a new, empty notebook in its own tab. */
+function newDoc(name = "untitled.chalk"): Nb {
+  const d = makeDoc(name);
+  S.docs.push(d);
+  loadDoc(S.docs.length - 1);
+  addCell();
+  d.savedText = serializeNotebook();   // an untouched new notebook is not "unsaved"
+  renderChrome(); renderCells(); renderSidebar();
+  return d;
+}
+
+/** Whether a document differs from its last saved (or opened) state. */
+function docDirty(d: Nb): boolean {
+  const live = d === currentDoc() ? serializeNotebook() : d.text;
+  return live !== d.savedText;
+}
+
+/** A new notebook nobody has typed in: the natural place to open a file into. */
+function docPristine(d: Nb): boolean {
+  return d.name === "untitled.chalk" && d.scenes.length === 0 && d.cells.every((c) => !(c.input?.value ?? c.src).trim() && !c.outLatex);
+}
+
+/** Close a tab; an unsaved notebook asks first. The last tab closing leaves a fresh one. */
+function closeDoc(i: number) {
+  const d = S.docs[i]; if (!d) return;
+  if (i === S.doc) stashDoc();
+  if (docDirty(d) && !window.confirm(`Close ${d.name} without saving?`)) return;
+  if (client) void client.call("engine.resetSession", { sessionId: d.sessionId }).catch(() => undefined);
+  S.docs.splice(i, 1);
+  if (!S.docs.length) { S.doc = -1; newDoc(); }
+  else {
+    // make the neighbour current without stashing the closed document back
+    const j = Math.min(i, S.docs.length - 1);
+    S.doc = -1;
+    loadDoc(j);
+  }
+  log("ok", `closed ${d.name}`);
+  autosave();
+}
+
+/** The tab bar: one tab per open notebook (italic with a star while unsaved), then the studio and the reference. */
+function renderTabs() {
+  const tabs = $(".tabbar"); tabs.innerHTML = "";
+  S.docs.forEach((d, i) => {
+    const dirty = docDirty(d);
+    const on = S.tab === "notebook" && i === S.doc;
+    const t = h("div", `tab${on ? " on" : ""}${dirty ? " dirty" : ""}`);
+    t.title = dirty ? `${d.name} — unsaved changes` : d.name;
+    const x = h("span", "x", "×"); x.title = "Close";
+    x.addEventListener("click", (ev) => { ev.stopPropagation(); closeDoc(i); });
+    t.append(h("span", "label", `${d.name}${dirty ? "*" : ""}`), x);
+    t.addEventListener("click", () => { if (i !== S.doc) loadDoc(i); switchTab("notebook"); });
+    tabs.append(t);
+  });
+  for (const [key, label] of [["studio", "manim studio"], ["reference", "reference"]] as const) {
+    const t = h("div", `tab${S.tab === key ? " on" : ""}`);
+    t.append(h("span", "label", label));
+    t.addEventListener("click", () => switchTab(key));
+    tabs.append(t);
+  }
+  tabs.append((() => { const a = h("div", "tabadd", "+"); a.title = "New notebook"; a.addEventListener("click", () => { newDoc(); switchTab("notebook"); }); return a; })());
+}
+
+// ---------------------------------------------------------------------------
 // Notebook files (.chalk): sources, outputs and studio scenes as JSON
 // ---------------------------------------------------------------------------
 
@@ -400,11 +520,24 @@ async function loadNotebook(text: string, name?: string) {
   let doc: ChalkFile;
   try { doc = JSON.parse(text) as ChalkFile; } catch { log("err", "not a .chalk file: invalid JSON"); return; }
   if ((doc.chalk !== 1 && doc.lemma !== 1) || !Array.isArray(doc.cells)) { log("err", "not a .chalk file"); return; }
-  await restartKernel();
-  S.docName = name ?? doc.name ?? "untitled.chalk";
-  S.cells = [];
-  for (const c of doc.cells) {
-    const cell = addCell(c.src);
+  const d = makeDoc(name ?? doc.name ?? "untitled.chalk", cellsFromFile(doc), Array.isArray(doc.scenes) ? doc.scenes : []);
+  if (!d.cells.length) d.cells.push(freshCell());
+  // an untouched new notebook is replaced; otherwise the file gets its own tab
+  const cur = currentDoc();
+  if (cur && docPristine(cur)) { stashDoc(); S.docs[S.doc] = d; S.doc = -1; loadDoc(S.docs.indexOf(d)); }
+  else { S.docs.push(d); loadDoc(S.docs.length - 1); }
+  switchTab("notebook");
+  log("ok", `opened ${d.name}: ${d.cells.length} cells, ${d.scenes.length} scenes`);
+  await runAll();
+  d.savedText = serializeNotebook();
+  renderTabs();
+  autosave();
+}
+
+/** Cells from a file's records (no DOM yet). */
+function cellsFromFile(doc: ChalkFile): Cell[] {
+  return doc.cells.map((c) => {
+    const cell = freshCell(c.src);
     cell.showWork = c.showWork ?? false; cell.label = c.label ?? null;
     if (c.outLatex) cell.outLatex = c.outLatex;
     if (c.outText) cell.outText = c.outText;
@@ -413,15 +546,8 @@ async function loadNotebook(text: string, name?: string) {
     if (c.steps) cell.steps = c.steps;
     if (c.error) cell.error = c.error;
     if (c.plot) cell.plot = c.plot;
-  }
-  if (!S.cells.length) addCell();
-  nextLabel = Math.max(0, ...S.cells.map((c) => c.label ?? 0)) + 1;
-  ST.scenes = Array.isArray(doc.scenes) ? doc.scenes : [];
-  ST.active = 0; ST.t = 0;
-  renderChrome(); renderCells(); renderSidebar();
-  log("ok", `opened ${S.docName}: ${S.cells.length} cells, ${ST.scenes.length} scenes`);
-  await runAll();
-  autosave();
+    return cell;
+  });
 }
 
 async function runAll() { for (const c of [...S.cells]) if ((c.input?.value ?? c.src).trim()) await runCell(c); }
@@ -439,7 +565,13 @@ function download(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function saveNotebook() { download(S.docName, serializeNotebook()); log("ok", `saved ${S.docName}`); }
+function saveNotebook() {
+  const text = serializeNotebook();
+  download(S.docName, text);
+  const d = currentDoc(); if (d) d.savedText = text;
+  renderTabs(); autosave();
+  log("ok", `saved ${S.docName}`);
+}
 function saveNotebookAs() {
   const name = window.prompt("Save notebook as", S.docName);
   if (!name) return;
@@ -456,18 +588,20 @@ function openNotebook() {
   inp.click();
 }
 function newNotebook() {
-  void (async () => {
-    await restartKernel();
-    S.docName = "untitled.chalk"; S.cells = []; addCell(); ST.scenes = []; ST.active = 0;
-    renderChrome(); renderCells(); renderSidebar();
-    autosave();
-    log("ok", "new notebook");
-  })();
+  newDoc(); switchTab("notebook");
+  autosave();
+  log("ok", "new notebook");
 }
 
-/** The notebook survives a reload: autosaved to the browser after every run or edit. */
+/** What the browser keeps between reloads: every open notebook, which one is current, and whether
+ *  each had unsaved changes. */
+interface Autosave { chalkmath: 1; active: number; docs: { file: ChalkFile; dirty: boolean }[] }
+
+/** The notebooks survive a reload: autosaved to the browser after every run or edit. */
 function autosave() {
-  try { localStorage.setItem("chalkmath.autosave", serializeNotebook()); } catch { /* storage may be unavailable */ }
+  stashDoc();
+  const doc: Autosave = { chalkmath: 1, active: S.doc, docs: S.docs.map((d) => ({ file: JSON.parse(d.text) as ChalkFile, dirty: docDirty(d) })) };
+  try { localStorage.setItem("chalkmath.autosave", JSON.stringify(doc)); } catch { /* storage may be unavailable */ }
 }
 function restoreAutosave(): string | null {
   try { return localStorage.getItem("chalkmath.autosave") ?? localStorage.getItem("lemma.autosave"); } catch { return null; }
@@ -477,8 +611,9 @@ function restoreAutosave(): string | null {
 // Cell list operations
 // ---------------------------------------------------------------------------
 
+function freshCell(src = ""): Cell { return { id: `c${++cellSeq}`, src, label: null, showWork: false }; }
 function addCell(src = ""): Cell {
-  const cell: Cell = { id: `c${++cellSeq}`, src, label: null, showWork: false };
+  const cell: Cell = freshCell(src);
   S.cells.push(cell);
   renderCells();
   return cell;
@@ -605,14 +740,7 @@ function renderChrome() {
   tb.append(brand, menus, h("div", "spacer"), theme, kernel);
 
   // tab bar
-  const tabs = $(".tabbar"); tabs.innerHTML = "";
-  for (const [key, label] of [["notebook", S.docName], ["studio", "manim studio"], ["reference", "reference"]] as const) {
-    const t = h("div", `tab${S.tab === key ? " on" : ""}`);
-    t.append(h("span", "label", label), h("span", "x", "×"));
-    t.addEventListener("click", () => switchTab(key));
-    tabs.append(t);
-  }
-  tabs.append((() => { const a = h("div", "tabadd", "+"); a.addEventListener("click", () => { switchTab("notebook"); const c = addCell(); focusCell(S.cells.indexOf(c)); }); return a; })());
+  renderTabs();
 
   // rail
   const rail = $(".rail"); rail.innerHTML = "";
@@ -797,7 +925,7 @@ function renderCells() {
     input.spellcheck = false;
     cell.input = input;
     input.addEventListener("focus", () => { S.active = i; renderChrome(); renderSidebar(); markActive(); });
-    input.addEventListener("input", () => { cell.src = input.value; updateCompletions(cell); renderSidebar(); });
+    input.addEventListener("input", () => { cell.src = input.value; updateCompletions(cell); renderSidebar(); renderTabs(); });
     input.addEventListener("blur", () => { hideCompletions(); });
     input.addEventListener("keydown", (ev) => onKey(ev, cell, i));
     mid.append(input);
@@ -1879,19 +2007,32 @@ renderPanel();
 renderView();
 document.addEventListener("click", () => { if (S.menu) { S.menu = null; renderChrome(); } });
 const saved = restoreAutosave();
+let restoredActive = 0;
 if (saved) {
-  // sources and outputs come back at once; the engine session is rebuilt by re-running once connected
+  // sources and outputs come back at once; each engine session is rebuilt by re-running when its tab is shown
   try {
-    const doc = JSON.parse(saved) as ChalkFile;
-    S.docName = doc.name ?? S.docName;
-    for (const c of doc.cells) { const cell = addCell(c.src); cell.showWork = c.showWork ?? false; cell.label = c.label ?? null; if (c.outLatex) cell.outLatex = c.outLatex; if (c.outText) cell.outText = c.outText; if (c.form) cell.form = c.form; if (c.echoLatex) cell.echoLatex = c.echoLatex; if (c.steps) cell.steps = c.steps; if (c.plot) cell.plot = c.plot; }
-    nextLabel = Math.max(0, ...S.cells.map((c) => c.label ?? 0)) + 1;
-    ST.scenes = Array.isArray(doc.scenes) ? doc.scenes : [];
+    const parsed = JSON.parse(saved) as Autosave | ChalkFile;
+    const entries: { file: ChalkFile; dirty: boolean }[] = "chalkmath" in parsed && Array.isArray(parsed.docs)
+      ? parsed.docs
+      : [{ file: parsed as ChalkFile, dirty: false }];
+    for (const { file, dirty } of entries) {
+      const d = makeDoc(file.name ?? "untitled.chalk", cellsFromFile(file), Array.isArray(file.scenes) ? file.scenes : []);
+      if (!d.cells.length) d.cells.push(freshCell());
+      d.hydrated = false;
+      S.docs.push(d);
+      // the saved text is what the tab compares against; a dirty document compares against nothing
+      d.text = JSON.stringify({ chalk: 1, name: d.name, cells: file.cells, scenes: d.scenes }, null, 2);
+      d.savedText = dirty ? "" : d.text;
+    }
+    restoredActive = "chalkmath" in parsed && typeof parsed.active === "number" ? parsed.active : 0;
   } catch { /* ignore a corrupt autosave */ }
 }
-if (!S.cells.length) { for (const s of SAMPLES) addCell(s); }
-if (S.cells[S.cells.length - 1]?.src.trim()) addCell();
-renderChrome();
-renderCells();
-renderSidebar();
-void connect().then(() => { if (saved) void runAll(); });
+if (!S.docs.length) {
+  const d = makeDoc("untitled.chalk", SAMPLES.map((src) => freshCell(src)));
+  d.cells.push(freshCell());
+  S.docs.push(d);
+}
+S.doc = -1;
+loadDoc(Math.min(restoredActive, S.docs.length - 1));
+if (!saved) { const d = currentDoc(); if (d) d.savedText = serializeNotebook(); }
+void connect().then(() => { const d = currentDoc(); if (d && !d.hydrated) hydrate(d); });
