@@ -121,9 +121,11 @@ implemented outside the engine:
 
 - images: render LaTeX (KaTeX/MathJax) or a visual spec to SVG/PNG in the frontend or a headless host;
 - manim / animation: a generator from `Derivation` JSON, using each step's whole-term `before`/`after`
-  and `path` to animate the rewrite. This is why derivations stay complete and why M6 (origin
-  tracking, stable subterm identities across steps) matters beyond `explain`: morphing a subterm
-  needs to know it is "the same" subterm.
+  and `path` to animate the rewrite. This is why derivations stay complete and why origin tracking
+  (`Origin.lean`, M6) matters beyond `explain`: morphing a subterm needs to know it is "the same"
+  subterm. `explain` traces a position backwards through the steps — its own origin outside a
+  redex (a theorem), the equal subterms of the redex inside the contractum, or *created* — and
+  reports one relation per step (`created` / `copied` / `contains`).
 
 Export formats are added as packages under `packages/` (e.g. `packages/export-manim`); the engine
 does not change.

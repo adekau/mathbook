@@ -1,4 +1,5 @@
 import MathEngine.PipelineOrder
+import MathEngine.Origin
 import MathEngine.Parser
 /-!
 # Sessions, commands and the evaluation pipeline
@@ -55,23 +56,33 @@ inductive TermRef where
   | output
   | step (n : Nat)
 
-/-- The subterm at `path` in the chosen term, and the steps that touched it. Prototype heuristic:
-every step up to that term that fired at, above, or below the path. Rewriting *moves* subterms, so
-this over-approximates; proper origin tracking is M6. For the input nothing produced the term yet. -/
+/-- The subterm at `path` in the chosen term, and the steps that produced it with how (M6 origin
+tracking, `Origin.lean`). Steps come back in derivation order, each once; the relations carry the
+finer story (a step can both create a node and copy one of its parts). -/
 def explainCell (s : Session) (cellId : String) (path : Path) (ref : TermRef := .output) :
-    Except String (Expr × Array Step) :=
+    Except String (Expr × Array Step × List (Nat × Relation)) :=
   match s.cells.lookup cellId with
   | none => .error s!"unknown cell {cellId}"
   | some cell =>
     let d := cell.derivation
-    let (term, upto) : Expr × Nat := match ref with
+    let (term, k) : Expr × Nat := match ref with
       | .input => (d.input, 0)
       | .output => (cell.output, d.steps.size)
-      | .step n => ((d.steps[n]?.map (·.after)).getD cell.output, n + 1)
+      | .step n => ((d.steps[n]?.map (·.after)).getD cell.output, n)
     match term.at? path with
     | none => .error s!"bad path {path}"
     | some sub =>
-      let related := (d.steps.toList.take upto).filter fun st => isPrefix st.path path || isPrefix path st.path
-      .ok (sub, related.toArray)
+      let infos := d.steps.map fun st => ({ before := st.before, after := st.after, path := st.path } : StepInfo)
+      let rels := match ref with
+        | .input => []
+        | _ => trace infos cell.output k path
+      -- one relation per step: created beats copied beats contains
+      let rank : Relation → Nat | .created => 0 | .copied => 1 | .contains => 2
+      let indices := (rels.map (·.1)).eraseDups.mergeSort (· ≤ ·)
+      let best := indices.map fun i =>
+        let rs := (rels.filter (·.1 == i)).map (·.2)
+        (i, rs.foldl (fun b r => if rank r < rank b then r else b) .contains)
+      let steps := best.filterMap fun (i, _) => d.steps[i]?
+      .ok (sub, steps.toArray, best)
 
 end MathEngine

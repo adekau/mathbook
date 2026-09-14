@@ -93,6 +93,19 @@ M5 termination: measure-decreasing proof replaces the step budget (connects to t
      `A + 1`, nested matrices are errors instead of junk normal forms; parity rules leave exponents 0 and 1 to
      `simp.power`; `diff(f, 2)` and `diff(f, x, 0)` are errors.
 M6 origin tracking for `explain` (van Deursen–Klint–Tip 1993); current path-prefix heuristic over-approximates.
+   DONE 2026-09-14: `engine/MathEngine/Origin.lean`. `explain` now traces the selected position *backwards* through the
+   derivation instead of comparing final paths: outside a step's redex a position is its own origin
+   (`at?_replaceAt_disjoint`, the theorem that makes skipping the step sound); inside the contractum its origins are the
+   positions of equal subterms of the redex (`copied`); with none, the step `created` the node and its children are
+   traced on; a position containing the redex is `contains`. Equality is taken up to the argument order `canon` may
+   change (`canonDeep`), which is also how the silent reorderings between recorded steps are bridged. The result is one
+   relation per step, in derivation order, sent as `ExplainResult.trace`; `explain` also accepts which term the path is
+   into (input, output, or the term after step n), and the notebook renders every term with paths, so any subterm of any
+   line is selectable and a step click shows the trail up to it with the relations. Findings: (1) a trace must stop at a
+   created node but continue into its parts, or the history of `2·x·cos x` would be "the product rule" and nothing
+   else; (2) exact equality breaks at the first silent sort (`x^(3+-1)` vs `x^(-1+3)`), which the first test caught;
+   (3) what remains over-approximate is equal subterms at several positions, the paper's secondary origins — reported
+   as sets, never dropped.
 M7 linear algebra over ℚ verified (elimination preserves solution set).
 M8 integration as a verified *checker* (`deriv (integrate f) = f`), not a verified integrator.
 Open: radical simplification (sqrt 8 → 2√2), user functions with parameters, plotting, design file import.

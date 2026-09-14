@@ -132,11 +132,21 @@ export interface ExplainParams {
   term?: { kind: "output" } | { kind: "input" } | { kind: "step"; index: number };
 }
 
+/** How a step relates to the selected subterm (M6 origin tracking). */
+export interface StepRelation {
+  /** Index into the cell's derivation steps. */
+  index: number;
+  /** `created`: the rule built this node. `copied`: it moved or duplicated it. `contains`: it fired below it. */
+  relation: "created" | "copied" | "contains";
+}
+
 export interface ExplainResult {
-  /** The subterm at `path` and the steps up to that term that fired at, above or below it. */
+  /** The subterm at `path` and the steps that produced it, traced backwards through the derivation. */
   subterm: WireExpr;
   rendered: Rendered;
   steps: Step[];
+  /** Same steps with how each one relates, in derivation order. Optional (M6). */
+  trace?: StepRelation[];
 }
 
 export interface Methods {

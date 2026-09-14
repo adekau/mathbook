@@ -93,7 +93,7 @@ interface Cell {
 }
 
 type TermRef = { kind: "output" } | { kind: "input" } | { kind: "step"; index: number };
-interface Selection { cellId: string; term: TermRef; path: Path; latex: string; text: string; related: Step[] }
+interface Selection { cellId: string; term: TermRef; path: Path; latex: string; text: string; related: Step[]; trace: Map<number, string> }
 const sameStep = (a: Step, b: Step) => a.rule === b.rule && a.explanation === b.explanation && a.path.join(".") === b.path.join(".");
 const termKey = (t: TermRef) => t.kind === "step" ? `step${t.index}` : t.kind;
 interface LogLine { time: string; level: "rpc" | "ok" | "err"; text: string }
@@ -223,7 +223,8 @@ async function explain(cell: Cell, term: TermRef, path: Path) {
   log("rpc", `engine.explain ${where} [${path.join(".") || "root"}]`);
   try {
     const ex = await client.call("engine.explain", { sessionId, cellId: cell.id, path, term });
-    S.sel = { cellId: cell.id, term, path, latex: ex.rendered.latex, text: ex.rendered.text, related: ex.steps };
+    S.sel = { cellId: cell.id, term, path, latex: ex.rendered.latex, text: ex.rendered.text, related: ex.steps,
+      trace: new Map((ex.trace ?? []).map((t) => [t.index, t.relation])) };
     S.panelTab = "explain"; S.panelOpen = true;
     log("ok", `${ex.rendered.text} — ${ex.steps.length} related steps`);
   } catch (e) {
@@ -690,23 +691,29 @@ function renderPanel() {
   }
   grid.append(c1);
 
-  // Trail: every step up to the selected term, the ones that touched the selection marked
+  // Trail: every step up to the selected term; the ones the tracer says produced the selection are
+  // marked by how (created / copied / contains), and the note is the last creating step's reason
   const c2 = h("div", "col");
   c2.append(h("h3", undefined, "Derivation trail"));
   const upto = sel.term.kind === "step" ? sel.term.index + 1 : sel.term.kind === "input" ? 0 : steps.length;
   const trailSteps = steps.slice(0, upto);
-  const isRelated = (st: Step) => sel.related.some((r) => sameStep(r, st));
+  const relOf = (i: number) => sel.trace.get(i) ?? (sel.related.some((r) => sameStep(r, steps[i]!)) ? "copied" : null);
   if (trailSteps.length) {
     const trail = h("div", "trail");
     trailSteps.forEach((st, i) => {
-      const row = h("div", `trailrow${isRelated(st) ? " on" : ""}`);
+      const rel = relOf(i);
+      const row = h("div", `trailrow${rel === "created" ? " on" : rel ? " weak" : ""}`);
       row.append(h("span", "no", String(i + 1)), h("span", "rule", st.rule));
+      if (rel) row.append(h("span", "rel", rel));
+      row.title = rel === "created" ? "This rule built the selected node." : rel === "copied" ? "This rule moved or copied the selected node." : rel === "contains" ? "This rule fired inside the selected node." : "This rule did not touch the selection.";
       row.addEventListener("click", () => { if (cell) void explain(cell, { kind: "step", index: i }, []); });
       row.style.cursor = "pointer";
       trail.append(row);
     });
     c2.append(trail);
-    const focus = sel.term.kind === "step" ? steps[sel.term.index] : [...sel.related].pop();
+    const createdAt = [...trailSteps.keys()].filter((i) => relOf(i) === "created").pop();
+    const focus = sel.term.kind === "step" && sel.path.length === 0 ? steps[sel.term.index]
+      : createdAt !== undefined ? steps[createdAt] : [...sel.related].pop();
     const p = h("p");
     if (focus) p.append(inlineMath(focus.explanation));
     else p.textContent = "No rule fired at or below this subterm: it came through unchanged.";

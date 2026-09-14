@@ -231,6 +231,12 @@ def tests : TestM Unit := do
   checkTrue "show work: latex paths" ((raw.splitOn "\\htmlData{path=1.0}{x}").length > 1) raw
   let (_, exraw) := handleS st2 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"engine.explain\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"path\":[1]}}"
   checkTrue "explain: subterm x^2 with diff.power" ((exraw.splitOn "\"text\":\"x^2\"").length > 1 && (exraw.splitOn "diff.power").length > 1) exraw
+  -- M6: the power rule *created* x^2 (through a silent reordering of its exponent); the arithmetic steps fired inside it
+  checkTrue "explain trace: x^2 created by step 0, contained by steps 1 and 2"
+    (contains exraw "{\"index\":0,\"relation\":\"created\"}" && contains exraw "{\"index\":1,\"relation\":\"contains\"}" && contains exraw "{\"index\":2,\"relation\":\"contains\"}") exraw
+  let (_, exq) := handleS st2 "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"engine.explain\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"path\":[0]}}"
+  checkTrue "explain trace: the coefficient 3 was copied out of the exponent by step 0 and untouched since"
+    (contains exq "\"text\":\"3\"" && contains exq "{\"index\":0,\"relation\":\"copied\"}" && !(contains exq "\"index\":1")) exq
   let (_, exstep) := handleS st2 "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"engine.explain\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"path\":[],\"term\":{\"kind\":\"step\",\"index\":0}}}"
   checkTrue "explain: root of the term after step 0 relates only step 0" ((exstep.splitOn "\"rule\":").length == 2) exstep
   let (_, exin) := handleS st2 "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"engine.explain\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"path\":[],\"term\":{\"kind\":\"input\"}}}"

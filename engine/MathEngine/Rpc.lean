@@ -95,8 +95,10 @@ def explain (st : Store) (params : Json) : Except String Json := do
         | _ => .output
       | _ => .output
     | none => .output
-  let (sub, steps) ← explainCell (st.get sessionId) cellId path ref
-  pure (.obj #[("subterm", sub.toJson), ("rendered", Rendered.toJson sub false), ("steps", .arr (steps.map Step.toJson))])
+  let (sub, steps, rels) ← explainCell (st.get sessionId) cellId path ref
+  let traceJson := rels.map fun (i, r) => Json.obj #[("index", .num (toString i)), ("relation", .str r.toString)]
+  pure (.obj #[("subterm", sub.toJson), ("rendered", Rendered.toJson sub false), ("steps", .arr (steps.map Step.toJson)),
+    ("trace", .arr traceJson.toArray)])
 
 def dispatch (st : Store) (req : Json) : Store × Json :=
   let id := (req.get? "id").getD .null
