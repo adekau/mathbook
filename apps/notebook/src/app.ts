@@ -541,21 +541,39 @@ function renderCellBody(cell: Cell) {
 
   if (cell.showWork && cell.steps?.length) {
     const work = h("div", "work");
-    cell.steps.forEach((st, n) => {
+    // A step with a nested derivation (rref's row operations, expand's sub-steps) inherits the
+    // weakest status among them: a command is only as verified as the work it delegated.
+    const RANK = { verified: 0, conditional: 1, unverified: 2 } as const;
+    const statusOf = (st: Step): keyof typeof RANK => {
+      let s: keyof typeof RANK = S.ruleStatus.get(st.rule)?.status ?? "unverified";
+      for (const sub of st.sub?.steps ?? []) { const t = statusOf(sub); if (RANK[t] > RANK[s]) s = t; }
+      return s;
+    };
+    const stepRow = (st: Step, label: string, status: string, term?: TermRef): HTMLElement => {
       const row = h("div", "step");
-      row.append(h("span", "no", String(n + 1)));
+      row.append(h("span", "no", label));
       const rule = h("span", "rule");
-      const status = S.ruleStatus.get(st.rule)?.status ?? "unverified";
       const mark = h("span", `vmark ${status}`);
       mark.title = S.ruleStatus.get(st.rule)?.note ?? "No soundness theorem yet.";
       rule.append(mark, document.createTextNode(st.rule));
       row.append(rule);
       const el = h("span", "el");
-      if (st.afterRendered) { el.innerHTML = tex(st.afterRendered.latex, true); wireTerm(el, cell, { kind: "step", index: n }); }
+      if (st.afterRendered) { el.innerHTML = tex(st.afterRendered.latex, true); if (term) wireTerm(el, cell, term); }
       else el.append(inlineMath(st.explanation));
       row.append(el);
+      return row;
+    };
+    cell.steps.forEach((st, n) => {
+      const row = stepRow(st, String(n + 1), statusOf(st), { kind: "step", index: n });
       row.addEventListener("click", () => void explain(cell, { kind: "step", index: n }, []));
       work.append(row);
+      st.sub?.steps.forEach((sub, k) => {
+        const srow = stepRow(sub, `${n + 1}.${k + 1}`, statusOf(sub));
+        srow.classList.add("sub");
+        srow.title = sub.explanation.replace(/\$/g, "");
+        srow.addEventListener("click", () => void explain(cell, { kind: "step", index: n }, []));
+        work.append(srow);
+      });
     });
     body.append(work);
   }

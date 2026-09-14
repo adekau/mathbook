@@ -227,6 +227,16 @@ def tests : TestM Unit := do
   let rr := (st.get "t").cells.lookup "rref([1,2;3,4])"
   check "show work: rref is a command step" ((rr.map fun c => (c.derivation.steps.toList.map (·.rule))).getD []).toString "[cmd.rref]"
   checkTrue "show work: rref sub steps" ((rr.bind fun c => c.derivation.steps[0]? >>= (·.sub)).map (fun d => d.steps.toList.any (·.rule == "la.row-add")) |>.getD false)
+  -- M7: numerals take the verified ℚ path, symbolic entries the unverified one
+  (st, r) := ev st "rref([1/2,1,3;1,3,5])"; check "la rref rational" r "[1, 0, 8; 0, 1, -1]"
+  (st, r) := ev st "rref([0,1,2;0,0,0;3,4,5])"; check "la rref swap" r "[1, 0, -1; 0, 1, 2; 0, 0, 0]"
+  (st, r) := sessionEval st "rref([0,1;2,4])" ",\"showWork\":true"
+  let subRules (src : String) : List String :=
+    ((st.get "t").cells.lookup src >>= fun c => c.derivation.steps[0]? >>= (·.sub)).map (fun d => d.steps.toList.map (·.rule)) |>.getD []
+  check "rref ℚ path: verified rule names" (subRules "rref([0,1;2,4])").toString "[la.row-swap, la.row-scale, la.row-add]"
+  (st, r) := sessionEval st "rref([a,1;1,a])" ",\"showWork\":true"
+  check "rref symbolic path" r "[1, 0; 0, 1]"
+  checkTrue "rref symbolic path: .symbolic rule names" ((subRules "rref([a,1;1,a])").all (·.endsWith ".symbolic")) (subRules "rref([a,1;1,a])").toString
   let (st2, raw) := handleS st "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"engine.evaluate\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"source\":\"diff(x^3, x)\",\"showWork\":true,\"paths\":true}}"
   checkTrue "show work: latex paths" ((raw.splitOn "\\htmlData{path=1.0}{x}").length > 1) raw
   let (_, exraw) := handleS st2 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"engine.explain\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"path\":[1]}}"

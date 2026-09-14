@@ -194,7 +194,7 @@ theorem not_noFire_of_cmd {f : String} {es : List Expr} (h : cmdNames.contains f
     | _ :: _ :: _, h => simp [cmdExpand] at h
   · have := hnf cmdRref ((mem_pipeline_iff _).2 (by simp))
     match es, this with
-    | [.matrix _], h => simp [cmdRref] at h
+    | [.matrix _], h => simp only [cmdRref, Option.map_eq_none_iff] at h; split at h <;> simp at h
     | [.num _], h | [.var _], h | [.add _], h | [.mul _], h | [.pow _ _], h | [.fn _ _], h => simp [cmdRref] at h
     | [], h => simp [cmdRref] at h
     | _ :: _ :: _, h => simp [cmdRref] at h
@@ -328,7 +328,7 @@ theorem dec_cmdRref : Dec cmdRref := dec_cmd
   (fun e res h => by
     unfold cmdRref at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
     split at h
-    · exact ⟨_, _, rfl, by decide⟩
+    · split at h <;> exact ⟨_, _, rfl, by decide⟩
     · exact ⟨_, _, rfl, by decide⟩
     · simp at h)
   (fun e res h => by

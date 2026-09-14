@@ -107,6 +107,21 @@ M6 origin tracking for `explain` (van Deursen–Klint–Tip 1993); current path-
    (3) what remains over-approximate is equal subterms at several positions, the paper's secondary origins — reported
    as sets, never dropped.
 M7 linear algebra over ℚ verified (elimination preserves solution set).
+   DONE 2026-09-14: `engine/MathEngine/LinAlgQ.lean`, Init-only. A matrix is read as a homogeneous system (one equation
+   `r · x = 0` per row; the augmented matrix of `A x = b` is the same system at `(x, −1)`, so both readings are one
+   predicate `Sol`). Elimination is a list of the three elementary row operations, and the theorem is one lemma per
+   operation (`sol_swap`, `sol_scale`, `sol_addMul`) folded over the list: `sol_rref : Sol (rref m) x ↔ Sol m x`, three
+   standard axioms. The command's numeral path replays the emitted operations into the derivation steps (`la.row-*`,
+   now reported `verified`); symbolic entries keep the old simplifier-driven algorithm under `la.row-*.symbolic`
+   (`unverified`, since its pivots are only assumed nonzero). Findings: (1) the invertibility that makes each operation
+   preserve solutions is had for free by defining the degenerate parameters — scaling by 0, adding a row to itself — as
+   the identity, so no lemma needs a side condition and the algorithm needs no proof that it avoids them; (2) padding
+   the shorter row instead of truncating (`rowAdd`) removes the rectangularity hypothesis entirely; (3) the field
+   algebra over `Rat` is discharged by `grind`, whose ring/field instances ship with core, so Mathlib was not needed —
+   the whole proof lives in the engine; (4) what is *not* proved is that the output is in reduced echelon form; it is
+   decided at run time (`isRref`) and a failure refuses the evaluation, the same honest boundary as `checked`. Open:
+   proving echelon form, `det`/`la.mul` over ℚ, and giving matrices a value in the ℝ semantics (which would give
+   `diff.matrix` content).
 M8 integration as a verified *checker* (`deriv (integrate f) = f`), not a verified integrator.
 Open: radical simplification (sqrt 8 → 2√2), user functions with parameters, plotting, design file import.
 Six-month cut line: M5 — reached 2026-09-13.

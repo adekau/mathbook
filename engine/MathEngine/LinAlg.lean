@@ -1,12 +1,21 @@
 import MathEngine.Order
 import MathEngine.Print
 import MathEngine.SimpRules
+import MathEngine.LinAlgQ
 /-!
 # `la.*` — matrix arithmetic as rewriting, and Gauss–Jordan elimination as a step-recording algorithm
 
 Ported from `linalg.ts`. Dimension errors refuse the evaluation (`RuleResult.error`), as the
-reference throws. M7 verifies elimination preserves the solution set. `la.context` is the catch-all that
-refuses a matrix literal in any position no rule handles, which the M5 termination proof relies on.
+reference throws. `la.context` is the catch-all that refuses a matrix literal in any position no rule
+handles, which the M5 termination proof relies on.
+
+`rref` has two paths. A matrix of numerals is reduced by the verified `LinQ.rref` (LinAlgQ.lean):
+the row operations it emits are replayed here into steps, and the theorem `LinQ.sol_rref` says the
+result has the same solution set; that the result is in echelon form is checked (`LinQ.isRref`), and
+a failed check refuses the evaluation rather than returning a wrong matrix. A matrix with symbolic
+entries goes through the older step-recording algorithm, whose arithmetic is the simplifier's and whose
+pivot choice trusts `simplify` to decide zero-ness; its steps carry the `.symbolic` suffix so the
+notebook reports them as unverified.
 -/
 namespace MathEngine
 open Expr
@@ -137,9 +146,9 @@ def laContext : PlainRule :=
 
 def contextRules : List PlainRule := [laContext]
 
-/-- Gauss–Jordan elimination, recorded as row-operation steps whose before/after are the whole
-matrix. Works on symbolic entries as long as `simplify` can decide zero-ness of pivots. -/
-def rref (m : List (List Expr)) : Expr × Array Step := Id.run do
+/-- Gauss–Jordan elimination on symbolic entries, recorded as row-operation steps whose before/after
+are the whole matrix. Works as long as `simplify` can decide zero-ness of pivots — unverified. -/
+def rrefSymbolic (m : List (List Expr)) : Expr × Array Step := Id.run do
   let (nr, nc) := dims m
   let mut rows := m
   let mut steps : Array Step := #[]
@@ -156,12 +165,12 @@ def rref (m : List (List Expr)) : Expr × Array Step := Id.run do
         let rp := rows.getD p []
         let rq := rows.getD pivotRow []
         rows := (rows.set p rq).set pivotRow rp
-        steps := steps.push ⟨"la.row-swap", s!"Swap $R_\{{p + 1}}$ and $R_\{{pivotRow + 1}}$ so the pivot for column {col + 1} is nonzero. (Elementary row operations preserve the row space and the solution set.)", [], before, snap rows, none⟩
+        steps := steps.push ⟨"la.row-swap.symbolic", s!"Swap $R_\{{p + 1}}$ and $R_\{{pivotRow + 1}}$ so the pivot for column {col + 1} is nonzero (assuming the symbolic entry is not zero).", [], before, snap rows, none⟩
       let pivot := entry rows pivotRow col
       if !pivot.isOne then
         let before := snap rows
         rows := rows.set pivotRow ((rows.getD pivotRow []).map fun x => simplify0 (Expr.div x pivot))
-        steps := steps.push ⟨"la.row-scale", s!"Scale $R_\{{pivotRow + 1}}$ by $1/({pivot.toText})$ so the pivot becomes 1.", [], before, snap rows, none⟩
+        steps := steps.push ⟨"la.row-scale.symbolic", s!"Scale $R_\{{pivotRow + 1}}$ by $1/({pivot.toText})$ so the pivot becomes 1 (assuming {pivot.toText} ≠ 0).", [], before, snap rows, none⟩
       for i in [0:nr] do
         if i != pivotRow then
           let factor := simplify0 (entry rows i col)
@@ -169,8 +178,38 @@ def rref (m : List (List Expr)) : Expr × Array Step := Id.run do
             let before := snap rows
             let prow := rows.getD pivotRow []
             rows := rows.set i (((rows.getD i []).zip prow).map fun (x, y) => simplify0 (Expr.sub x (.mul [factor, y])))
-            steps := steps.push ⟨"la.row-add", s!"$R_\{{i + 1}} \\leftarrow R_\{{i + 1}} - ({factor.toText}) R_\{{pivotRow + 1}}$ to clear column {col + 1}.", [], before, snap rows, none⟩
+            steps := steps.push ⟨"la.row-add.symbolic", s!"$R_\{{i + 1}} \\leftarrow R_\{{i + 1}} - ({factor.toText}) R_\{{pivotRow + 1}}$ to clear column {col + 1}.", [], before, snap rows, none⟩
       pivotRow := pivotRow + 1
   return (snap rows, steps)
+
+/-- The rows as rationals, if every entry is a numeral; the flag says whether any was approximate. -/
+def asRatRows (rows : List (List Expr)) : Option (List (List Rat) × Bool) := do
+  let rs ← rows.mapM fun r => r.mapM fun | .num q => some q | _ => none
+  return (rs.map (·.map (·.val)), rs.any (·.any (·.approx)))
+
+/-- Gauss–Jordan elimination over ℚ: the operations of the verified `LinQ.rref`, replayed into
+steps. `LinQ.sol_rref` is the theorem that the output has the input's solution set. -/
+def rrefRat (rs : List (List Rat)) (approx : Bool) : Except String (Expr × Array Step) := Id.run do
+  let lit (r : Rat) : Expr := .num (Q.ofRat r approx)
+  let snap (m : List (List Rat)) : Expr := .matrix (m.map (·.map lit))
+  let mut m := rs
+  let mut steps : Array Step := #[]
+  for (col, op) in LinQ.rrefOps rs do
+    let before := snap m
+    m := op.apply m
+    let (rule, text) := match op with
+      | .swap i j => ("la.row-swap", s!"Swap $R_\{{i + 1}}$ and $R_\{{j + 1}}$ so the pivot for column {col + 1} is nonzero. (Elementary row operations preserve the solution set: `LinQ.sol_swap`.)")
+      | .scale i c => ("la.row-scale", s!"Scale $R_\{{i + 1}}$ by ${(lit c).toText}$ so the pivot becomes 1. (`LinQ.sol_scale`: the factor is nonzero.)")
+      | .addMul i j c => ("la.row-add", s!"$R_\{{i + 1}} \\leftarrow R_\{{i + 1}} - ({(lit (-c)).toText}) R_\{{j + 1}}$ to clear column {col + 1}. (`LinQ.sol_addMul`.)")
+    steps := steps.push ⟨rule, text, [], before, snap m, none⟩
+  if !LinQ.isRref m then
+    return .error "internal: elimination did not reach reduced row echelon form"
+  return .ok (snap m, steps)
+
+/-- `rref`: the verified ℚ path when every entry is a numeral, the symbolic path otherwise. -/
+def rref (m : List (List Expr)) : Except String (Expr × Array Step) :=
+  match asRatRows m with
+  | some (rs, approx) => rrefRat rs approx
+  | none => .ok (rrefSymbolic m)
 
 end MathEngine

@@ -18,7 +18,8 @@ open Json
 machine-checked instead of guessing. Kept next to the rules it describes: `verified` means an
 unconditional soundness theorem over ℝ (`proofs/Proofs/SimpReal.lean`), `conditional` means the
 theorem needs a side condition *and* the necessity of that condition is itself proved, `unverified`
-means no theorem yet (M4 covers `diff.*`, M7 `la.*`). Rules absent from this list are unverified. -/
+means no theorem yet. The `la.row-*` rules are proved over ℚ (`LinAlgQ.lean`), not ℝ: their claim is
+that the row operation preserves the solution set. Rules absent from this list are unverified. -/
 def ruleStatus : Json :=
   let entry (name status note : String) : Json :=
     .obj #[("rule", .str name), ("status", .str status), ("note", .str note)]
@@ -37,11 +38,18 @@ def ruleStatus : Json :=
     entry "diff.product" "conditional" "Needs both factors differentiable at the point.",
     entry "diff.power" "conditional" "Proved for a natural exponent with a differentiable base; real exponents still open.",
     entry "diff.chain" "conditional" "Needs the inner function differentiable; proved for sin, cos and exp, while ln and tan also need a domain condition.",
-    entry "diff.matrix" "unverified" "Proved, but matrices carry no value in the ℝ semantics yet, so the theorem has no content until M7.",
-    entry "diff.higher-order" "unverified" "An abbreviation: it eliminates the three-argument form, so there is nothing to prove."]
+    entry "diff.matrix" "unverified" "Proved, but matrices carry no value in the ℝ semantics, so the theorem has no content yet.",
+    entry "diff.higher-order" "unverified" "An abbreviation: it eliminates the three-argument form, so there is nothing to prove.",
+    entry "cmd.rref" "verified" "Over ℚ the reduced matrix has the input's solution set (LinQ.sol_rref); echelon form is checked at run time. With symbolic entries the nested row operations are the unverified .symbolic ones, and the step inherits their status.",
+    entry "la.row-swap" "verified" "Exchanging two rows preserves the solution set (LinQ.sol_swap); elimination as a whole: LinQ.sol_rref.",
+    entry "la.row-scale" "verified" "Scaling a row by a nonzero rational preserves the solution set (LinQ.sol_scale).",
+    entry "la.row-add" "verified" "Adding a multiple of another row preserves the solution set (LinQ.sol_addMul).",
+    entry "la.row-swap.symbolic" "unverified" "Symbolic entries: the pivot is assumed nonzero because simplify could not show it is zero.",
+    entry "la.row-scale.symbolic" "unverified" "Symbolic entries: division by a pivot that is only assumed nonzero.",
+    entry "la.row-add.symbolic" "unverified" "Symbolic entries: the arithmetic is the simplifier's, outside the ℚ theorem."]
 
 def capabilities : Json :=
-  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m5"), ("verified", .bool true),
+  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m7"), ("verified", .bool true),
          ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric"]),
          ("ruleStatus", ruleStatus),
          ("termination", .obj #[("status", .str "proven"), ("theorem", .str "MathEngine.pipelineOrdered"),

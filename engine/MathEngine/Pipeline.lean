@@ -61,9 +61,11 @@ def cmdRref : PlainRule :=
   { name := "cmd.rref", apply := fun e => Option.map checked <|
       match e with
       | .fn "rref" [.matrix rows] =>
-        let (out, steps) := rref rows
-        some ⟨out, "Gauss–Jordan elimination to reduced row echelon form.",
-          if steps.isEmpty then none else some ⟨.matrix rows, steps, out⟩, none⟩
+        match rref rows with
+        | .ok (out, steps) =>
+          some ⟨out, "Gauss–Jordan elimination to reduced row echelon form.",
+            if steps.isEmpty then none else some ⟨.matrix rows, steps, out⟩, none⟩
+        | .error msg => some (refuse msg)
       | .fn "rref" _ => some (refuse "rref takes one matrix")
       | _ => none }
 

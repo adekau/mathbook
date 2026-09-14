@@ -48,6 +48,12 @@ differential test with zero mismatches.
   code (commands, matrix arithmetic) have their outputs *checked* for the tier they must decrease
   rather than proved. The only remaining step budget is the `expand` command's nested set,
   recorded in `book/TRACKING.md`.
+- **Elimination is verified over ℚ by construction.** `LinAlgQ.lean` writes Gauss–Jordan as a
+  list of the three elementary row operations, each invertible (the degenerate parameters are the
+  identity), and proves `sol_rref`: the reduced matrix has the input's solution set. The `rref`
+  command replays those operations into its steps when every entry is a numeral; symbolic entries
+  fall back to the simplifier-driven algorithm, whose steps are named `la.row-*.symbolic` and
+  reported unverified. Echelon form itself is checked at run time (`isRref`), not proved.
 - **Soundness is a fold, over whichever semantics you bring.** `RewriteSound.normalize_sound_for`
   is stated for an abstract `Congruence` (reflexive, transitive, a congruence under `withChildren`,
   invariant under `canon`). Supply those four facts for a new semantics and normalization's
