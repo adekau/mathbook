@@ -196,6 +196,13 @@ Open items after M8 (2026-09-14, Alex: "go through the open items before the boo
   evaluation) and then substitutes variables, with a definition's own parameters shielded from the session's
   bindings. The parser's `known` list, which decides whether `f(x)` is a call or a product, is fed the table's names.
   Nothing new to prove: expansion happens before the pipeline, as variable substitution always did.
-- plotting (engine samples, notebook draws; studio Graph shot) — pending.
+- plotting (engine samples, notebook draws; studio Graph shot) — DONE 2026-09-14. `plot(f, x, from, to[, n])` is a
+  new optional method `engine.plot` (protocol rule 5): the engine simplifies `f` under the session — so a derivative
+  or a session function plots as what it is, with its derivation recorded like any other cell, and `explain` works
+  on the formula — then samples it on a uniform grid with the numeric evaluator, reporting `null` where the value is
+  not finite. The notebook draws the samples as an SVG (axes through the origin when in range, the curve broken at
+  the gaps, the tails of the range trimmed so an asymptote does not flatten the rest) under the formula; the studio
+  gets a Graph shot that draws the curve over the shot's duration and emits `Axes`/`axes.plot` Manim code with the
+  function as a NumPy lambda. One engine, as decided: nothing in the notebook evaluates.
 - notebook file open/save — pending.
 Six-month cut line: M5 — reached 2026-09-13.

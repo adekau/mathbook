@@ -27,6 +27,7 @@ interface Doc { name: string; sig: string; blurb: string; ref?: string; examples
 const DOCS: Doc[] = [
   { name: "diff", sig: "diff(f, x[, n])", blurb: "Derivative of f with respect to x; the optional n takes it n times. Implemented as rewrite rules that push d/dx inward, so the derivation reads like a textbook.", ref: "https://mathworld.wolfram.com/Derivative.html", examples: ["diff(x^2 * sin(x), x)", "diff(x^3, x, 2)"] },
   { name: "integrate", sig: "integrate(f, x)", blurb: "Antiderivative of f in x, without the constant. A small rule set guesses; the guess is accepted only if differentiating it gives f back, so the check is the proof.", ref: "https://mathworld.wolfram.com/IndefiniteIntegral.html", examples: ["integrate(x^2 + sin(x), x)", "integrate(exp(2*x), x)"] },
+  { name: "plot", sig: "plot(f, x, from, to[, n])", blurb: "Graph of f over [from, to]. The engine simplifies f under the session (a derivative plots as the derivative), records the derivation, and samples it exactly where it has a finite value; the notebook draws the samples.", examples: ["plot(sin(x)/x, x, -10, 10)", "plot(diff(x^3 - 3x, x), x, -3, 3)"] },
   { name: "expand", sig: "expand(e)", blurb: "Multiplies out products and powers of sums by repeated distribution.", ref: "https://mathworld.wolfram.com/Expand.html", examples: ["expand((x+1)^3)", "expand((a+b)^4)"] },
   { name: "simplify", sig: "simplify(e)", blurb: "Explicit request for the normal form. Every cell is simplified anyway; this names the intent.", examples: ["simplify(x + x)"] },
   { name: "rref", sig: "rref(M)", blurb: "Gauss–Jordan elimination to reduced row echelon form. Each row operation is recorded as its own step.", ref: "https://mathworld.wolfram.com/ReducedRowEchelonForm.html", examples: ["rref([1,2,3;4,5,6;7,8,10])", "rref([1,2;2,4])"] },
@@ -55,6 +56,7 @@ function cellKind(src: string): string | null {
   switch (head) {
     case "diff": return "derivative";
     case "integrate": return "integral";
+    case "plot": return "plot";
     case "rref": return "row reduce";
     case "det": return "determinant";
     case "transpose": return "transpose";
@@ -80,9 +82,12 @@ const SAMPLES = [
 // State
 // ---------------------------------------------------------------------------
 
+interface PlotData { var: string; from: number; to: number; points: [number, number | null][]; text: string }
+
 interface Cell {
   id: string;
   src: string;
+  plot?: PlotData;
   label: number | null;
   ms?: number;
   outLatex?: string;
@@ -110,7 +115,7 @@ const termKey = (t: TermRef) => t.kind === "step" ? `step${t.index}` : t.kind;
 interface LogLine { time: string; level: "rpc" | "ok" | "err"; text: string }
 
 /** One shot of a scene: a rendered term, the animation into it, and its duration. */
-interface Shot { id: number; label: string; tex: string; anim: string; dur: number; note: string; on: boolean; cell: number | null }
+interface Shot { id: number; label: string; tex: string; anim: string; dur: number; note: string; on: boolean; cell: number | null; plot?: PlotData }
 interface Scene { id: number; name: string; shots: Shot[] }
 
 type Tab = "notebook" | "studio" | "reference";
@@ -194,11 +199,12 @@ async function runCell(cell: Cell) {
   S.busy = true;
   renderChrome();
   const t0 = performance.now();
-  log("rpc", `engine.evaluate ${JSON.stringify(src)}`);
+  const isPlot = /^\s*plot\s*\(/.test(src);
+  log("rpc", `${isPlot ? "engine.plot" : "engine.evaluate"} ${JSON.stringify(src)}`);
   try {
-    const r = await client.call("engine.evaluate", {
-      sessionId, cellId: cell.id, source: src, showWork: true, paths: true,
-    });
+    const r = isPlot
+      ? await client.call("engine.plot", { sessionId, cellId: cell.id, source: src, showWork: true, paths: true })
+      : await client.call("engine.evaluate", { sessionId, cellId: cell.id, source: src, showWork: true, paths: true });
     cell.ms = performance.now() - t0;
     if (r.ok) {
       cell.label = cell.label ?? nextLabel++;
@@ -206,11 +212,13 @@ async function runCell(cell: Cell) {
       cell.echoLatex = r.inputRendered?.latex;
       cell.steps = r.derivation?.steps ?? [];
       delete cell.error;
+      delete cell.plot;
+      if ("kind" in r && r.kind === "plot") cell.plot = { var: r.var, from: r.from, to: r.to, points: r.points, text: r.rendered.text };
       log("ok", `Out[${cell.label}] ${r.rendered.text}  (${cell.ms.toFixed(1)} ms, ${cell.steps.length} steps)`);
-      if (r.bound?.length) log("ok", `bound ${r.bound.join(", ")}`);
+      if ("bound" in r && r.bound?.length) log("ok", `bound ${r.bound.join(", ")}`);
     } else {
       cell.label = cell.label ?? nextLabel++;
-      delete cell.outLatex; delete cell.echoLatex; cell.steps = [];
+      delete cell.outLatex; delete cell.echoLatex; delete cell.plot; cell.steps = [];
       cell.error = r.error;
       log("err", `${r.error.code}: ${r.error.message}`);
     }
@@ -287,7 +295,7 @@ function focusCell(i: number) {
 }
 
 function clearOutputs() {
-  for (const c of S.cells) { delete c.outLatex; delete c.echoLatex; delete c.error; c.steps = []; c.label = null; c.ms = undefined; }
+  for (const c of S.cells) { delete c.outLatex; delete c.echoLatex; delete c.error; delete c.plot; c.steps = []; c.label = null; c.ms = undefined; }
   nextLabel = 1; S.sel = null;
   renderCells(); renderSidebar(); renderPanel();
   log("ok", "outputs cleared");
@@ -468,6 +476,66 @@ function renderSidebar() {
   side.append(list);
 }
 
+/** Draw sampled points: axes through the origin when in range, a few labelled ticks, the curve
+ *  broken wherever the engine reported no finite value. `frac` draws the first part of the curve
+ *  (the studio animates it). */
+function plotSvg(p: PlotData, w: number, hgt: number, frac = 1): SVGSVGElement {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${w} ${hgt}`); svg.setAttribute("width", String(w)); svg.setAttribute("height", String(hgt));
+  const ys = p.points.map((q) => q[1]).filter((y): y is number => y !== null).sort((a, b) => a - b);
+  let y0 = -1, y1 = 1;
+  if (ys.length) {
+    // trim the tails so an asymptote does not flatten the rest
+    const lo = ys[Math.floor(ys.length * 0.02)]!, hi = ys[Math.ceil(ys.length * 0.98) - 1]!;
+    y0 = Math.min(lo, 0); y1 = Math.max(hi, 0);
+    if (y1 - y0 < 1e-9) { y0 -= 1; y1 += 1; }
+    const pad = (y1 - y0) * 0.08; y0 -= pad; y1 += pad;
+  }
+  const L = 38, R = 10, T = 10, B = 24;
+  const sx = (x: number) => L + ((x - p.from) / (p.to - p.from || 1)) * (w - L - R);
+  const sy = (y: number) => T + ((y1 - y) / (y1 - y0)) * (hgt - T - B);
+  const line = (x1: number, yA: number, x2: number, yB: number, cls: string) => {
+    const l = document.createElementNS(NS, "line");
+    l.setAttribute("x1", String(x1)); l.setAttribute("y1", String(yA)); l.setAttribute("x2", String(x2)); l.setAttribute("y2", String(yB));
+    l.setAttribute("class", cls); svg.append(l);
+  };
+  const text = (x: number, y: number, t: string, cls: string) => {
+    const e = document.createElementNS(NS, "text");
+    e.setAttribute("x", String(x)); e.setAttribute("y", String(y)); e.setAttribute("class", cls); e.textContent = t; svg.append(e);
+  };
+  const nice = (v: number) => Math.abs(v) < 1e-9 ? "0" : (Math.abs(v) >= 1000 || Math.abs(v) < 0.01 ? v.toExponential(1) : String(Math.round(v * 100) / 100));
+  // frame and axes
+  line(L, T, L, hgt - B, "axis"); line(L, hgt - B, w - R, hgt - B, "axis");
+  if (y0 < 0 && y1 > 0) line(L, sy(0), w - R, sy(0), "zero");
+  if (p.from < 0 && p.to > 0) line(sx(0), T, sx(0), hgt - B, "zero");
+  for (let k = 0; k <= 4; k++) {
+    const x = p.from + ((p.to - p.from) * k) / 4, y = y0 + ((y1 - y0) * k) / 4;
+    line(sx(x), hgt - B, sx(x), hgt - B + 4, "tick"); text(sx(x), hgt - 6, nice(x), "tl");
+    line(L - 4, sy(y), L, sy(y), "tick"); text(L - 6, sy(y) + 3, nice(y), "tl r");
+  }
+  // the curve, in segments
+  const n = Math.max(0, Math.min(p.points.length, Math.round(p.points.length * frac)));
+  let d = "", pen = false;
+  for (let i = 0; i < n; i++) {
+    const [x, y] = p.points[i]!;
+    if (y === null || y < y0 || y > y1) { pen = false; continue; }
+    d += `${pen ? "L" : "M"}${sx(x).toFixed(1)} ${sy(y).toFixed(1)} `; pen = true;
+  }
+  const path = document.createElementNS(NS, "path");
+  path.setAttribute("d", d); path.setAttribute("class", "curve"); svg.append(path);
+  text(w - R, T + 10, `${p.var}`, "tl r");
+  return svg;
+}
+
+/** The sampled function as a Python expression for Manim: `3*x^2 + sin(x)` → `3*x**2 + np.sin(x)`. */
+function pyExpr(text: string): string {
+  return text.replace(/\^/g, "**")
+    .replace(/\b(sin|cos|tan|exp|sqrt|abs)\(/g, "np.$1(")
+    .replace(/\bln\(/g, "np.log(").replace(/\blog\(/g, "np.log10(")
+    .replace(/\bpi\b/g, "np.pi").replace(/\be\b/g, "np.e");
+}
+
 function renderCells() {
   hideHover();
   const host = $(".cells");
@@ -594,8 +662,18 @@ function renderCellBody(cell: Cell) {
     const out = h("div", "outrow");
     out.append(h("div", "prompt", `Out[${cell.label}]=`));
     const val = h("div", "outval");
-    val.innerHTML = tex(cell.outLatex, true);
-    wireTerm(val, cell, { kind: "output" });
+    if (cell.plot) {
+      const box = h("div", "plotbox");
+      box.append(plotSvg(cell.plot, 520, 240));
+      const cap = h("div", "plotcap");
+      cap.innerHTML = tex(cell.outLatex, true);
+      wireTerm(cap, cell, { kind: "output" });
+      val.classList.add("isplot");
+      val.append(box, cap);
+    } else {
+      val.innerHTML = tex(cell.outLatex, true);
+      wireTerm(val, cell, { kind: "output" });
+    }
     out.append(val, h("div", "brk"));
     el.append(out);
   }
@@ -1039,6 +1117,11 @@ function sendToScene(cell: Cell) {
     if (!st.afterRendered) continue;
     shots.push(mk(st.rule, st.afterRendered.latex, defaultAnim(st.rule), 1.4, st.explanation));
   }
+  if (cell.plot) {
+    const g = mk("Graph", cell.outLatex, "Create", 2.0, `Plot of the function over [${cell.plot.from}, ${cell.plot.to}], sampled by the engine.`);
+    g.plot = cell.plot;
+    shots.push(g);
+  }
   if (!ST.scenes.length) ST.scenes.push({ id: Date.now(), name: "Scene 1", shots: [] });
   if (ST.active >= ST.scenes.length) ST.active = ST.scenes.length - 1;
   ST.scenes[ST.active]!.shots.push(...shots);
@@ -1085,10 +1168,25 @@ function manimSceneCode(scene: Scene | null): string {
   if (!on.length) return '# This scene has no shots yet.\n# Open the notebook and press "→ Scene" on an evaluated cell.';
   const cls = pyName(scene.name);
   const q = (s: string) => s.replace(/"/g, "'");
-  const L = ["from manim import *", "", "", `class ${cls}(Scene):`, `    """${q(scene.name)} — storyboard generated by Lemma Manim Studio."""`, "", "    def construct(self):"];
+  const L = ["from manim import *", ...(on.some((s) => s.plot) ? ["import numpy as np"] : []), "", "", `class ${cls}(Scene):`, `    """${q(scene.name)} — storyboard generated by Lemma Manim Studio."""`, "", "    def construct(self):"];
   let first = true;
   for (const s of on) {
     L.push(`        # ${q(s.label)}`);
+    if (s.plot) {
+      const pl = s.plot;
+      const ys = pl.points.map((pt) => pt[1]).filter((y): y is number => y !== null);
+      const ymin = ys.length ? Math.min(0, ...ys) : -1, ymax = ys.length ? Math.max(0, ...ys) : 1;
+      if (!first) L.push("        self.play(FadeOut(expr), run_time=0.3)");
+      L.push(`        axes = Axes(x_range=[${pl.from}, ${pl.to}], y_range=[${ymin.toFixed(2)}, ${ymax.toFixed(2)}], axis_config={"include_numbers": True})`);
+      L.push(`        graph = axes.plot(lambda ${pl.var}: ${pyExpr(pl.text)}, x_range=[${pl.from}, ${pl.to}], color=YELLOW)`);
+      L.push(`        label = MathTex(r"${s.tex}", font_size=36).to_corner(UR)`);
+      L.push("        self.play(Create(axes), run_time=0.8)");
+      L.push(`        self.play(Create(graph), FadeIn(label), run_time=${s.dur.toFixed(1)})`);
+      L.push("        expr = VGroup(axes, graph, label)");
+      first = false;
+      L.push("");
+      continue;
+    }
     if (first) {
       L.push(`        expr = MathTex(r"${s.tex}", font_size=54)`);
       L.push(`        self.play(Write(expr), run_time=${s.dur.toFixed(1)})`);
@@ -1275,6 +1373,22 @@ function renderStage() {
   const p = Math.max(0, Math.min(1, (t - cur.start) / Math.max(0.001, cur.dur)));
   label.textContent = `1920×1080 · shot ${ci + 1} of ${on.length}`;
 
+  if (cur.plot) {
+    // a graph shot: the curve draws itself over the shot's duration
+    let gbox = center.querySelector(".plotshot") as HTMLElement | null;
+    if (!gbox || gbox.dataset.shot !== String(cur.id)) {
+      center.innerHTML = "";
+      gbox = h("div", "plotshot"); gbox.dataset.shot = String(cur.id); center.append(gbox);
+    }
+    const avail = Math.max(240, Math.min(720, stage.clientWidth - 52));
+    gbox.innerHTML = ""; gbox.append(plotSvg(cur.plot, avail, Math.round(avail * 0.45), p));
+    if (stageShot !== cur.id || !foot.childElementCount) {
+      stageShot = cur.id; foot.innerHTML = "";
+      foot.append(h("span", "caption", cur.label));
+    }
+    $(".studio .shotlist")?.querySelectorAll(".shot").forEach((r, k) => r.classList.toggle("on", k === ci));
+    return;
+  }
   const prep = prepare(on);
   const morph = prep.morphs.get(cur.id)!;
   let box = center.querySelector(".morph") as HTMLElement | null;

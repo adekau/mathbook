@@ -45,7 +45,7 @@ structure Tok where
 
 def builtinFunctions : List String :=
   ["sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs",
-   "diff", "simplify", "expand", "N", "det", "rref", "transpose", "solve", "subst", "integrate"]
+   "diff", "simplify", "expand", "N", "det", "rref", "transpose", "solve", "subst", "integrate", "plot"]
 
 /-- Lexer over the character list; `i` is the byte-free character index used for spans. -/
 partial def lex (src : String) : Except ParseError (Array Tok) := go src.toList 0 #[]

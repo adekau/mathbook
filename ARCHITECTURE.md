@@ -61,6 +61,9 @@ differential test with zero mismatches.
   `2^(3/2)` (a sixth tier, the magnitudes of integer numerals, orders that step), radicals with the
   same square-free part collect in sums and same-index radicals multiply in products (both decrease
   `M`), and the printer displays the single-power form the textbook way. `RadicalRules.lean`.
+- **Plots are sampled by the engine and drawn by the notebook.** `engine.plot` simplifies the
+  function under the session, records the cell, and returns a uniform sample with `null` where the
+  value is not finite; the notebook's SVG and the studio's graph shot are presentation only.
 - **Integration is checked, not found.** `Antiderivative.lean` guesses an antiderivative with a
   few textbook rules and proves nothing; `cmdIntegrate` differentiates the guess with the pipeline
   and accepts it only if the normal form is the integrand itself. `cmdIntegrate_spec` states that;

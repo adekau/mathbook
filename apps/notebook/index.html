@@ -190,6 +190,17 @@ button { font-family: var(--font); }
 .work { margin:12px 0 0 8px; display:flex; flex-direction:column; gap:5px; }
 .step { display:grid; grid-template-columns:24px minmax(0,190px) minmax(0,1fr); gap:12px; align-items:center; padding:7px 11px; border-radius:7px; cursor:pointer; background:var(--p-row-bg); }
 .step:hover { filter:brightness(1.14); }
+.outval.isplot { display:block; }
+.plotbox { max-width:100%; overflow-x:auto; }
+.plotbox svg, .plotshot svg { max-width:100%; height:auto; display:block; }
+.plotcap { font-size:15px; margin-top:4px; color:var(--p-ink-2); }
+svg .axis { stroke:var(--ink-mut); stroke-width:1; }
+svg .zero { stroke:var(--ink-faint); stroke-width:1; stroke-dasharray:3 3; }
+svg .tick { stroke:var(--ink-mut); stroke-width:1; }
+svg .tl { font-family:var(--code); font-size:9.5px; fill:var(--ink-mut); text-anchor:middle; }
+svg .tl.r { text-anchor:end; }
+svg .curve { fill:none; stroke:var(--acc); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+.plotshot { display:flex; justify-content:center; padding:12px; }
 .step.sub { padding-top:5px; padding-bottom:5px; grid-template-columns:34px minmax(0,164px) minmax(0,1fr); }
 .step.sub .no { width:auto; padding:0 6px; border-radius:9px; }
 .step.sub .el { font-size:14px; }

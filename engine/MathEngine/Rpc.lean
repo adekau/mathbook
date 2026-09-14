@@ -69,7 +69,7 @@ def ruleStatus : Json :=
 
 def capabilities : Json :=
   .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m8"), ("verified", .bool true),
-         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate"]),
+         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate", .str "plot"]),
          ("ruleStatus", ruleStatus),
          ("termination", .obj #[("status", .str "proven"), ("theorem", .str "MathEngine.pipelineOrdered"),
            ("summary", .str "Cell evaluation has no step budget: every pipeline rule decreases a five-tier ordering (commands, higher-order diff, matrix literals, the weight M, size) on nodes whose children are normal.")])]
@@ -110,6 +110,28 @@ def evaluate (st : Store) (params : Json) : Store × Json :=
         | _ => res
       (st, .obj res)
 
+private def floatJson (x : Float) : Json := .num (toString x)
+
+def plot (st : Store) (params : Json) : Store × Json :=
+  match params.getStr? "source" with
+  | none => (st, errorJson "params" "missing source")
+  | some src =>
+    let sessionId := (params.getStr? "sessionId").getD ""
+    let cellId := (params.getStr? "cellId").getD ""
+    let (s, r) := plotCell (st.get sessionId) cellId src
+    let st := st.set sessionId s
+    match r with
+    | .error (code, msg, span) => (st, errorJson code msg span)
+    | .ok (_, out, d, pl) =>
+      let paths := params.getBool "paths"
+      let pts := pl.points.map fun (t, y) => Json.arr #[floatJson t, match y with | some v => floatJson v | none => .null]
+      let res := #[("ok", .bool true), ("kind", .str "plot"), ("value", out.toJson), ("rendered", Rendered.toJson out paths),
+        ("var", .str pl.var), ("from", floatJson pl.from_), ("to", floatJson pl.to), ("points", .arr pts)]
+      let res := if params.getBool "showWork" then
+          (res.push ("derivation", d.toJson paths)).push ("inputRendered", Rendered.toJson d.input paths)
+        else res
+      (st, .obj res)
+
 def explain (st : Store) (params : Json) : Except String Json := do
   let sessionId := (params.getStr? "sessionId").getD ""
   let cellId := (params.getStr? "cellId").getD ""
@@ -137,6 +159,7 @@ def dispatch (st : Store) (req : Json) : Store × Json :=
   match req.getStr? "method" with
   | some "engine.capabilities" => (st, reply capabilities)
   | some "engine.evaluate" => let (st, r) := evaluate st params; (st, reply r)
+  | some "engine.plot" => let (st, r) := plot st params; (st, reply r)
   | some "engine.explain" =>
     match explain st params with
     | .ok r => (st, reply r)

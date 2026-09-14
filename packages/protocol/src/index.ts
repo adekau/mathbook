@@ -150,11 +150,24 @@ export interface ExplainResult {
   trace?: StepRelation[];
 }
 
+/** `plot(f, x, from, to[, n])`: the engine simplifies `f` under the session, records the cell like
+ *  any other (so `engine.explain` works on it), and samples it on a uniform grid. Drawing is the
+ *  frontend's; a sample is `null` where `f` has no finite value. Optional method (rule 5). */
+export interface PlotParams { sessionId: string; cellId: string; source: string; showWork?: boolean; paths?: boolean }
+export interface PlotResult {
+  ok: true; kind: "plot";
+  value: WireExpr; rendered: Rendered;
+  var: string; from: number; to: number;
+  points: [number, number | null][];
+  derivation?: Derivation; inputRendered?: Rendered;
+}
+
 export interface Methods {
   "engine.capabilities": { params: Record<string, never>; result: EngineCapabilities };
   "engine.evaluate":     { params: EvaluateParams; result: EvaluateResult | EvaluateError };
   "engine.explain":      { params: ExplainParams; result: ExplainResult };
   "engine.resetSession": { params: { sessionId: string }; result: { ok: true } };
+  "engine.plot":         { params: PlotParams; result: PlotResult | EvaluateError };
 }
 export type MethodName = keyof Methods;
 

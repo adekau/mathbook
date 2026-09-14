@@ -51,6 +51,44 @@ def evaluateCell (s : Session) (cellId source : String) :
         | _ => s
       (s, .ok (stmt, output, d))
 
+/-- A sampled plot: the variable, the range, and `(t, y)` pairs (`none` where `f` has no finite value). -/
+structure Plot where
+  var : String
+  from_ : Float
+  to : Float
+  points : Array (Float × Option Float)
+
+/-- `plot(f, x, from, to[, n])`: simplify `f` under the session (so derivatives and session functions
+plot as what they are), record the cell like any other, and sample `f` on a uniform grid with the
+numeric evaluator. Sampling is presentation: the derivation shown is `f`'s. -/
+def plotCell (s : Session) (cellId source : String) :
+    Session × Except (String × String × Option (Nat × Nat)) (Expr × Expr × Derivation × Plot) :=
+  match parseStmt source (s.fns.map (·.1)) with
+  | .error e => (s, .error ("syntax", e.message, some (e.start, e.stop)))
+  | .ok stmt =>
+    let bad := (s, .error ("eval", "plot takes a function, a variable, and the range: plot(f, x, from, to)", none))
+    match stmt.value with
+    | .fn "plot" (f :: .var x :: a :: b :: rest) =>
+      let num (e : Expr) : Option Float := (evalNumeric [] (substitute s.env (substituteFns s.fns e))).toOption
+      match num a, num b with
+      | some lo, some hi =>
+        let n : Nat := match rest with
+          | [.num k] => min 4000 (max 2 k.val.num.toNat)
+          | _ => 300
+        let input := substitute (s.env.filter (·.1 != x)) (substituteFns s.fns f)
+        match (normalizeT pipelineRules pipelineOrdered input).run #[] with
+        | (.error msg, _) => (s, .error ("eval", msg, none))
+        | (.ok output, steps) =>
+          let d : Derivation := ⟨input, steps, output⟩
+          let s := { s with cells := (cellId, ⟨output, d⟩) :: s.cells.filter (·.1 != cellId) }
+          let points := (Array.range n).map fun i =>
+            let t := lo + (hi - lo) * i.toFloat / (n - 1).toFloat
+            let y := (evalNumeric [(x, t)] output).toOption.filter fun v => v.isFinite
+            (t, y)
+          (s, .ok (f, output, d, ⟨x, lo, hi, points⟩))
+      | _, _ => (s, .error ("eval", "plot: the range must evaluate to numbers", none))
+    | _ => bad
+
 def isPrefix : Path → Path → Bool
   | [], _ => true
   | _ :: _, [] => false
