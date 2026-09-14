@@ -1,0 +1,156 @@
+\chapter{Soundness Is a Fold}\label{ch:sound}
+
+A rewrite rule that terminates but changes the value is worse than useless: it is confident and
+wrong. This chapter is about the theorems that say a rule \emph{means} something --- first over a
+small fragment where everything is decidable, then over the real numbers --- and about the two
+rules that turned out not to, whose refutations are the most instructive theorems in the engine.
+
+\section{Soundness for a rule, and for a run}
+
+Fix a relation \lc{rel} between terms that we intend to mean ``these denote the same thing''. A
+rule is sound for \lc{rel} if its output is related to its input. That is a statement about one
+firing at one node. What the notebook needs is a statement about the \emph{whole run}: the input
+of a cell is related to its output. The passage from one to the other is a fold over the
+rewriter's recursion, and it needs exactly four properties of the relation.
+
+\begin{minted}{lean}
+structure Congruence where
+  rel : Expr → Expr → Prop
+  refl : ∀ e, rel e e
+  trans : ∀ {a b c}, rel a b → rel b c → rel a c
+  /-- Rewriting each child soundly rewrites the node soundly. -/
+  congr : ∀ e cs, RelList rel (children e) cs → rel e (withChildren e cs)
+  /-- Reordering a sum's or product's arguments is sound — what `canon` does silently. -/
+  canon : ∀ e, rel e (canon e)
+
+def RuleSoundFor (C : Congruence) (r : Rule W) : Prop :=
+  ∀ e res, r.apply e = some res → C.rel e res.result
+
+theorem normalize_sound_for (C : Congruence) (rules : List (Rule W))
+    (hs : ∀ r ∈ rules, RuleSoundFor C r) (e : Expr) (s : Array Step) :
+    C.rel e ((normalize rules e).run' s)
+\end{minted}
+
+The theorem is proved once, for an abstract \lc{Congruence}, by following the rewriter's
+recursion: children are rewritten (congruence), the node is put into canonical order
+(\lc{canon}), a rule fires (its own soundness), the result is rewritten again (transitivity,
+and the recursion). Nothing in the proof knows what \lc{rel} is. That was a deliberate
+generalization made in the third week, and it paid three times: the integers, the reals, and
+the reals under a derivative each instantiate the same fold.
+
+\section{The integer fragment}
+
+The first semantics is the smallest one that can be \emph{decided}: an evaluator
+\lc{eval?}, from an environment and a term to an optional integer, that gives a value to numerals with denominator one,
+variables from an environment, sums, products and natural powers, and \lc{none} to everything
+else --- functions, fractions, matrices. Two terms are related when the second refines the first:
+wherever the first has a value, the second has the same one.
+
+\begin{minted}{lean}
+def Refines (e e' : Expr) : Prop := ∀ ρ v, eval? ρ e = some v → eval? ρ e' = some v
+theorem simplify_sound (e : Expr) : Refines e (simplify0 e)
+\end{minted}
+
+Every one of the seven simplification rules is sound for this relation, and the fold gives
+\lc{simplify_sound}. On its own this is a modest claim --- it says nothing about $\sqrt 2$ or
+$\sin$ --- but it was the first end-to-end theorem about the engine, checked on the first day the
+rules existed, and it fixed the \emph{shape} every later semantics would take.
+
+\section{The reals}
+
+The real semantics lives in \file{proofs/}, because $\mathbb{R}$ is Mathlib's. It is a total
+function: powers are \lc{Real.rpow}, \texttt{sqrt} is \lc{Real.sqrt}, \texttt{ln} is
+\lc{Real.log}, and where these are undefined in mathematics they take Mathlib's \emph{junk} values
+($\log 0 = 0$, $\sqrt{-1} = 0$, $0^{-1} = 0$). Junk values are not a weakness here; they are what
+makes every statement below an unconditional equation between total functions, so that the side
+conditions a rule really needs have to be \emph{written down} rather than hidden inside a partial
+function.
+
+\begin{minted}{lean}
+def evalR (ρ : EnvR) : Expr → ℝ
+  | .num q => (q.val : ℝ)
+  | .var x => ρ x
+  | .add es => sumR ρ es
+  | .mul es => prodR ρ es
+  | .pow b e => (evalR ρ b) ^ (evalR ρ e)
+  | .fn f [a] => applyFn f (evalR ρ a)
+  | .fn _ _ => 0
+  | .matrix _ => 0
+
+def SemEqR (e e' : Expr) : Prop := ∀ ρ, evalR ρ e = evalR ρ e'
+\end{minted}
+
+A bridge theorem, \lc{evalR_of_eval?}, says that wherever the integer evaluator is defined the two
+agree; so the theorem of the previous section was a restriction of the truth, not a different
+claim. The reader will meet this pattern again in Chapter~\ref{ch:deriv}: three semantics, each
+shown to be a restriction of the next.
+
+\section{Two rules that are not sound}
+
+Five of the seven rules are sound for \lc{SemEqR} and the fold applies to them. Two are not, and
+the interesting part is that this is \emph{proved}.
+
+\begin{thmbox}[\lc{not_collectPowers_soundR}]
+  The rule $b^m \cdot b^n \to b^{m+n}$ is not unconditionally sound over $\mathbb{R}$: at $x = 0$
+  it rewrites $x \cdot x^{-1}$, which is $0$, to $x^0$, which is $1$.
+\end{thmbox}
+
+\begin{minted}{lean}
+theorem not_collectPowers_soundR : ¬ RuleSoundR collectPowers := by
+  intro hs
+  have h := hs (.mul [.var "x", .pow (.var "x") (.num (Q.ofInt (-1)))]) _ rfl (fun _ => 0)
+  norm_num [evalR_mul, prodR_cons, prodR_nil, evalR_var, evalR_pow, evalR_num, …] at h
+\end{minted}
+
+\begin{thmbox}[\lc{not_functionRules_soundR}]
+  The rule $\exp(\ln x) \to x$ is not unconditionally sound: at $x = -1$ the left side is
+  $\exp(\ln(-1)) = \exp(\ln 1) = 1$, because \lc{Real.log} is even, while the right side is $-1$.
+\end{thmbox}
+
+Both rules are the standard convention of every computer-algebra system, and the engine keeps
+them. What changed is the label. The collect-powers rule is \status{conditional}, and the theorem
+\lc{collectPowers_soundR_on} says exactly when it is right: whenever the merged base is positive.
+The notebook shows that condition next to the step. A reader who has only ever seen $x/x = 1$
+printed without comment now sees the $x \neq 0$ that was always there.
+
+\begin{logbox}[On pinning Mathlib]
+  The proofs package pins Mathlib at the release tag whose \texttt{lean-toolchain} equals the
+  engine's. The first plan had been ``pin to Mathlib master''; on the day, master was on a
+  release candidate \emph{ahead} of stable, so following it would have forced the engine off the
+  policy of latest stable. Pin to the tag that matches; bump both together.
+\end{logbox}
+
+\section{What the fold does not cover}
+
+The fold is stated for rules that are sound \emph{unconditionally}. A conditional rule cannot be
+folded, because the hypothesis at one step is about the values at that step, and the fold does
+not know them. So the notebook's ``this derivation is sound'' is not one theorem; it is the
+conjunction of the statuses of the steps, exactly as displayed. Chapter~\ref{ch:integrate} turns
+this into a precise statement --- the integral checker's theorem takes ``the derivation shown was
+sound at the point'' as its hypothesis, and that hypothesis is what the statuses say.
+
+\begin{trybox}
+\begin{minted}{text}
+x * x^(-1)
+exp(ln(x))
+\end{minted}
+  Both simplify. Click each step and read the proof status: \status{conditional}, with the
+  hypothesis written out. Then try \texttt{subst(x * x\^{}(-1), x, 0)}: the answer is $1$,
+  because the children of a command are normalized first and the conditional step has already
+  fired. The label on that step is the only warning, which is the point of the label.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[A third refutation]
+  The rule $\sqrt{x^2} \to x$ is not in the engine. Prove in the style of the two refutations
+  above that it would not be unconditionally sound over $\mathbb{R}$, and state the side
+  condition under which it is.
+\end{exercisebox}
+
+\begin{exercisebox}[Congruence laws]
+  Show that \lc{SemEqR} satisfies the \lc{canon} law: a permutation of the arguments of a sum
+  does not change \lc{sumR}. (The engine's proof is \lc{sumR_perm}, an induction on
+  \lc{List.Perm}.) Which of the four laws would fail for a relation that compared terms only at
+  the single point $\rho = 0$?
+\end{exercisebox}

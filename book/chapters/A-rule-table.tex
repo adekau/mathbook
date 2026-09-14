@@ -1,0 +1,74 @@
+\chapter{The Rule Table}\label{app:rules}
+
+The statuses below are the ones the engine reports through \texttt{engine.capabilities}. A rule
+the engine omits is unverified.
+
+\newcommand{\rt}[3]{\rn{#1} & \status{#2} & #3 \\}
+\footnotesize
+\begin{longtable}{p{4.3cm}p{2.15cm}p{7.65cm}}
+\toprule Rule & Status & Note \\ \midrule \endhead
+\multicolumn{3}{l}{\textbf{Simplification}} \\
+\rt{simp.flatten}{verified}{Associativity of $+$ and $\cdot$.}
+\rt{simp.identity}{verified}{The additive and multiplicative identities and the annihilator.}
+\rt{simp.fold-constants}{verified}{Exact rational arithmetic; $\mathbb{Q}$ embeds in $\mathbb{R}$.}
+\rt{simp.collect-like-terms}{verified}{Distributivity: $a t + b t = (a+b) t$.}
+\rt{simp.power}{verified}{Includes exact roots; the root search returns only checked roots.}
+\rt{simp.collect-powers}{conditional}{$b^m b^n = b^{m+n}$ needs a positive base: at $b = 0$ it turns $0$ into $1$.}
+\rt{simp.function}{conditional}{$\exp(\ln x) = x$ needs $0 < x$: at $x = -1$ it turns $-1$ into $1$. The other cases, $\sin/\cos = \tan$ among them, are unconditional.}
+\rt{simp.radical}{verified}{A perfect-power base is reduced ($8^{1/2} = 2^{3/2}$) and same-index radicals multiply under one root; unconditional, the bases being positive integers.}
+\rt{simp.collect-radicals}{verified}{Radicals with the same square-free part collect, $\sqrt{50} - \sqrt{18} = 2\sqrt 2$; unconditional.}
+\midrule \multicolumn{3}{l}{\textbf{Derivatives}} \\
+\rt{diff.constant}{verified}{A term the variable does not occur in has derivative $0$.}
+\rt{diff.variable}{verified}{The identity function has slope $1$ everywhere.}
+\rt{diff.constant-multiple}{verified}{Constant factors pull out; no differentiability needed.}
+\rt{diff.sum}{conditional}{Needs every summand differentiable: for $|x| + x$ at $0$ the rule gives $1$ where the derivative does not exist.}
+\rt{diff.product}{conditional}{Needs both factors differentiable at the point.}
+\rt{diff.power}{conditional}{Proved for a natural exponent with a differentiable base; real exponents still open.}
+\rt{diff.chain}{conditional}{Needs the inner function differentiable; proved for $\sin$, $\cos$ and $\exp$, while $\ln$ and $\tan$ also need a domain condition.}
+\rt{diff.matrix}{unverified}{Proved, but matrices carry no value in the $\mathbb{R}$ semantics, so the theorem has no content yet.}
+\rt{diff.higher-order}{unverified}{An abbreviation: it eliminates the three-argument form, so there is nothing to prove.}
+\midrule \multicolumn{3}{l}{\textbf{Linear algebra}} \\
+\rt{cmd.rref}{verified}{Over $\mathbb{Q}$ the reduced matrix has the input's solution set (\lc{sol_rref}) and is in reduced row echelon form (\lc{rref_isRref}). With symbolic entries the nested row operations are the unverified \texttt{.symbolic} ones, and the step inherits their status.}
+\rt{la.row-swap}{verified}{Exchanging two rows preserves the solution set (\lc{sol_swap}).}
+\rt{la.row-scale}{verified}{Scaling a row by a nonzero rational preserves the solution set (\lc{sol_scale}).}
+\rt{la.row-add}{verified}{Adding a multiple of another row preserves the solution set (\lc{sol_addMul}).}
+\rt{la.row-swap.symbolic}{unverified}{Symbolic entries: the pivot is assumed nonzero because simplify could not show it is zero.}
+\rt{la.row-scale.symbolic}{unverified}{Symbolic entries: division by a pivot that is only assumed nonzero.}
+\rt{la.row-add.symbolic}{unverified}{Symbolic entries: the arithmetic is the simplifier's, outside the $\mathbb{Q}$ theorem.}
+\midrule \multicolumn{3}{l}{\textbf{Expansion}} \\
+\rt{cmd.expand}{verified}{Distribution is a total function proved sound over $\mathbb{R}$ (\lc{dist_sound}); the collection afterwards is the pipeline's own steps with their statuses.}
+\rt{expand.distribute}{verified}{Multiplying out a product of sums and collecting like monomials: \lc{dist_sound}.}
+\rt{expand.power}{verified}{A power of a sum is the sum multiplied by itself: \lc{dist_sound}.}
+\midrule \multicolumn{3}{l}{\textbf{Integration}} \\
+\rt{cmd.integrate}{verified}{Accepted only when the candidate's derivative normalizes to the integrand, exactly (\lc{cmdIntegrate_spec}); \lc{integrate_deriv} reads that as $F' = f$ wherever the differentiation steps shown are sound. The finder's own steps are guesses.}
+\rt{int.check}{verified}{The differentiation of the candidate: this step carries the claim, with the statuses of its own steps.}
+\rt{int.compare}{verified}{Derivative and integrand are expanded (\lc{dist}, proved sound) and simplified before comparison; the statuses of the simplification steps apply.}
+\rt{int.constant}{checked}{A guess from the finder; nothing is proved about it. Accepted only because \rn{int.check} verifies the result by differentiation.}
+\rt{int.variable}{checked}{A guess from the finder, verified by \rn{int.check}.}
+\rt{int.sum}{checked}{A guess from the finder, verified by \rn{int.check}.}
+\rt{int.constant-multiple}{checked}{A guess from the finder, verified by \rn{int.check}.}
+\rt{int.power}{checked}{A guess from the finder, verified by \rn{int.check} (the symbolic-exponent case relies on \rn{simp.collect-powers} there).}
+\rt{int.exponential}{checked}{A guess from the finder, verified by \rn{int.check}.}
+\rt{int.table}{checked}{A guess from the finder, verified by \rn{int.check}.}
+\rt{int.linear-substitution}{checked}{A guess from the finder, verified by \rn{int.check}.}
+\rt{int.substitution}{checked}{A guess from the finder ($u$-substitution), verified by \rn{int.check}.}
+\rt{int.by-parts}{checked}{A guess from the finder (integration by parts), verified by \rn{int.check}.}
+\midrule \multicolumn{3}{l}{\textbf{Order world}} \\
+\rt{order.closure}{verified}{The order is the reflexive-transitive closure, and reflexivity, antisymmetry and transitivity are decided (\lc{checkPartialOrder_none}).}
+\rt{order.covers}{verified}{Hasse edges are exactly the covers: $x < y$ with nothing strictly between (\lc{covers_spec}).}
+\rt{order.upper-bounds}{verified}{Every element above both, by the decision on the finite order.}
+\rt{order.least}{verified}{The element found is an upper bound below every upper bound (\lc{sup_spec}); none exists when the search fails (\lc{sup_none}).}
+\rt{order.lower-bounds}{verified}{Every element below both, by the decision on the finite order.}
+\rt{order.greatest}{verified}{Dual of the join: the greatest lower bound.}
+\rt{order.lattice}{verified}{Every pair searched for a join and a meet; the witness is reported when one is missing.}
+\rt{order.cover}{verified}{A cover in the Hasse diagram; the chain composes by transitivity.}
+\rt{order.monotone}{verified}{Every pair $x \le y$ of the order checked; the witness is reported when it fails.}
+\rt{order.iterate}{verified}{One step of the Kleene chain; each element of the chain is below every fixed point (\lc{iter_le_fixed}).}
+\rt{order.fixed}{verified}{The chain stopped at a fixed point (checked), which \lc{iter_le_fixed} makes the least (dually, the greatest).}
+\midrule \multicolumn{3}{l}{\textbf{$\lambda$-calculus}} \\
+\rt{lambda.delta}{verified}{Unfolding a definition replaces a free name by its term; nothing to prove beyond that.}
+\rt{lambda.beta}{unverified}{$\beta$-reduction with capture-avoiding substitution; the substitution lemma is not yet proved.}
+\rt{lambda.alpha-beta}{unverified}{A binder renamed to avoid capture, then $\beta$; the renaming is not yet proved to preserve $\alpha$-equivalence.}
+\bottomrule
+\end{longtable}
+\normalsize

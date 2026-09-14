@@ -1,0 +1,45 @@
+name: Build the book
+
+# Builds book/show-your-work.tex to a PDF on every push and pull request (uploaded as a workflow
+# artifact), and attaches it to a dated release on pushes to main — the same shape as the
+# lean4learning books' workflow, so the two repositories build the same way.
+
+on:
+  push:
+    branches: [main]
+    paths: ["book/**", ".github/workflows/build-book.yml"]
+  pull_request:
+    paths: ["book/**", ".github/workflows/build-book.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: build-book-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: texlive/texlive:latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stamp the commit
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE" && git rev-parse --short HEAD > book/chapters/commit.tex
+      - name: Build
+        working-directory: book
+        run: |
+          latexmk -xelatex -shell-escape -interaction=nonstopmode -halt-on-error show-your-work.tex
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: show-your-work
+          path: book/show-your-work.pdf
+          retention-days: 90
+      - name: Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="book-$(date -u +%Y.%m.%d)-$(git rev-parse --short HEAD)"
+          gh release create "$tag" book/show-your-work.pdf --title "Show Your Work $tag" --notes "Built from $GITHUB_SHA"

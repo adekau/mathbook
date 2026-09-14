@@ -1,0 +1,80 @@
+\chapter{The Notebook}\label{ch:notebook}
+
+The notebook evaluates nothing. That is its whole design, and it was decided before a line of it
+was written: the frontend owns no printer, no simplifier, no numeric evaluator; it sends source to
+an engine and draws what comes back. This chapter is about what that leaves for the notebook to
+do, which turns out to be more than expected, and about the three ways the engine reaches it.
+
+\section{One engine, three hosts}
+
+The engine is a Lean program with a JSON-RPC surface (Chapter~\ref{ch:what}). It runs in three
+places from one source:
+
+\begin{itemize}[nosep]
+  \item \textbf{In the browser}, compiled to WebAssembly and loaded in a web worker. The runtime
+    and \lc{Init} are built from source for \texttt{wasm32}, because Lean stopped shipping a
+    prebuilt one after v4.15 and the project wants current Lean. The module is 1.8~MB and
+    answers its first request 96~ms after the worker starts. No threads, so no cross-origin
+    isolation headers: a self-hosted notebook is a static directory.
+  \item \textbf{Natively}, behind an HTTP host, for a shared server.
+  \item \textbf{On the command line}, over stdio, which is how the tests drive it.
+\end{itemize}
+
+The notebook does not know which. It holds an \lc{EngineClient} built from a \lc{Transport},
+and a transport moves strings.
+
+\section{What the notebook draws}
+
+Everything the notebook shows is either a string from the engine or a picture described by it.
+The engine renders terms to text and to LaTeX, and with paths requested wraps every subterm in an
+\texttt{\textbackslash htmlData} annotation; the notebook typesets the LaTeX and attaches a click
+handler that reads the path back. That is the whole of selection.
+
+The derivation panel is a list of steps. A step click shows the trail up to it
+(Chapter~\ref{ch:origins}); a nested derivation --- the simplification inside a derivative step,
+or the differentiation inside an integration check --- opens as a sub-panel with the same
+machinery, and the status shown for a step is the weakest status of anything beneath it.
+
+Pictures follow protocol rule 5: a new capability is an optional field, never a change. A plot is
+a list of samples with \texttt{null} where the function has no finite value; the notebook draws the
+curve, breaks it at the gaps, and trims the tails of the range so an asymptote does not flatten
+the rest. A Hasse diagram is a list of elements with heights and a list of covers; the notebook
+lays them out in layers. In both cases the engine simplified the formula or decided the order,
+recorded a derivation, and described the picture; nothing in the drawing evaluates.
+
+\section{Files, and the session behind them}
+
+A notebook file is JSON: the cells' sources, their saved outputs and derivations, and the studio's
+scenes. Opening one shows the saved outputs at once and then re-runs every cell in order, so that
+the engine's session --- and with it \texttt{explain}, which needs the derivation to be in the
+engine's memory --- matches what is on screen. The notebook also autosaves to the browser after
+every run and comes back on reload the same way.
+
+\begin{logbox}[The stale module]
+  A browser served last week's WebAssembly for a whole afternoon while the tests passed. Every
+  asset URL now carries a build stamp, and the notebook logs the engine's version next to the
+  worker's start-up time. Not a finding about mathematics; a finding about trust.
+\end{logbox}
+
+\section{Input}
+
+Two small conveniences turned out to matter for the worlds of Chapter~\ref{ch:worlds}. Typing a
+backslash opens a completion list of every symbol abbreviation, filtered as you type; at
+\texttt{\textbackslash lam} it shows the one entry with the symbol it produces, $\lambda$, on the
+right, and Tab or a following space inserts it. This is the input method of the Lean editor
+extension, borrowed because the reader of this book already knows it. And a cell's kind --- an
+ordinary term, a $\lambda$-term, an order-world command --- is decided by the engine and reported
+in the reply; the notebook only shows the badge.
+
+\section{Exercises}
+
+\begin{exercisebox}[A fourth host]
+  The transport for a WebSocket is under thirty lines. Write it, and say what the engine has to
+  change. (Nothing.)
+\end{exercisebox}
+
+\begin{exercisebox}[Rule 5 in practice]
+  Add a field to \lc{EvaluateResult} that an old notebook would ignore and a new one would draw,
+  and explain why the old notebook keeps working against the new engine and the new notebook
+  against the old one.
+\end{exercisebox}

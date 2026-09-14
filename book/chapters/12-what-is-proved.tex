@@ -1,0 +1,71 @@
+\chapter{What Is Proved, and What Is Not}\label{ch:ledger}
+
+The book has used four words throughout --- verified, conditional, checked, unverified --- and this
+chapter is their ledger. It is also the argument of the book stated once, plainly: a verified
+system is not one where everything is proved, but one where the boundary between proved and not is
+drawn in the code, reported to the user, and never crossed silently.
+
+\section{The four statuses, once more}
+
+\begin{itemize}[nosep]
+  \item \status{verified}: an unconditional theorem, over $\mathbb{R}$ where the rule has a real
+    meaning, over $\mathbb{Q}$ for elimination, over the Prop for the order world.
+  \item \status{conditional}: a theorem with a side condition whose necessity is itself proved by
+    a counterexample. The notebook shows the condition.
+  \item \status{checked}: a guess that a later step verifies, and the later step is verified.
+  \item \status{unverified}: no theorem, and the note says what would be needed.
+\end{itemize}
+
+Appendix~\ref{app:rules} is the table, generated from the same list the engine sends the notebook,
+so the book and the software cannot disagree about it.
+
+\section{Termination}
+
+Cell evaluation has no step budget. Every rule of the notebook pipeline decreases the six-tier
+ordering on a node whose children are normal (\lc{pipelineOrdered}), for every checker the
+pipeline is instantiated with (\lc{pipelineOrderedWith}). Expansion is a structurally recursive
+function. Elimination is a loop over columns. The one remaining budget is $\beta$-reduction, whose
+termination is undecidable, and it is refused loudly at 1000 steps.
+
+Where the proof needed a property of a subsystem's output it does not see inside, that property is
+decided at run time and a failure is an error: a command's output has no command in it; a radical
+rule's guard holds; the Kleene chain stabilized. These are boundaries, not budgets. A boundary is a
+property of a result; a budget is a count of steps; the difference is whether the failure can be
+explained.
+
+\section{Axioms}
+
+Every theorem in \file{engine/} and \file{proofs/} depends on the three standard axioms of Lean's
+classical mathematics and no others: propositional extensionality, choice, and quotient soundness.
+There are no \lc{sorry}s. \lc{#print axioms} on the top-level theorems is part of the build.
+
+\section{Sizes}
+
+\begin{center}
+\begin{tabular}{lr}
+  Lean source (engine and proofs) & 11\,389 lines \\
+  Theorems and lemmas & 547 \\
+  WebAssembly module & 1.8 MB \\
+  First reply in the browser & 96 ms \\
+\end{tabular}
+\end{center}
+
+\section{What is not proved}
+
+The list is in the table, but the pattern is worth stating. What is unproved is either
+\emph{vacuous} (a theorem about matrices in a semantics where matrices have no value), an
+\emph{abbreviation} (nothing to prove), \emph{symbolic} where the verified path is numeric, or
+\emph{metatheory} that the author has not yet written ($\alpha$-equivalence, de Bruijn
+commutation, pigeonhole). None of it is a rule that is believed wrong. And every item was on the
+open list before it was in this chapter.
+
+\section{What the book argued}
+
+That a learning notebook can show its work and mean it. That the meaning is a theorem per rule,
+folded once over the rewriter and instantiated per semantics. That termination without a budget
+is an ordering, that the ordering is a design, and that what the ordering cannot afford is better
+done as a function than faked as a rule. That a guess plus a verified check is a verified
+answer. And that the honest label on a step is worth more than a proof the user cannot see.
+
+The notebook is at the address on the title page. Every ``Try it'' box in this book runs there,
+in the browser, on the engine whose theorems this chapter counted.

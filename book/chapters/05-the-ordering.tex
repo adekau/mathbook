@@ -1,0 +1,183 @@
+\chapter{The Ordering}\label{ch:order}
+
+Chapter~\ref{ch:rewrite} promised that the simplifier would never need a step budget, and kept the
+promise with an additive measure. This chapter is about the day that measure met the rest of the
+notebook --- derivatives that duplicate subterms, commands that grow terms, matrix rules that
+copy a scalar into every entry --- and about the ordering that replaced it. It is the chapter
+where the project's order theory is used rather than displayed, and the one whose constants were
+hardest won.
+
+\section{Why the additive measure fails}
+
+The measure of Chapter~\ref{ch:rewrite} is a weighted node count, and it is additive: the measure
+of a node is a head weight plus the measures of its children. Additivity is exactly what the fold
+over the rewriter needs, and it is exactly what a duplicating rule breaks. The product rule sends
+$\frac{d}{dx}(f \cdot g)$ to $f' g + f g'$: two copies of $f$ and two of $g$ where there was one
+of each. No head weight for \texttt{diff} can pay for that, because the payment must be
+\emph{proportional to the size of $f$}, and an additive weight is a constant.
+
+The classic answer is a recursive path ordering, where a symbol higher in a precedence may be
+replaced by any term built from lower ones. It fits the derivative rules perfectly --- they are the
+textbook example --- and it does not fit the rest of the simplifier. Two rules already in the
+engine want opposite precedences:
+
+\[
+  (ab)^n \to a^n b^n \quad\text{needs}\quad \mathtt{pow} > \mathtt{mul},
+  \qquad
+  x \cdot x \to x^2 \quad\text{needs}\quad \mathtt{mul} > \mathtt{pow}.
+\]
+
+Neither could be moved. Distributing integer powers over products is what every computer-algebra
+system does under ``simplify'', and $x \cdot x \to x^2$ is the reason collect-powers exists. A
+global RPO was also not in Mathlib, and the estimate for building one was three times the work of
+the alternative --- while still leaving these two rules unordered.
+
+\begin{logbox}[The decision]
+  Option B, recorded on 13 September with Alex: tiered measures with an innermost-strategy
+  lemma. Not a global RPO; not ``fuel as a proven bound''. The two parity rules stay in
+  \texttt{simplify} and get a bespoke ordering. Expansion --- whose rules genuinely grow terms ---
+  stays on fuel for now and gets its own chapter (\ref{ch:cannot}).
+\end{logbox}
+
+\section{Six tiers}
+
+The ordering is lexicographic on a tuple of six natural numbers. Each tier exists because a
+family of rules could not be ordered by the tiers below it.
+
+\begin{minted}{lean}
+abbrev Mu := Nat × Nat × Nat × Nat × Nat × Nat
+def μ (e : Expr) : Mu := (cmdCount e, d3Count e, litCount e, M e, size e, numCount e)
+\end{minted}
+
+\begin{enumerate}[nosep]
+  \item \textbf{Commands.} \texttt{expand}, \texttt{rref}, \texttt{N}, \texttt{subst},
+    \texttt{integrate}: a command node is consumed by its rule and produces a term with no command
+    in it. Whatever the command does inside, this tier drops.
+  \item \textbf{Malformed derivatives.} The three-argument $\texttt{diff}(f, x, n)$ is eliminated
+    into $n$ nested two-argument ones, which \emph{raises} the weight $M$; counting three-argument
+    nodes first makes the elimination a decrease.
+  \item \textbf{Nodes above matrix literals.} Scalar multiplication $s \cdot A$ copies $s$ into
+    every entry, so counting literals alone fails and counting entries fails. Counting the nodes
+    \emph{on a path from the root to a literal} makes every matrix rule a strict decrease, and
+    keeps matrices out of $M$ entirely.
+  \item \textbf{The weight $M$.} The tier that orders derivatives against the simplifier. Its
+    definition is the next section.
+  \item \textbf{Size.} For rules that keep $M$ and drop a node.
+  \item \textbf{Integer magnitudes.} Added later, for the radical rules (Chapter~\ref{ch:cannot}).
+\end{enumerate}
+
+Lexicographic products of well-founded orders are well-founded, and the whole proof of that is one
+line of \lc{Prod.lex}. The lemma \lc{muLt_of} builds a decrease tier by tier: each tier is
+$\le$ under the assumption that the earlier tiers are equal, and the first strict one wins.
+
+\section{The weight $M$}
+
+\begin{minted}{lean}
+def M : Expr → Nat
+  | .num q => if q.isOne then 1 else if q.isInt then 2 else 4
+  | .var _ => 10
+  | .add es => ML es + (if es.isEmpty then 3 else 0)
+  | .mul es => 2 + ML es + 2 * es.length
+  | .pow b e => (M b + 1) * M e - 1
+  | .fn "diff" [g, t] => 3 ^ (M g + 3) + M t
+  | .fn _ es => 5 * ML es + 10
+  | .matrix rows => 10 + MR rows
+\end{minted}
+
+Every constant here is forced by a named rule, and the log records which.
+
+\begin{itemize}[nosep]
+  \item \textbf{A numeric exponent multiplies its base.} $M(b^e) = (M b + 1) \cdot M e - 1$. This is
+    the shape that makes $(b^m)^n \to b^{mn}$ decrease with symbolic $m$ while $x \cdot x \to x^2$
+    also decreases. Every polynomial interpretation tried before it failed on one or the other.
+  \item \textbf{A per-factor charge on products.} $M(\prod e_i) = 2 + \sum (M e_i + 2)$. The
+    $+2$ per factor is what $x \cdot x \to x^2$ spends: two factors at 10 each plus their charges
+    outweigh $(10+1) \cdot 2 - 1 = 21$.
+  \item \textbf{One weighs 1.} So that $x \cdot x^a \to x^{a+1}$ decreases: the exponent $a+1$
+    costs one more than $a$, and the product's charge pays for it.
+  \item \textbf{Non-integer numerals weigh 4.} So that $\sqrt 2 + \sqrt 2 \to 2 \sqrt 2$
+    decreases: the term $2^{1/2}$ must weigh at least $9$, and a fraction weighing $2$ would make
+    it $8$.
+  \item \textbf{A derivative is exponential in its body.} $M(\texttt{diff}(f, x)) = 3^{M f + 3} +
+    M x$. The product rule replaces one derivative of $fg$ by two derivatives of the parts plus
+    two copies of the parts, and $3^{M f + M g + \ldots}$ dominates $3^{M f + 3} + 3^{M g + 3} +
+    2(M f + M g) + \text{charges}$ with room to spare. Three is the smallest base that works; two
+    fails on the chain rule.
+\end{itemize}
+
+The tuning was the real work of the milestone. A rule that fails to decrease does not fail
+loudly; it fails as an \lc{omega} goal that is false, and finding \emph{which} constant to move,
+without breaking the thirty lemmas already proved, took most of two days.
+
+\section{The obligation must be conditional}
+
+The product rule duplicates its body. If the body could still contain a command --- an
+\texttt{expand} that will grow when it fires --- then no ordering of this shape survives, because
+the duplicated command grows twice. So the termination obligation for a rule is not ``its output
+is smaller than its input'' but ``its output is smaller than its input \emph{when the input's
+children are already normal}'':
+
+\begin{minted}{lean}
+structure Ordered (rules : List PlainRule) : Prop where
+  decreasing : ∀ r ∈ rules, ∀ e res, ChildrenNormal rules e →
+    r.apply e = some res → res.error = none → MuLt (μ res.result) (μ e)
+\end{minted}
+
+The rewriter's innermost strategy makes the hypothesis true at every firing --- children are
+normalized before the parent is tried --- and the proof carries \lc{Normal} through the recursion
+in the \emph{result type} of \lc{normAtT}, together with the invariant $\mu(\text{out}) \le
+\mu(\text{in})$ that a parent needs to know about its rewritten children. This is the
+``innermost-strategy lemma'' of the decision, and it is where the order theory and the rewriting
+strategy meet: the ordering is not on terms but on terms whose children are in normal form.
+
+\section{Honest boundaries}
+
+Three families of rules run subsystems the proof does not see inside: commands (which call the
+expander, elimination, floating point), and the matrix rules (unverified arithmetic until
+Chapter~\ref{ch:linalg}). For each, the proof needs one property of the output and nothing else,
+and that property is \emph{checked at run time}:
+
+\begin{minted}{lean}
+def checked (r : RuleResult) : RuleResult :=
+  if r.error.isSome then r
+  else if cmdCount r.result = 0 then r
+  else refuse "a command produced a term that still contains a command"
+\end{minted}
+
+A failure surfaces as an error in the cell, never as non-termination and never as a silent wrong
+answer. This is the shape --- decide at run time exactly what the proof needs, and refuse
+otherwise --- that the rest of the book keeps returning to. It is a boundary, not a budget: no
+number is chosen, and the check is a property of the output, not a count of the steps.
+
+Behaviour changed in the process, all of it deliberately and all of it logged: \texttt{det} and
+$A^k$ on literals are one step each; $N(1/3)$ evaluates where the reference left it; $\sin(A)$ for a
+matrix $A$ is an error instead of a junk normal form; $\texttt{diff}(f, 2)$ is an error.
+
+\begin{trybox}
+\begin{minted}{text}
+diff(x^2 * sin(x) * exp(x), x)
+(a*b)^3 * (a*b)^2
+\end{minted}
+  The first is a long derivation with a product rule inside a product rule; there is no budget
+  behind it. The second fires both parity rules in sequence. Open the capabilities panel: the
+  termination line names \lc{pipelineOrdered}.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Forcing a constant]
+  Compute $M$ on both sides of $x \cdot x \to x^2$ and of $x \cdot x^a \to x^{a+1}$ with $M(1)$
+  set to $2$ instead of $1$. Which rule stops decreasing?
+\end{exercisebox}
+
+\begin{exercisebox}[Why not base 2]
+  Write the chain rule $\frac{d}{dx} \sin u \to \cos u \cdot \frac{d}{dx} u$ and compute $M$ on
+  both sides with $M(\texttt{diff}(f,x)) = 2^{M f + 3} + M x$. Find a $u$ for which it fails to
+  decrease, then show that base 3 succeeds for every $u$.
+\end{exercisebox}
+
+\begin{exercisebox}[The innermost lemma]
+  Give a rule set and a term for which the outermost strategy fails to terminate but the
+  innermost one terminates under \lc{Ordered}. (A command inside the body of a product is the
+  engine's own example.)
+\end{exercisebox}

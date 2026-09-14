@@ -1,0 +1,112 @@
+\chapter{Integration as a Checker}\label{ch:integrate}
+
+Nobody proves an integrator correct. The engine does not try. What it does instead is the oldest
+trick in the subject --- differentiate the answer and see --- made into a theorem, and the
+interesting part is what had to change in the pipeline for the theorem to be stateable at all.
+
+\section{A guess, then a check}
+
+The finder (\file{Antiderivative.lean}) is an ordinary table-driven antidifferentiator: sums,
+constant factors, powers, $a^u$, the elementary functions, each under a linear substitution;
+later, $u$-substitution and integration by parts with the LIATE heuristic. Nothing about it is
+proved, and its steps are labelled with a fourth status, \status{checked}: a guess whose result a
+later step verifies.
+
+The command then differentiates the candidate with the pipeline, and accepts only if the normal
+form of the derivative is the normal form of the integrand, exactly. The claim is a theorem about
+the command's output, and it assumes nothing about the finder:
+
+\begin{minted}{lean}
+theorem cmdIntegrate_spec (norm : Norm) {f : Expr} {x : String} {res : RuleResult}
+    (h : (cmdIntegrate norm).apply (.fn "integrate" [f, .var x]) = some res)
+    (hok : res.error = none) :
+    ∃ g sub g' s₁ s₂, norm (D res.result x) = .ok (g, sub) ∧
+      norm (Expand.dist g) = .ok (g', s₁) ∧ norm (Expand.dist f) = .ok (g', s₂)
+\end{minted}
+
+And in \file{proofs/}, with the real semantics, that becomes a statement about \lc{deriv}:
+
+\begin{minted}{lean}
+theorem integrate_deriv (norm : Norm) … (ρ : EnvR)
+    (hdiff  : … evalD ρ (D res.result x) = evalD ρ g)
+    (hleft  : … evalD ρ (Expand.dist g) = evalD ρ g')
+    (hright : … evalD ρ (Expand.dist f) = evalD ρ f') :
+    deriv (fx ρ x res.result) (ρ x) = evalD ρ f
+\end{minted}
+
+The three hypotheses say that the normalizations the check performed were sound at the point
+$\rho$. That is exactly what the statuses of the nested derivation say, rule by rule
+(Chapters~\ref{ch:sound} and~\ref{ch:deriv}). So the notebook's display of an integration ---
+finder steps marked \status{checked}, an \rn{int.check} step with the differentiation nested
+under it, and the command inheriting the weakest status below it --- is a faithful rendering of
+this theorem's hypotheses.
+
+\section{The knot}
+
+The pipeline could not check with itself. A rule set cannot contain a rule that normalizes with
+that set --- the definition would be circular, and Lean says so. The way out was to make the
+pipeline \emph{generic in the checker's normalizer}:
+
+\begin{minted}{lean}
+def pipelineRulesWith (norm : Norm) : List PlainRule := …
+theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm)
+\end{minted}
+
+The termination theorem of Chapter~\ref{ch:order} then holds for \emph{every} \lc{norm}, and the
+knot closes after the proof: the checker is the pipeline with nested \texttt{integrate} refused,
+the notebook's pipeline is the pipeline with that checker, and neither has a step budget.
+
+\begin{minted}{lean}
+def pipelineRules : List PlainRule := pipelineRulesWith checkNorm
+theorem pipelineOrdered : Ordered pipelineRules := pipelineOrderedWith checkNorm
+\end{minted}
+
+\section{Exact means refusable}
+
+The check is exact, so a correct guess can be refused. $\int \tan x$ was: the finder produced
+$-\ln \cos x$, its derivative normalized to $\sin x \cdot (\cos x)^{-1}$, and the engine did not
+identify that with $\tan x$. That is the right failure mode --- never a wrong answer --- and the fix
+was a rule (Chapter~\ref{ch:cannot}), proved in three layers, not a weaker check.
+
+Integration by parts found a subtler one. Every candidate was correct and every one was refused,
+because the pipeline never distributes a numeral over a sum: the ordering forbids it, distribution
+is \texttt{expand}'s job, and so $-(a + b) + b$ is a normal form. The fix keeps the check sound
+rather than weakening it: both sides are expanded with \lc{Expand.dist} --- proved sound for the
+derivative semantics too, \lc{dist_soundD}, the second instance of the generic proof --- and
+simplified before comparison. That is the \rn{int.compare} step, and it is why the spec above
+compares \lc{norm (Expand.dist g)} with \lc{norm (Expand.dist f)} rather than \lc{g} with
+\lc{f}.
+
+A third finding came free. $\int x^a$ is accepted through \rn{simp.collect-powers} cancelling
+$(a+1)/(a+1)$, so its check inherits that rule's side condition, $a \neq -1$, and the statuses say
+so without anyone writing it down. The theorem's hypotheses are the notebook's display; the
+display knew about $a = -1$ before the author did.
+
+\begin{logbox}[Still refused]
+  $e^x \sin x$ needs the ``solve for the integral'' trick; $\sin^2 x$ needs a trigonometric
+  identity the simplifier lacks; $1/(x^2 + 1)$ needs an arctangent the engine does not have. Each
+  is refused with the candidate it tried, and none is a wrong answer.
+\end{logbox}
+
+\begin{trybox}
+\begin{minted}{text}
+integrate(x * exp(x), x)
+integrate(x^a, x)
+integrate(sin(x)^2, x)
+\end{minted}
+  Open the derivation of the first: the by-parts steps are \status{checked}, the check step
+  carries the differentiation, and the compare step shows both sides expanded. The second's
+  status names the side condition. The third is refused.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Reading the hypotheses]
+  For $\int x^a\,dx$, list the rules that fire in the check's differentiation and say which
+  hypothesis of \lc{integrate_deriv} each one's status discharges.
+\end{exercisebox}
+
+\begin{exercisebox}[A checker for something else]
+  Design a checked command for solving $ax + b = 0$: what does the finder guess, what does the
+  check normalize, and what is the analogue of \lc{cmdIntegrate_spec}?
+\end{exercisebox}

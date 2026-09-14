@@ -1,0 +1,86 @@
+\chapter{Origins}\label{ch:origins}
+
+``Show work'' has two halves. The first is a derivation the reader can follow line by line, and
+Part~I built it. The second is the answer to a question about a \emph{piece} of the result:
+where did this $2$ come from? which steps produced $\cos x$? The first version of the engine
+answered by comparing paths --- if the selected subterm's path was a prefix of a step's path, the
+step was involved --- and it was wrong often enough that a milestone was spent replacing it.
+
+\section{Origin tracking}
+
+The idea is van Deursen, Klint and Tip's (1993): trace a position \emph{backwards} through the
+derivation, one step at a time, and let each step say what it did to it.
+
+\begin{itemize}[nosep]
+  \item \textbf{Outside the redex}, a position is its own origin. The step did not touch it.
+  \item \textbf{Inside the contractum}, the origins of a position are the positions of
+    \emph{equal subterms of the redex}: the rule \emph{copied} the node there.
+  \item \textbf{With no equal subterm}, the step \emph{created} the node. Its children are traced
+    on; the node itself has no earlier history.
+  \item \textbf{A position that contains the redex} has the step below it: the relation is
+    \emph{contains}.
+\end{itemize}
+
+\begin{minted}{lean}
+inductive Relation where
+  | created   -- the node at the position was built by the rule
+  | copied    -- the rule moved or duplicated it into the contractum
+  | contains  -- the rule fired strictly below the node
+\end{minted}
+
+The result is one relation per step, in derivation order. It is sent to the notebook as a trace,
+and \texttt{explain} accepts which term the path is into --- the input, the output, or the term
+after step $n$ --- so every subterm of every line is selectable.
+
+\section{The theorem that lets a step be skipped}
+
+The first bullet is the one that needs a proof. Skipping a step ``because it did not touch the
+position'' is only sound if a rewrite at $p$ really leaves every position disjoint from $p$
+unchanged, and that is a statement about \lc{replaceAt} and \lc{at?}, the two path primitives:
+
+\begin{minted}{lean}
+def Disjoint (p q : Path) : Prop := ¬ p.IsPrefix q ∧ ¬ q.IsPrefix p
+
+theorem at?_replaceAt_disjoint (new : Expr) : ∀ (e : Expr) (p q : Path), Disjoint p q →
+    (replaceAt e p new).at? q = e.at? q
+\end{minted}
+
+It is a small theorem, but it is the one that makes the tracer's cheapest case correct without
+looking at the term, and it was written before the tracer.
+
+\section{Three findings}
+
+\begin{enumerate}[nosep]
+  \item \textbf{A trace must stop at a created node but continue into its parts.} The product
+    rule creates the sum $f'g + fg'$; the node is new, but $f$ and $g$ inside it are copies. If
+    the trace stopped at the creation, the history of $2x \cos x$ would be ``the product rule''
+    and nothing else. The tracer stops the node and traces its children.
+  \item \textbf{Exact equality breaks at the first silent sort.} The rewriter puts arguments in
+    canonical order between recorded steps, so $x^{3 + -1}$ in one step's \emph{after} is
+    $x^{-1 + 3}$ in the next step's \emph{before}. Equality is therefore taken up to the argument
+    order that \lc{canon} may change (\lc{canonDeep}), and the same comparison bridges the silent
+    reorderings between recorded steps. The first test caught this.
+  \item \textbf{What remains over-approximate.} Equal subterms at several positions --- the
+    paper's \emph{secondary origins} --- are reported as sets, never dropped. A reader who selects
+    one of two identical $x$'s gets both histories, which is the honest answer.
+\end{enumerate}
+
+\begin{trybox}
+\begin{minted}{text}
+diff(x^2 * cos(x), x)
+\end{minted}
+  Click the $2x$ in the result. The panel shows the steps that produced it, each labelled
+  created, copied or contains. Now click a step, then a subterm of \emph{that} line.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Disjointness]
+  Prove that if \lc{Disjoint p q} then \lc{Disjoint (i :: p) (i :: q)}, and explain which case
+  of \lc{at?_replaceAt_disjoint} needs it.
+\end{exercisebox}
+
+\begin{exercisebox}[Secondary origins]
+  Find a derivation in which a selected subterm has two origins in the input, and say what a
+  single-origin tracer would have to invent to report only one.
+\end{exercisebox}

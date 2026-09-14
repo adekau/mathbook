@@ -1,0 +1,168 @@
+\chapter{Rewriting with a Trace}\label{ch:rewrite}
+
+Everything the engine does to a term, it does by rewriting: a rule looks at one node, and either
+does not apply or replaces the node by something else and says why. The rewriter applies rules
+until none applies, records every firing, and hands the record to the notebook. This chapter is
+that machinery: the terms, the rules, the strategy, and the trace. It is deliberately small; the
+weight of the book is in what the rules \emph{claim} (Part~II) and in why the rewriting
+\emph{stops} (Part~III).
+
+\section{Terms}
+
+The term language is deliberately tiny.
+
+\begin{minted}{lean}
+inductive Expr where
+  | num    : Q → Expr                    -- an exact rational, with an "approximate" flag
+  | var    : String → Expr
+  | add    : List Expr → Expr            -- n-ary sums and products
+  | mul    : List Expr → Expr
+  | pow    : Expr → Expr → Expr
+  | fn     : String → List Expr → Expr   -- sin, ln, diff, matrix commands, …
+  | matrix : List (List Expr) → Expr
+\end{minted}
+
+There is no subtraction and no division: $a - b$ is \lc{add [a, mul [-1, b]]} and $a/b$ is
+\lc{mul [a, pow b (-1)]}. The printer recovers the familiar forms on the way out, and the
+rewriter never has to know about them. Numerals are core Lean's \lc{Rat}, wrapped in a structure
+\lc{Q} that adds a flag saying whether the number came from a decimal literal (so that
+\texttt{2.5} prints as \texttt{2.5} and not \texttt{5/2}); the flag is presentation and changes no
+value, and a two-line theorem in \file{proofs/Proofs/Q.lean} says so.
+
+Sums and products are lists, and their arguments are kept in a canonical order. The function
+\lc{canon} sorts the arguments of a sum or a product (products containing a matrix are left
+alone: matrix multiplication does not commute). Canonical order runs \emph{silently} inside the
+rewriter rather than as a rule: it is applied to every node after its children are normalized,
+it is never recorded as a step, and Chapter~\ref{ch:origins} will have to bridge over it when it
+traces origins across steps.
+
+\section{Rules}
+
+A rule inspects one node and either declines or returns a result: the new node, an explanation
+in Markdown-with-\LaTeX, optionally a nested derivation (row reduction records its row operations
+this way), and optionally an error --- a rule may refuse the whole evaluation, as the dimension
+check in a matrix product does.
+
+\begin{minted}{lean}
+structure RuleResult where
+  result : Expr
+  explanation : String
+  sub : Option Derivation := none
+  error : Option String := none
+\end{minted}
+
+The rules of the original \lc{simplify} carry one more thing: a proof that they make a measure go
+down.
+
+\begin{minted}{lean}
+structure Weights where
+  w : Expr → Nat
+  pos : ∀ e, 1 ≤ w e
+  head : ∀ e cs, w (withChildren e cs) = w e   -- a weight looks only at the node's head
+
+structure Rule (W : Weights) where
+  name : String
+  silent : Bool := false
+  apply : Expr → Option RuleResult
+  decreasing : ∀ e r, apply e = some r → measure W r.result < measure W e
+\end{minted}
+
+\lc{measure W} is the weighted node count. Because a weight depends only on a node's head and is
+at least one, two facts are proved once for every weighting: the measure is additive over the
+children (replacing children by lighter children makes the node lighter), and it is invariant
+under \lc{canon} (a permutation of the arguments weighs the same). Those two facts are what let
+the rewriter below be a total, well-founded function rather than a loop with a counter.
+
+\begin{notebox}
+  The obligation \lc{decreasing} is discharged by each rule's author, in Lean, at the point of
+  writing the rule. For the seven original simplification rules the discharge is a few lines of
+  \lc{omega} each under weights $2$ for a numeral, $4$ for a sum or product, $5$ for a power, $8$
+  for a variable, a function or a matrix. That was enough for \lc{simplify}. It was not enough for
+  derivatives, and Part~III is the story of what replaced it.
+\end{notebox}
+
+\section{The strategy}
+
+The rewriter is \emph{innermost}: it normalizes the children of a node first, then applies the
+first rule that fires at the node, then normalizes the result again. Innermost is not the only
+choice, but it is the one that makes the later termination argument possible
+(Chapter~\ref{ch:order}): a rule only ever fires on a node whose children are already normal.
+
+\begin{minted}{lean}
+mutual
+  def normAt (rules : List (Rule W)) (e : Expr) (path : Path) (acc : Array RawStep) :
+      {r : Expr × Array RawStep // measure W r.1 ≤ measure W e} := …
+  def normChildren … := …
+end
+
+def normalize (rules : List (Rule W)) (e : Expr) : TraceM Expr := do
+  let ⟨(out, raw), _⟩ := normAt rules e [] #[]
+  let (steps, _) := buildSteps e raw
+  modify (· ++ steps)
+  pure out
+\end{minted}
+
+The return type of \lc{normAt} is a subtype: the function returns its result \emph{together with a
+proof} that the result is no heavier than the input. That proof is what the recursion is measured
+by --- after a rule fires, the result is strictly lighter, so normalizing it again is a smaller
+problem --- and Lean accepts the definition without \lc{partial}, without fuel, and without any
+promise the code does not keep.
+
+\section{The trace}
+
+A step records the rule, the explanation, the \emph{path} from the root to the node that changed,
+and the whole term before and after.
+
+\begin{minted}{lean}
+structure Step where
+  rule : String
+  explanation : String
+  path : Path            -- child indices from the root
+  before : Expr
+  after : Expr
+  sub : Option Derivation := none
+
+structure Derivation where
+  input : Expr
+  steps : Array Step
+  output : Expr
+\end{minted}
+
+Paths are how the notebook and the engine refer to the same node. When the engine prints a term as
+\LaTeX\ for the notebook it wraps every subterm in an annotation carrying its path,
+\verb|\htmlData{path=1.0}{…}|, and KaTeX turns that into a DOM attribute. A click on the rendered
+$\cos x$ yields the path \texttt{1.0}; the notebook sends it back with the cell and the line it was
+clicked on; the engine walks its own copy of the term to the same node. No text is ever parsed
+back. Chapter~\ref{ch:origins} builds on this to answer ``where did this come from?''.
+
+\begin{logbox}[Parity, then a differential test]
+  The engine replaced a TypeScript reference implementation. The port was tested against the
+  reference at the wire level: 147 cell sources in one session, comparing text, \LaTeX\ with paths,
+  value trees, errors and bindings --- zero mismatches, after which the reference was deleted and
+  its answers kept as a golden file replayed by \texttt{lake test}. The differential test found
+  two things worth keeping: matrix products must not be sorted into canonical order, and the two
+  ``parity'' rules $(ab)^n \to a^n b^n$ and $(b^m)^n \to b^{mn}$ with symbolic $m$ resist every
+  additive measure. They wait for Chapter~\ref{ch:order}.
+\end{logbox}
+
+\section{Exercises}
+
+\begin{exercisebox}[A rule with its obligation]
+  Write the rule $x + 0 \to x$ as a \lc{Rule simpW}: the \lc{apply} function on a node
+  \lc{.add es}, removing the zero numerals, and the \lc{decreasing} proof. Under which weightings
+  does the obligation hold? (It holds for every \lc{Weights}, since a node was removed; say why
+  the \lc{head} law is what makes that a one-line proof.)
+\end{exercisebox}
+
+\begin{exercisebox}[Silent steps]
+  Canonical ordering is not recorded as a step. Give a derivation in which the term after step $n$
+  and the term before step $n{+}1$ differ, and describe what the notebook would show if the
+  reordering \emph{were} recorded. Chapter~\ref{ch:origins} has to deal with exactly this gap.
+\end{exercisebox}
+
+\begin{exercisebox}[Paths]
+  The path of the $\cos x$ in $2x\cos x + x^2\sin x$ depends on canonical order. Compute it from
+  the tree \lc{add [mul [2, x, cos x], mul [x^2, sin x]]}, then change the order of the two
+  summands and compute it again. Why must the engine, not the notebook, be the one to assign
+  paths?
+\end{exercisebox}

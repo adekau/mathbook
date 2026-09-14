@@ -1,0 +1,46 @@
+\chapter{Building It}\label{app:build}
+
+The repository is \file{github.com/adekau/mathbook}. The toolchain is the latest stable Lean 4
+(\file{engine/lean-toolchain}, v4.33.1 at this commit); \file{proofs/} pins Mathlib at the
+release tag whose toolchain matches, and \file{engine/} depends on \lc{Init} alone, which the
+script \file{scripts/check-engine-deps.sh} enforces in CI.
+
+\section*{The engine and its tests}
+\begin{minted}{text}
+cd engine && lake build && lake test
+\end{minted}
+\texttt{lake test} replays \file{Tests/golden.tsv}, the wire-level answers recorded by the
+differential test against the original TypeScript engine before that engine was deleted, and
+the unit tests in \file{Tests/Main.lean}.
+
+\section*{The proofs}
+\begin{minted}{text}
+cd proofs && lake exe cache get && lake build
+\end{minted}
+The first command fetches Mathlib's compiled cache; the build then takes a few minutes. Every
+top-level theorem's axioms are printed as part of it.
+
+\section*{The notebook}
+\begin{minted}{text}
+npm install && npm test && npm run bundle
+\end{minted}
+\texttt{npm test} runs the TypeScript tests, including the native stdio round trip against the
+Lean executable. \texttt{npm run bundle} writes the static notebook to
+\file{apps/notebook/dist}, with a build stamp on every asset.
+
+\section*{WebAssembly}
+\begin{minted}{text}
+npm run wasm
+\end{minted}
+Builds the Lean runtime and \lc{Init} for \texttt{wasm32} from the toolchain's sources (once;
+cached under \file{engine/toolchains/}), then links the engine. The first build takes about
+ten minutes, most of it elaborating \lc{Init}; the patch the runtime needs is in
+\file{engine/wasm/}.
+
+\section*{This book}
+\begin{minted}{text}
+cd book && latexmk -xelatex -shell-escape show-your-work.tex
+\end{minted}
+XeLaTeX with \texttt{minted} (Pygments) and \texttt{tcolorbox}. The CI workflow
+\file{.github/workflows/build-book.yml} builds it on every push and attaches the PDF to a
+release tagged with the date and commit.

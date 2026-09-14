@@ -1,0 +1,120 @@
+\chapter{What a Verified Notebook Is}\label{ch:what}
+
+\begin{quote}\itshape
+``The answer is $2x\cos x + x^2\sin x$.''\;---\;``Says who?''
+\end{quote}
+
+A computer-algebra system prints an answer and asks to be believed. Usually it is right, and
+usually that is enough. This book is about a notebook built on a different bargain: it prints the
+answer \emph{and} the steps, and for each step it says what would have to be true for the step
+to be a lie. Sometimes nothing: the step is a theorem. Sometimes one named hypothesis. Sometimes
+``this step is a guess, and the step below it checks the guess''. And sometimes ``no theorem yet''.
+The notebook never says more than it can back.
+
+\section{Show your work}
+
+Type \texttt{diff(x\^{}2 * sin(x), x)} into the notebook and it answers
+$2x\sin x + x^2\cos x$, with seven steps underneath: the product rule, the power rule, a constant
+folded, an identity applied, the chain rule, an identity applied again. Each step is a line, the
+whole term after the step, with the part that changed underlined. Click any subterm of any line
+--- the $\cos x$ in the answer, say --- and a panel names the step that \emph{created} it (the
+chain rule), the steps that merely \emph{copied} it along, and the steps that fired \emph{inside}
+it, together with the proof status of each. That panel is Chapter~\ref{ch:origins}.
+
+The four statuses are the book's spine, so they are worth stating once, properly.
+
+\begin{defbox}[The four statuses]
+  Every rule the engine can fire is reported to the notebook with one of four labels.
+  \begin{description}[nosep]
+    \item[\status{verified}] An unconditional theorem states that the output of the rule means the
+      same as its input, in the semantics of the chapter that proved it (the integers, the reals,
+      the reals under a derivative, the rationals in a linear system, \dots).
+    \item[\status{conditional}] The theorem needs a side condition --- \emph{and the side condition
+      is shown to be necessary}: a counterexample is proved, not just suspected. The notebook shows
+      the condition.
+    \item[\status{checked}] The step is a guess. A later step verifies the guess by an independent
+      computation whose own steps carry their own statuses. (Integration, Chapter~\ref{ch:integrate}.)
+    \item[\status{unverified}] There is no theorem yet. The notebook says so, in those words.
+  \end{description}
+  A step with nested steps inherits the weakest status below it.
+\end{defbox}
+
+The distinction between the first two is the one that gives the book most of its stories. A
+computer-algebra system simplifies $x/x$ to $1$. So does this engine. But $x/x$ is not $1$ at
+$x = 0$, and rather than pretend otherwise, or refuse the simplification everyone expects, the
+engine keeps the rule and \emph{writes down the assumption}: the rule is \status{conditional} on
+the merged base being nonzero, and a theorem in Chapter~\ref{ch:sound} proves that without the
+assumption the rule turns $0$ into $1$. That is the whole attitude of the project in one rule.
+
+\section{One engine}
+
+There is exactly one implementation of the mathematics, and it is written in Lean~4. It compiles
+to a native executable (behind an HTTP host, or as a command-line tool speaking JSON-RPC on
+standard input) and, from the same source, to WebAssembly running in a web worker. The notebook
+is a static page; it draws terms with KaTeX and draws plots and Hasse diagrams as SVG, and it never
+evaluates anything. Every number, every rewrite, every ``this is a lattice'' comes over the wire
+from the engine, with the derivation attached.
+
+\begin{center}
+\resizebox{\linewidth}{!}{\begin{tikzpicture}[node distance=9mm]
+  \node[box] (nb) {notebook (static page)\\KaTeX, SVG, no mathematics};
+  \node[box, right=9mm of nb] (proto) {JSON-RPC over a Transport\\worker · HTTP · stdio};
+  \node[box, right=9mm of proto] (eng) {the engine, Lean 4\\native and wasm};
+  \node[box, below=of eng] (proofs) {\file{proofs/}: theorems about\\the engine, with Mathlib};
+  \draw[edge] (nb) -- (proto);
+  \draw[edge] (proto) -- (eng);
+  \draw[edge, dashed] (proofs) -- node[right, font=\scriptsize] {imports} (eng);
+\end{tikzpicture}}
+\end{center}
+
+Two decisions from the first week held for the whole project.
+
+\paragraph{Two packages.} The engine, in \file{engine/}, imports nothing but Lean's prelude
+\lc{Init}. The reason is mechanical: the WebAssembly build emits C for every imported Lean module,
+and \lc{Init} alone is 631 of them; Mathlib would be tens of thousands. So the real numbers,
+which need Mathlib, cannot live in the engine. They live in a second package, \file{proofs/},
+which imports the engine and Mathlib and contains theorems only. A script,
+\file{scripts/check-engine-deps.sh}, fails the build if the engine ever acquires a dependency.
+The consequence for the reader: every theorem in this book either lives in the engine (and is
+proved with Lean's core tactics --- \lc{omega}, \lc{simp}, \lc{grind}, \lc{decide}) or lives in
+\file{proofs/} and may use anything Mathlib knows about $\mathbb{R}$. The book says which.
+
+\paragraph{The protocol is the seam.} The notebook and the engine share a small JSON-RPC contract
+(\file{packages/protocol}). Its one design rule --- rule~5 --- is that new capabilities are added
+as \emph{optional fields and optional methods}, never as changes. Every chapter of this book that
+added something to the wire (paths, proof statuses, origin traces, the de~Bruijn view, the Hasse
+diagram) added it as a field a frontend may ignore. The notebook from week one would still run
+against the engine from the last chapter.
+
+\section{The spike: does the engine reach the browser?}
+
+Before any mathematics, one question decided whether the project was possible: can a Lean~4
+program of this size run in a browser, on \emph{current} Lean, fast enough to answer as you type?
+
+\begin{logbox}[Milestone 0]
+  Lean stopped shipping a prebuilt 32-bit WebAssembly runtime after v4.15. The project's policy is
+  the latest stable toolchain (v4.33.1 at the time of writing), so the runtime and \lc{Init} were
+  built from source for \texttt{wasm32} with Emscripten: about nine minutes the first time, cached
+  afterwards. The result was a 1.4~MB \texttt{engine-lean.wasm} that answered its first request
+  96~ms after the worker started, and evaluated \texttt{x + 0} in 50~µs per call after warm-up. No
+  threads, so no cross-origin isolation headers: the notebook stays a plain static directory.
+
+  One upstream bug surfaced on the way. On a 32-bit target, the runtime's conversion of a string
+  to a list of characters built the empty list with a boxed \lc{UInt32} zero, which on
+  \texttt{wasm32} is a heap object, not a scalar; the patch is three lines and lives in
+  \file{engine/wasm/}. It looked like a reference-counting error for an hour.
+\end{logbox}
+
+The spike settled the shape of everything after it. The engine would be one program; the
+notebook would be thin; the proofs would live next door; and ``verified'' would mean what the
+statuses say. The rest of the book is what it took to make the statuses true.
+
+\begin{trybox}[Your first three cells]
+\begin{minted}{text}
+diff(x^2 * sin(x), x)
+rref([1,2,3;4,5,6;7,8,10])
+sqrt(50) - sqrt(18)
+\end{minted}
+  Open the work on each, and click a subterm of an answer. The third cell's answer is $2\sqrt{2}$,
+  and Chapter~\ref{ch:cannot} explains why the engine could not write it that way as a term.
+\end{trybox}

@@ -1,0 +1,115 @@
+\chapter{Linear Algebra over $\mathbb{Q}$}\label{ch:linalg}
+
+Row reduction was in the engine from the first week, as a step-recording algorithm driven by the
+simplifier, and for months its steps were labelled \status{unverified}. This chapter is about the
+two theorems that changed the label: elimination preserves the solution set, and the result is in
+reduced row echelon form. Both live in the engine itself, with no Mathlib, and the second cost a
+lemma that reads better than the algorithm it is about.
+
+\section{A matrix is a system}
+
+The first decision was what a matrix \emph{means}. Reading it as a linear map would have needed
+matrix multiplication and its algebra; reading it as a homogeneous system needs a dot product.
+One equation $r \cdot x = 0$ per row, and the augmented matrix of $Ax = b$ is the same system at
+the point $(x, -1)$, so both readings are one predicate:
+
+\begin{minted}{lean}
+def Sol (m : Mat) (x : List Rat) : Prop := ∀ r ∈ m, dot r x = 0
+\end{minted}
+
+Elimination is a list of the three elementary row operations, and the theorem is one lemma per
+operation folded over the list:
+
+\begin{minted}{lean}
+inductive Op where
+  | swap (i j : Nat)              -- exchange rows i and j
+  | scale (i : Nat) (c : Rat)     -- Rᵢ ← c · Rᵢ; with c = 0 it is the identity
+  | addMul (i j : Nat) (c : Rat)  -- Rᵢ ← Rᵢ + c · Rⱼ; with i = j it is the identity
+
+theorem sol_rref (m : Mat) (x : List Rat) : Sol (rref m) x ↔ Sol m x
+\end{minted}
+
+\section{Three ways to have no side condition}
+
+The lemmas have no hypotheses, and each absence was arranged.
+
+\begin{enumerate}[nosep]
+  \item \textbf{Degenerate parameters are the identity.} Scaling a row by $0$ would lose an
+    equation; adding a row to itself with coefficient $-1$ would too. Instead of proving that
+    the algorithm avoids these cases, the operations \emph{define} them as doing nothing. Then
+    every operation is invertible for free, and the algorithm needs no proof that it stays
+    away from the edge.
+  \item \textbf{Pad, do not truncate.} Adding a shorter row to a longer one pads the shorter with
+    zeros (\lc{rowAdd}). This removes the rectangularity hypothesis from every lemma, because
+    nothing ever depends on rows having equal length.
+  \item \textbf{The field algebra is \lc{grind}'s.} Mathlib's \lc{ring} is not available in the
+    Init-only engine, and the identities over \lc{Rat} that each lemma needs are discharged by
+    \lc{grind}, whose ring and field instances ship with core. So the whole proof lives in
+    \file{engine/}, next to the code it is about.
+\end{enumerate}
+
+The command's numeral path replays the emitted operations into the derivation steps, so the
+notebook shows \rn{la.row-swap}, \rn{la.row-scale} and \rn{la.row-add} with the theorem names.
+Symbolic entries keep the old simplifier-driven algorithm under a \texttt{.symbolic} suffix and
+stay \status{unverified}, because a symbolic pivot is only \emph{assumed} nonzero.
+
+\section{Echelon form: proved, not checked}
+
+The first version decided at run time that the output was in echelon form and refused otherwise
+--- the boundary of Chapter~\ref{ch:order}, applied once more. It was on the open list because a
+boundary is a promise to come back. The proof carries an invariant column by column:
+
+\begin{minted}{lean}
+/-- Rows `< p` are pivot rows with pivot columns `pivs`; rows `≥ p` are zero left of `col`. -/
+structure Inv (m : Mat) (p col : Nat) (pivs : List Nat) : Prop where
+  len    : pivs.length = p
+  lt     : ∀ c ∈ pivs, c < col
+  sorted : pivs.Pairwise (· < ·)
+  pivot  : ∀ i, i < p → entry m i (pivs.getD i 0) = 1
+  lead   : ∀ i, i < p → ∀ j, j < pivs.getD i 0 → entry m i j = 0
+  alone  : ∀ i, i < p → ∀ k, k ≠ i → entry m k (pivs.getD i 0) = 0
+  below  : ∀ i, p ≤ i → ∀ j, j < col → entry m i j = 0
+  p_le   : p ≤ m.length
+
+def IsRref (m : Mat) (w : Nat) : Prop := ∃ p pivs, Inv m p w pivs
+theorem rref_isRref (m : Mat) : IsRref (rref m) (ncols m)
+\end{minted}
+
+A column step either finds no pivot --- the invariant moves one column right --- or swaps, scales
+and clears, giving one more pivot row. The lemma that made the proof entry-wise rather than
+operational is \lc{entry_clears}: the clearing step reads all its factors from the matrix
+\emph{before} any clearing, so its sequential application equals the simultaneous one, and each
+row changes by its own multiple of the pivot row, which is itself untouched. Without that
+observation the proof would have had to follow the loop; with it, every clause of \lc{Inv} is
+checked on one entry at a time.
+
+The statement is in the width of the \emph{input}. That sidesteps proving that row operations
+preserve rectangularity; for the rectangular matrices the parser admits, the two widths coincide.
+
+\begin{logbox}[Still open]
+  Determinants and matrix products over $\mathbb{Q}$, and a value for matrices in the real
+  semantics --- which is what would give \rn{diff.matrix} content. None of it is hard; all of it
+  is listed, with the honest label, in Appendix~\ref{app:rules}.
+\end{logbox}
+
+\begin{trybox}
+\begin{minted}{text}
+rref([1,2,3;4,5,6;7,8,10])
+rref([a,1;1,a])
+\end{minted}
+  The first is verified all the way down. The second is symbolic: its steps carry the
+  \texttt{.symbolic} suffix and say which pivot was assumed nonzero.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Identity by definition]
+  Show that \lc{sol_scale} would need the hypothesis $c \neq 0$ if scaling by $0$ zeroed the
+  row, and that the algorithm as written never scales by $0$ anyway. Which of the two is the
+  cheaper thing to know?
+\end{exercisebox}
+
+\begin{exercisebox}[The width]
+  Give a non-rectangular \lc{Mat} for which \lc{IsRref (rref m) (ncols m)} holds but the
+  intuitive ``reduced echelon form'' does not, and explain why the parser never produces it.
+\end{exercisebox}

@@ -1,0 +1,48 @@
+\chapter*{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+
+This book was written from building a thing: a notebook, in the spirit of Mathematica, that
+differentiates, integrates, row-reduces and simplifies, and that \emph{shows its work} --- every
+answer arrives with the chain of rewrites that produced it, every subterm of every line can be
+clicked to ask where it came from, and every rule that fired carries a label saying how much of
+it is a theorem. The engine behind the notebook is a single Lean~4 program. It runs natively as a
+server and a command-line tool, and it runs in the browser as WebAssembly; the notebook never
+computes anything itself. The proofs about the engine are Lean~4 too, and they are checked every
+time the project builds.
+
+The order of the chapters is roughly the order in which the thing was built, because the order
+turned out to matter. A rewriter came first, and with it a trace. Then meaning: what each rule
+claims, over the integers, then over the reals, then under a derivative. Then termination,
+which was the hard part and is the centre of the book: the engine has no step budget, and the
+proof that it needs none took several wrong orderings and one wall that would not move. Then the
+tracing of origins, then three more ``worlds'' --- linear algebra, integration, the
+$\lambda$-calculus and finite order theory --- each of which had to find its own honest place
+between \emph{proved} and \emph{checked}.
+
+\medskip
+\textbf{Who this book is for.} Someone who can read undergraduate mathematics and some functional
+code, who has perhaps met Lean~4 in one of its companion volumes, and who wants to see what
+``verified'' can mean for a system that is also meant to be \emph{used}. No Mathlib is needed to
+read the engine; where the reals enter, the book says so.
+
+\medskip
+\textbf{What is claimed.} Precisely what the notebook's status labels claim, and no more. A rule is
+\status{verified} when an unconditional theorem says its output means what its input meant;
+\status{conditional} when the theorem needs a hypothesis and the \emph{necessity} of the hypothesis
+is itself proved; \status{checked} when the step is a guess that a later step verifies; and
+\status{unverified} when there is no theorem yet. Chapter~\ref{ch:ledger} is the full ledger.
+Several places where a proof was avoided are pointed at by name: they are the run-time checks the
+book calls \emph{honest boundaries}, and the reader will see exactly what is checked and why a
+check was the right thing there.
+
+\medskip
+\textbf{How to read this book.} Part~I is the engine's shape and the rewriter that keeps a trace.
+Part~II gives the rules their meaning. Part~III is termination. Part~IV is the notebook side of
+``show your work''. Part~V adds the other worlds. Boxes labelled \emph{From the log} retell what
+actually happened --- the wrong turns are kept, since they are the argument for the right ones ---
+and boxes labelled \emph{Try it} give cells to type into the notebook.
+
+\medskip
+\textbf{The code.} Everything quoted is from the repository at the commit stamped on the title
+page. File names are given the way the repository has them: \file{engine/MathEngine/Order.lean}
+is the ordering, \file{proofs/Proofs/SimpReal.lean} the real-number theorems, and so on.

@@ -1,0 +1,122 @@
+\chapter{What the Ordering Cannot Afford}\label{ch:cannot}
+
+An ordering is a budget of a different kind: it says which rewrites are affordable, and a rule the
+ordering cannot afford is not a rule the engine can have. This chapter is about three rules that
+were wanted and could not be afforded as rewrites --- expansion, radical simplification, and one
+trigonometric identity --- and about the three different things that were done instead. Each of
+them has a lesson that the ordering chapter alone would not teach.
+
+\section{Expansion is a function, not a rule set}
+
+Distribution $a(b + c) \to ab + ac$ grows a term, and it grows it in a way no interpretation
+compatible with $x \cdot x \to x^2$ can pay for. The proof that it cannot is short and was the
+first thing tried: an interpretation under which distribution decreases makes the product $ab$
+cheaper than the sum $a + b$ scaled by the multiplier, and that same interpretation makes
+$x \cdot x \to x^2$ increase. It is the wall of Chapter~\ref{ch:order} again, seen from the other
+side.
+
+So expansion is not a rewrite system. \lc{Expand.dist} is one total, structurally recursive
+function: children first, then a product with a sum among its factors is multiplied out, collecting
+like monomials as the product is built factor by factor. The pipeline of Chapter~\ref{ch:order}
+then collects whatever is left.
+
+\begin{minted}{lean}
+def distMul (fs : List Expr) : Expr :=
+  if fs.any isAdd
+    then ofPoly ((fs.map toPoly).foldl polyMul [⟨Q.one, []⟩])
+    else .mul fs
+\end{minted}
+
+The collection during distribution is not a nicety. The first version distributed and left the
+collection to the pipeline's collect-like-terms rule, which took the 4096 monomials of
+$(x+y)^{12}$ one pair at a time at the root, with a full canonical sort after each pair: minutes,
+and a recorded derivation of 49\,143 steps. Collecting as a polynomial --- sorted keys, coefficients
+folded --- makes it instant and cuts the recorded expansion to two steps.
+
+The soundness theorem is unconditional, because distribution holds in every commutative ring:
+
+\begin{minted}{lean}
+theorem dist_sound (ρ : EnvR) : ∀ e : Expr, evalR ρ (Expand.dist e) = evalR ρ e
+\end{minted}
+
+It is proved once for an abstract semantics --- a structure \lc{Sem} with an evaluator and its
+four equations for sums, products, numerals and natural powers --- and instantiated twice, for
+\lc{evalR} and for \lc{evalD}. The second instance matters in Chapter~\ref{ch:integrate}.
+
+\begin{logbox}[Two shapes that read the same]
+  A step-recording algorithm and a rewrite system look identical in the notebook: a list of
+  steps, each with a rule name and a before and after. That is the argument for writing a
+  function whenever a joint ordering would be forced. The reader loses nothing; the proof
+  becomes an induction on the function instead of a fold over rules; and the fuel rewriter,
+  which expansion had been the last user of, is deleted. There is no step budget anywhere in the
+  engine except one, and that one is Chapter~\ref{ch:worlds}'s.
+\end{logbox}
+
+\section{Radicals: what the ordering allows}
+
+Alex asked for $\sqrt 8 \to 2\sqrt 2$, and asked for it by retuning $M$. The analysis showed that
+retuning cannot do it, and the log records both the request and the outcome.
+
+As a term, $2\sqrt 2$ is $2 \cdot 2^{1/2}$, whose weight is $19$; $8^{1/2}$ weighs $11$. The result
+contains the input's radical \emph{and more}. Only a weight that depends on the \emph{value} of a
+numeral could pay for that --- making $8$ heavier than $2$ by enough --- and numeral weights must
+stay bounded, or fold-constants stops decreasing on arbitrary sums ($1 + 7 \to 8$ would gain).
+
+What the ordering does allow is the single-power form: $8^{1/2} \to 2^{3/2}$, at equal $M$ and
+equal size. To order it, a sixth tier was added: the magnitudes of the integer numerals, counted
+\emph{head-only}. That last word cost a day. A tier that reads a child's value fails the
+children-monotonicity lemma the rewriter rests on --- a numeral child of equal weight could be
+replaced by another --- and putting the value on the numeral node itself sidesteps it. The other
+constraint is that $4^{2/3} \to 2^{4/3}$ ties every bit-length or value weight on the exponent
+side, which is why the tier weighs integers only and non-integer exponents nothing.
+
+Two more rules then do what Mathematica does where it matters. Radicals with the same square-free
+part collect in a sum ($\sqrt{50} - \sqrt{18} \to 2\sqrt 2$; a sum of two radicals outweighs one
+product, so this decreases $M$), and same-index radicals multiply under one root ($\sqrt{12} \cdot
+\sqrt 3 \to \sqrt{36} \to 6$). Each rule guards itself with the decidable decrease its proof needs,
+so the ordering lemma is a split on the guard; the guards never fail in practice and are honest
+boundaries, not fuel. All three are proved sound over $\mathbb{R}$ unconditionally, their bases
+being positive integers.
+
+The printer then shows the single-power form the textbook way: $2^{3/2}$ as $2\sqrt 2$,
+$12^{1/2}$ as $2\sqrt 3$, $5\sqrt{12}$ as $10\sqrt 3$. Text output stays faithful to the term. The
+notebook shows what a reader expects; the engine holds what the ordering can carry; and the
+distance between them is one function in the printer.
+
+\section{Sine over cosine is tangent}
+
+The third rule was found by the integration checker (Chapter~\ref{ch:integrate}) refusing a
+correct answer: $\int \tan x$ was rejected because $\frac{d}{dx}(-\ln \cos x)$ normalized to
+$\sin x \cdot (\cos x)^{-1}$ and the engine did not identify that with $\tan x$. The rule is a new
+case of \rn{simp.function}, it \emph{does} decrease --- one function node replaces a product of two
+--- and it had to be proved in all three layers: the additive measure of Chapter~\ref{ch:rewrite},
+the ordering of Chapter~\ref{ch:order}, and soundness over $\mathbb{R}$, which is unconditional
+because Mathlib's $\tan$ is $\sin/\cos$ everywhere, junk values included.
+
+The lesson is about the cost of a rule. Three layers of proof for one identity is the price of
+every rule in the engine, and it is why rules are added when a checker refuses something and not
+before.
+
+\begin{trybox}
+\begin{minted}{text}
+expand((x + y)^12)
+sqrt(50) - sqrt(18)
+sqrt(12) * sqrt(3)
+\end{minted}
+  The first has two expansion steps; everything after them is the pipeline collecting. The second and third run the radical rules; click a step and
+  see the theorem name.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[The wall, from the other side]
+  Suppose an interpretation $I$ makes $a(b+c) \to ab + ac$ strictly decrease for all $a, b, c$.
+  Show that $I(x \cdot x) < I(x^2)$ cannot also hold with $I$ of the form in
+  Chapter~\ref{ch:order}.
+\end{exercisebox}
+
+\begin{exercisebox}[Why head-only]
+  Give a rule that is a decrease under a value-of-children tier and a term on which the
+  children-monotonicity lemma ($\mu(\text{child}') \le \mu(\text{child}) \Rightarrow
+  \mu(\text{parent}') \le \mu(\text{parent})$) fails for that tier.
+\end{exercisebox}

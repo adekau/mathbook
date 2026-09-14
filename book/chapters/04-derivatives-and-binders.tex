@@ -1,0 +1,111 @@
+\chapter{Derivatives and the Binder Problem}\label{ch:deriv}
+
+The derivative rules were the first rules that could not simply be added to the existing story.
+Their termination broke the additive measure (Part~III), and their \emph{meaning} broke the
+semantics of the previous chapter in a way that is worth understanding, because it is the
+reason the engine has three semantics rather than one.
+
+\section{The rules}
+
+$\texttt{diff}(f, x)$ is a function node, \lc{.fn "diff" [f, .var x]}, and the derivative rules
+push it inward: the derivative of a sum is the sum of the derivatives, of a product the product
+rule, of a power the power rule, of $\sin u$ the chain rule with $\cos u$ outside. Each is one
+rewrite, each is recorded, and the trace of $\frac{d}{dx}(x^2 \sin x)$ reads like a textbook
+because it \emph{is} the textbook's derivation, one rule per line.
+
+\section{Why \lc{evalR} could not take the case}
+
+The obvious plan was to extend \lc{evalR} with a case for \texttt{diff}. It cannot be done, and
+the reason is the second child.
+
+In $\texttt{diff}(f, x)$ the argument $x$ is not a value; it is a \emph{binder}, the name of the
+variable we differentiate along. But \lc{Expr} has no binder positions --- every child of every
+node is a term. So \lc{.var x} and \lc{.add [.var x]} denote the same real number, while only one
+of them can be read as ``the variable we differentiate along''. A semantics that interprets
+\texttt{diff} therefore cannot satisfy the \lc{congr} law of Chapter~\ref{ch:sound}: rewriting
+the child \lc{.add [.var x]} to \lc{.var x} is sound for every other node and changes the meaning
+of this one. And \lc{congr} is the law the fold rests on.
+
+\section{A third semantics}
+
+So the semantics was extended rather than edited. \lc{evalD} agrees with \lc{evalR} everywhere
+except that it reads \texttt{diff}, via Mathlib's \lc{deriv}:
+
+\begin{minted}{lean}
+def fnD : EnvR → String → List Expr → ℝ
+  | ρ, f, [a] => applyFn f (evalD ρ a)
+  | ρ, f, [g, v] =>
+    if f = "diff" then
+      match v with
+      | .var x => deriv (fun t => evalD (upd ρ x t) g) (ρ x)
+      | _ => 0
+    else 0
+  | _, _, _ => 0
+\end{minted}
+
+The theorem \lc{evalD_eq_evalR} says the two agree on every term without a \texttt{diff} node.
+This is the third layer of one pattern: \lc{eval?} $\subset$ \lc{evalR} $\subset$ \lc{evalD},
+each proved a restriction of the next. And because the derivative rules never run under the
+verified \lc{normalize} of Chapter~\ref{ch:rewrite} --- they run under the tiered rewriter of
+Part~III --- they never needed the congruence law in the first place. Each rule gets its own
+theorem, at the whole-term level, with \lc{deriv}.
+
+\section{Which rules need a hypothesis}
+
+Here the junk-value discipline of the previous chapter earns its keep. \lc{deriv} is junk-valued
+where a function is not differentiable, so the sum, product and chain rules genuinely fail
+without a hypothesis, and the hypothesis has to be stated.
+
+\begin{itemize}[nosep]
+  \item \status{verified}: \rn{diff.constant}, \rn{diff.variable}, \rn{diff.constant-multiple}.
+    Pulling a constant factor out needs no differentiability at all.
+    The Mathlib lemma is \lc{deriv_const_mul_field}.
+  \item \status{conditional}: \rn{diff.sum} (every summand differentiable at the point),
+    \rn{diff.product} (both factors), \rn{diff.power} (a natural exponent and a differentiable
+    base; the real-exponent case is open), \rn{diff.chain} (the inner function differentiable;
+    proved for $\sin$, $\cos$, $\exp$; $\ln$ and $\tan$ also need a domain condition and are open).
+\end{itemize}
+
+And the necessity is proved, as it was for the algebraic rules:
+
+\begin{thmbox}[\lc{not_diff_sum_sound}]
+  The sum rule is not unconditional: at $0$, the rule gives $|x| + x$ the derivative $1$, where
+  the derivative does not exist.
+\end{thmbox}
+
+The engine reports all of this through the capabilities message, so the notebook's panel says
+``conditional: needs both factors differentiable at the point'' instead of ``no soundness
+theorem yet''. That message was the first place where the statuses of the Preface became
+visible to a user.
+
+\begin{logbox}[Not claimed]
+  \rn{diff.higher-order} is an abbreviation --- it eliminates the three-argument form
+  $\texttt{diff}(f, x, n)$ into $n$ nested derivatives --- so there is nothing to prove.
+  \rn{diff.matrix} is proved but vacuous: a matrix has no value in the real semantics, so the
+  theorem has no content. The honest label for both is \status{unverified}, and the note next to
+  the label says why.
+\end{logbox}
+
+\begin{trybox}
+\begin{minted}{text}
+diff(abs(x) + x, x)
+diff(x^x, x)
+diff(ln(x), x)
+\end{minted}
+  The first is the counterexample of \lc{not_diff_sum_sound} in the notebook: the sum rule
+  fires, leaves the derivative of $|x|$ standing, and its status says what it assumed. The second uses a rule the theorems do not yet cover
+  (a real exponent) and says so.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[The binder problem, concretely]
+  Give two terms that \lc{evalR} cannot distinguish but that a semantics for \texttt{diff} must,
+  and show which law of \lc{Congruence} they break.
+\end{exercisebox}
+
+\begin{exercisebox}[A missing case]
+  The chain rule for $\ln u$ needs $u > 0$ at the point (and differentiability). Write the
+  theorem statement in the style of \lc{diff_chain_sin_sound}, and say which Mathlib lemma
+  about \lc{Real.log} you would need.
+\end{exercisebox}

@@ -1,0 +1,130 @@
+\chapter{Two More Worlds}\label{ch:worlds}
+
+The engine's term type, its rewriter, its printer, its origin tracker and its notebook were built
+for algebra. The last week of the project asked whether they were built for anything else, by
+adding two small worlds from the author's other books: the untyped $\lambda$-calculus, and finite
+partial orders with joins, meets and fixed points. The answer is yes, with one budget and a
+different shape of theorem.
+
+\section{The lambda calculus}
+
+A cell is a $\lambda$-cell if it contains a $\lambda$ or a backslash, a \texttt{:=}, or starts with
+a defined name; the engine decides. The parser reads $\lambda x\,y.\,e$, juxtaposition, digits as
+Church numerals, and \texttt{name := term}; the Church library --- \texttt{succ}, \texttt{add},
+\texttt{mul}, \texttt{true}, \texttt{false}, \texttt{if}, pairs --- is preloaded.
+
+Reduction is normal order, one $\beta$-step at a time, each step recorded:
+
+\begin{minted}{lean}
+def betaStep : Term → Option (Term × Bool)
+  | .app (.lam x body) arg => some (subst x arg body)
+  | .app a b =>
+    match betaStep a with
+    | some (a', r) => some (.app a' b, r)
+    | none => (betaStep b).map fun (b', r) => (.app a b', r)
+  | .lam x e => (betaStep e).map fun (e', r) => (.lam x e', r)
+  | .var _ => none
+\end{minted}
+
+The Boolean says whether an $\alpha$-renaming preceded the step, so that the notebook can label
+it \rn{lambda.alpha-beta} rather than \rn{lambda.beta}.
+
+\paragraph{Substitution had to be total.} The textbook capture-avoiding substitution renames a
+binder and recurses on the \emph{renamed} body, and Lean cannot see that terminate --- the
+author's earlier book marks it \lc{partial}. The engine carries the renaming down in one
+structural pass first (\lc{freshen}, with the clash set and the renaming as parameters) and then
+substitutes without ever renaming. It computes the same thing, and it is total.
+
+\paragraph{The one budget.} Whether a term has a normal form is undecidable, so reduction runs on
+fuel: $\Omega$ is refused after 1000 $\beta$-steps with what it had become. It is the only budget
+in the engine, and it is the honest one; everything in Part~III was about removing the others.
+
+\paragraph{Encoded, not extended.} Terms are encoded into \lc{Expr} --- \lc{fn "λ" [var x, body]}
+and \lc{fn "@" [f, a]} --- so selection, explanation and origin tracking work unchanged and the
+printer learned two heads. The de Bruijn view is computed alongside every step and sent with it;
+the notebook's View menu toggles a rendering the engine already delivered. A normal form that is a
+Church numeral or a Boolean is read out beside the result, and the reader is proved right on the
+engine's own numerals:
+
+\begin{minted}{lean}
+theorem readChurch_church (n : Nat) : readChurch (church n) = some n
+\end{minted}
+
+What is not proved --- that the renaming preserves $\alpha$-equivalence, that the de Bruijn view
+commutes with $\beta$ --- is why the $\beta$-steps are reported \status{unverified}. The
+substitution lemma that \emph{is} proved says only that substitution introduces no new free
+variables. Appendix~\ref{app:rules} lists all of it.
+
+\section{Finite partial orders}
+
+The order world is a different shape of engine: decisions over lists, and theorems that say each
+decision means the textbook Prop. A poset is given as elements and a relation,
+\texttt{poset(\{a,b,c\}; a<b, a<c)}; the engine takes the reflexive-transitive closure and decides
+reflexivity, antisymmetry and transitivity, naming a witness on failure. Then: covers (the Hasse
+diagram), upper and lower bounds, join and meet, lattice-or-witness-pair, top and bottom, maximal
+and minimal, \texttt{le} explained by a chain of covers; maps as tables, \texttt{monotone} with a
+witness; \texttt{lfp} and \texttt{gfp} by iterating from $\bot$ or $\top$, with the Kleene chain as
+the derivation. \texttt{divisors(n)}, \texttt{subsets(\{…\})} and \texttt{chain(n)} build the
+standard examples.
+
+The theorems, all Init-only:
+
+\begin{minted}{lean}
+theorem checkPartialOrder_none {P : Poset} (h : checkPartialOrder P = none) :
+    (∀ x ∈ P.elems, P.rel x x = true) ∧
+    (∀ p ∈ P.le, p.1 ≠ p.2 → P.rel p.2 p.1 = false) ∧
+    (∀ p ∈ P.le, ∀ q ∈ P.le, p.2 = q.1 → P.rel p.1 q.2 = true)
+
+theorem covers_spec (P : Poset) (x y : String) :
+    covers P x y = true ↔ P.lt x y = true ∧ ∀ z ∈ P.elems, ¬ (P.lt x z = true ∧ P.lt z y = true)
+
+theorem sup_spec {P : Poset} {xs : List String} {j : String} (h : sup P xs = some j) :
+    j ∈ upperBounds P xs ∧ ∀ v ∈ upperBounds P xs, P.rel j v = true
+
+theorem iter_le_fixed {P : Poset} {f : PMap} (hm : monotoneFailure P f = none) {y : String}
+    (hy : f.apply y = y) : ∀ (n : Nat) (x : String), P.rel x y = true → P.rel (f.iter n x) y = true
+\end{minted}
+
+The last is the Knaster--Tarski fragment a finite poset needs: every point of the Kleene chain
+lies below every fixed point above its start, so with $x = \bot$ the chain's last element --- a
+fixed point, as checked --- is the least. The honest boundary is that the chain stabilizes within
+$|P|$ steps; that is pigeonhole on a finite chain, and it is checked at run time rather than
+proved.
+
+\begin{logbox}[The same shape as \lc{checked}]
+  Every theorem in this world is ``the decision means the Prop''. It is the shape of the
+  run-time boundaries of Chapter~\ref{ch:order}, but here the Prop is the definition a reader
+  meets in a first course, which is what should sit next to a Hasse diagram. The notebook draws
+  the diagram in layers by height from a list of covers, and \lc{covers_spec} is the reason the
+  picture is right.
+\end{logbox}
+
+\begin{trybox}
+\begin{minted}{text}
+let D = divisors(12)
+join(D, 4, 6)
+lattice(D)
+let f = map(D; 1->2, 2->2, 3->6, 4->4, 6->6, 12->12)
+lfp(D, f)
+add 2 3
+(λx. x x) (λx. x x)
+\end{minted}
+  The Kleene chain is the derivation of \texttt{lfp}. Type \texttt{\textbackslash lam} and
+  Tab for the $\lambda$. The result of \texttt{add 2 3} reads ``the Church numeral 5''; toggle
+  de Bruijn indices in the View menu. The last line is $\Omega$, refused after 1000 steps with
+  what it had become.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[The renaming pass]
+  Show that \lc{freshen} followed by \lc{substRaw} computes the same term as the textbook's
+  recursive-renaming substitution on $(\lambda y.\, x\, y)[x := y]$, and say what the textbook
+  version recurses on that Lean cannot see decrease.
+\end{exercisebox}
+
+\begin{exercisebox}[Pigeonhole, proved]
+  State the theorem that closes the order world's boundary: on a finite poset, a monotone map
+  iterated from $\bot$ reaches a fixed point within $|P|$ steps. Which lemma about
+  \lc{List.Nodup} would you reach for?
+\end{exercisebox}
