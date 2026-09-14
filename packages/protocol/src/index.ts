@@ -71,9 +71,10 @@ export interface Rendered {
 export interface RuleStatus {
   rule: string;
   /** "verified": unconditional soundness theorem. "conditional": theorem with a side condition,
-   *  whose necessity is itself proved. "unverified": no theorem yet. Rules the engine omits are
-   *  unverified. */
-  status: "verified" | "conditional" | "unverified";
+   *  whose necessity is itself proved. "checked": a guess whose result a later step verifies (the
+   *  integration finder, checked by differentiation). "unverified": no theorem yet. Rules the
+   *  engine omits are unverified. */
+  status: "verified" | "conditional" | "checked" | "unverified";
   note: string;
 }
 

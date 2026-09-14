@@ -237,6 +237,20 @@ def tests : TestM Unit := do
   (st, r) := sessionEval st "rref([a,1;1,a])" ",\"showWork\":true"
   check "rref symbolic path" r "[1, 0; 0, 1]"
   checkTrue "rref symbolic path: .symbolic rule names" ((subRules "rref([a,1;1,a])").all (·.endsWith ".symbolic")) (subRules "rref([a,1;1,a])").toString
+  -- M8: integrate is a checked guess
+  (st, r) := ev st "integrate(x^2 + sin(x), x)"; check "integrate sum" r "1/3*x^3 - cos(x)"
+  (st, r) := ev st "integrate(exp(2*x), x)"; check "integrate linear substitution" r "1/2*exp(2*x)"
+  (st, r) := ev st "integrate(x^a, x)"; check "integrate symbolic exponent" r "x^(a + 1)/(a + 1)"
+  (st, r) := ev st "integrate(2^x, x)"; check "integrate exponential" r "2^x/ln(2)"
+  (st, r) := ev st "diff(integrate(x^3, x), x)"; check "diff of integrate" r "x^3"
+  (st, r) := ev st "integrate(integrate(x, x), x)"; check "nested integrate" r "1/6*x^3"
+  (st, r) := ev st "integrate(x*sin(x), x)"; checkTrue "integrate refuses what it cannot find" (r.startsWith "<error: integrate: no antiderivative") r
+  (st, r) := ev st "integrate(tan(x), x)"; checkTrue "integrate rejects an unverifiable candidate" (r.startsWith "<error: integrate: the candidate -ln(cos(x)) was rejected") r
+  (st, r) := sessionEval st "integrate(5*x^3 - 2*x + 7, x)" ",\"showWork\":true"
+  let intSub := (st.get "t").cells.lookup "integrate(5*x^3 - 2*x + 7, x)" >>= fun c => c.derivation.steps.toList.find? (·.rule == "cmd.integrate") >>= (·.sub)
+  check "integrate: finder steps end with the check" (intSub.map (fun d => d.steps.toList.map (·.rule)) |>.getD []).toString "[int.sum, int.constant-multiple, int.power, int.constant-multiple, int.variable, int.constant, int.check]"
+  let checkStep := intSub.bind fun d => d.steps.toList.find? (·.rule == "int.check")
+  checkTrue "integrate: the check step carries the differentiation" ((checkStep >>= (·.sub)).map (fun d => d.steps.toList.any (·.rule == "diff.power")) |>.getD false)
   let (st2, raw) := handleS st "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"engine.evaluate\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"source\":\"diff(x^3, x)\",\"showWork\":true,\"paths\":true}}"
   checkTrue "show work: latex paths" ((raw.splitOn "\\htmlData{path=1.0}{x}").length > 1) raw
   let (_, exraw) := handleS st2 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"engine.explain\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"path\":[1]}}"

@@ -147,3 +147,10 @@ m * [1;2;4]	[17; 38; 63]
 m * m	[30, 36, 45; 66, 81, 102; 109, 134, 169]
 rref([1/2,1,3;1,3,5])	[1, 0, 8; 0, 1, -1]
 rref([1,2,3,4;2,4,6,8;1,1,1,1])	[1, 0, -1, -2; 0, 1, 2, 3; 0, 0, 0, 0]
+integrate(x^2, x)	1/3*x^3
+integrate(1/x, x)	ln(x)
+integrate(cos(3*x + 1), x)	1/3*sin(3*x + 1)
+integrate((2*x+1)^3, x)	1/8*(2*x + 1)^4
+integrate(ln(x), x)	x*ln(x) - x
+integrate(x*y, x)	1/2*y*x^2
+integrate(x^(-2), x)	-1/x

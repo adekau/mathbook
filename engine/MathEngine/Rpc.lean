@@ -18,7 +18,8 @@ open Json
 machine-checked instead of guessing. Kept next to the rules it describes: `verified` means an
 unconditional soundness theorem over ℝ (`proofs/Proofs/SimpReal.lean`), `conditional` means the
 theorem needs a side condition *and* the necessity of that condition is itself proved, `unverified`
-means no theorem yet. The `la.row-*` rules are proved over ℚ (`LinAlgQ.lean`), not ℝ: their claim is
+means no theorem yet, `checked` means the step is a guess whose result a later step verifies
+(the `int.*` finder, checked by `int.check`). The `la.row-*` rules are proved over ℚ (`LinAlgQ.lean`), not ℝ: their claim is
 that the row operation preserves the solution set. Rules absent from this list are unverified. -/
 def ruleStatus : Json :=
   let entry (name status note : String) : Json :=
@@ -46,11 +47,21 @@ def ruleStatus : Json :=
     entry "la.row-add" "verified" "Adding a multiple of another row preserves the solution set (LinQ.sol_addMul).",
     entry "la.row-swap.symbolic" "unverified" "Symbolic entries: the pivot is assumed nonzero because simplify could not show it is zero.",
     entry "la.row-scale.symbolic" "unverified" "Symbolic entries: division by a pivot that is only assumed nonzero.",
-    entry "la.row-add.symbolic" "unverified" "Symbolic entries: the arithmetic is the simplifier's, outside the ℚ theorem."]
+    entry "la.row-add.symbolic" "unverified" "Symbolic entries: the arithmetic is the simplifier's, outside the ℚ theorem.",
+    entry "cmd.integrate" "verified" "Accepted only when the candidate's derivative normalizes to the integrand, exactly (cmdIntegrate_spec); integrate_deriv reads that as deriv F = f wherever the differentiation steps shown are sound. The finder's own steps are guesses.",
+    entry "int.check" "verified" "The differentiation of the candidate: this step carries the claim, with the statuses of its own steps.",
+    entry "int.constant" "checked" "A guess from the finder; nothing is proved about it. Accepted only because int.check verifies the result by differentiation.",
+    entry "int.variable" "checked" "A guess from the finder, verified by int.check.",
+    entry "int.sum" "checked" "A guess from the finder, verified by int.check.",
+    entry "int.constant-multiple" "checked" "A guess from the finder, verified by int.check.",
+    entry "int.power" "checked" "A guess from the finder, verified by int.check (the symbolic-exponent case relies on simp.collect-powers there).",
+    entry "int.exponential" "checked" "A guess from the finder, verified by int.check.",
+    entry "int.table" "checked" "A guess from the finder, verified by int.check.",
+    entry "int.linear-substitution" "checked" "A guess from the finder, verified by int.check."]
 
 def capabilities : Json :=
-  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m7"), ("verified", .bool true),
-         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric"]),
+  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m8"), ("verified", .bool true),
+         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate"]),
          ("ruleStatus", ruleStatus),
          ("termination", .obj #[("status", .str "proven"), ("theorem", .str "MathEngine.pipelineOrdered"),
            ("summary", .str "Cell evaluation has no step budget: every pipeline rule decreases a five-tier ordering (commands, higher-order diff, matrix literals, the weight M, size) on nodes whose children are normal. Only the nested `expand` set still runs on fuel.")])]

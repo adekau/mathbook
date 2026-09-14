@@ -105,6 +105,8 @@ mutual
       | "sqrt", [_], [a] => (T.sqrt a, P_ATOM)
       | "diff", [_, .var _], [a, x] =>
         if T.times != "*" then (s!"\\frac\{d}\{d{x}}\\left({a}\\right)", P_MUL) else (T.fn name as, P_ATOM)
+      | "integrate", [_, .var _], [a, x] =>
+        if T.times != "*" then (s!"\\int {a} \\, d{x}", P_MUL) else (T.fn name as, P_ATOM)
       | _, _, _ => (T.fn name as, P_ATOM)
     | .pow b x =>
       if x.isNumEq (Q.ofRat (mkRat 1 2)) then (T.sqrt (child b 0 P_ADD), P_ATOM)

@@ -54,6 +54,14 @@ differential test with zero mismatches.
   command replays those operations into its steps when every entry is a numeral; symbolic entries
   fall back to the simplifier-driven algorithm, whose steps are named `la.row-*.symbolic` and
   reported unverified. Echelon form itself is checked at run time (`isRref`), not proved.
+- **Integration is checked, not found.** `Antiderivative.lean` guesses an antiderivative with a
+  few textbook rules and proves nothing; `cmdIntegrate` differentiates the guess with the pipeline
+  and accepts it only if the normal form is the integrand itself. `cmdIntegrate_spec` states that;
+  `proofs/Proofs/Integrate.lean` reads it as `deriv F = f` wherever the differentiation shown is
+  sound, which the statuses of its steps report. Because a rule set cannot contain a rule that
+  normalizes with that set, the pipeline is `pipelineRulesWith norm`, generic in the checker's
+  normalizer, and `Integrate.lean` closes the knot: the checker is the pipeline with nested
+  `integrate` refused, and the notebook's pipeline is the pipeline with that checker.
 - **Soundness is a fold, over whichever semantics you bring.** `RewriteSound.normalize_sound_for`
   is stated for an abstract `Congruence` (reflexive, transitive, a congruence under `withChildren`,
   invariant under `canon`). Supply those four facts for a new semantics and normalization's

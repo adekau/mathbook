@@ -1,4 +1,4 @@
-import MathEngine.PipelineOrder
+import MathEngine.Integrate
 import MathEngine.Origin
 import MathEngine.Parser
 /-!

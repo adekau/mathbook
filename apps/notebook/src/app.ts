@@ -26,6 +26,7 @@ interface Doc { name: string; sig: string; blurb: string; ref?: string; examples
 
 const DOCS: Doc[] = [
   { name: "diff", sig: "diff(f, x[, n])", blurb: "Derivative of f with respect to x; the optional n takes it n times. Implemented as rewrite rules that push d/dx inward, so the derivation reads like a textbook.", ref: "https://mathworld.wolfram.com/Derivative.html", examples: ["diff(x^2 * sin(x), x)", "diff(x^3, x, 2)"] },
+  { name: "integrate", sig: "integrate(f, x)", blurb: "Antiderivative of f in x, without the constant. A small rule set guesses; the guess is accepted only if differentiating it gives f back, so the check is the proof.", ref: "https://mathworld.wolfram.com/IndefiniteIntegral.html", examples: ["integrate(x^2 + sin(x), x)", "integrate(exp(2*x), x)"] },
   { name: "expand", sig: "expand(e)", blurb: "Multiplies out products and powers of sums by repeated distribution.", ref: "https://mathworld.wolfram.com/Expand.html", examples: ["expand((x+1)^3)", "expand((a+b)^4)"] },
   { name: "simplify", sig: "simplify(e)", blurb: "Explicit request for the normal form. Every cell is simplified anyway; this names the intent.", examples: ["simplify(x + x)"] },
   { name: "rref", sig: "rref(M)", blurb: "Gauss–Jordan elimination to reduced row echelon form. Each row operation is recorded as its own step.", ref: "https://mathworld.wolfram.com/ReducedRowEchelonForm.html", examples: ["rref([1,2,3;4,5,6;7,8,10])", "rref([1,2;2,4])"] },
@@ -53,6 +54,7 @@ function cellKind(src: string): string | null {
   const head = m?.[1];
   switch (head) {
     case "diff": return "derivative";
+    case "integrate": return "integral";
     case "rref": return "row reduce";
     case "det": return "determinant";
     case "transpose": return "transpose";
@@ -94,6 +96,15 @@ interface Cell {
 
 type TermRef = { kind: "output" } | { kind: "input" } | { kind: "step"; index: number };
 interface Selection { cellId: string; term: TermRef; path: Path; latex: string; text: string; related: Step[]; trace: Map<number, string> }
+/** A step with a nested derivation (rref's row operations, integrate's finder and check) inherits
+ *  the weakest status among them: a command is only as verified as the work it delegated. */
+const RANK = { verified: 0, checked: 1, conditional: 2, unverified: 3 } as const;
+type Status = keyof typeof RANK;
+function statusOf(st: Step): Status {
+  let s: Status = S.ruleStatus.get(st.rule)?.status ?? "unverified";
+  for (const sub of st.sub?.steps ?? []) { const t = statusOf(sub); if (RANK[t] > RANK[s]) s = t; }
+  return s;
+}
 const sameStep = (a: Step, b: Step) => a.rule === b.rule && a.explanation === b.explanation && a.path.join(".") === b.path.join(".");
 const termKey = (t: TermRef) => t.kind === "step" ? `step${t.index}` : t.kind;
 interface LogLine { time: string; level: "rpc" | "ok" | "err"; text: string }
@@ -541,14 +552,6 @@ function renderCellBody(cell: Cell) {
 
   if (cell.showWork && cell.steps?.length) {
     const work = h("div", "work");
-    // A step with a nested derivation (rref's row operations, expand's sub-steps) inherits the
-    // weakest status among them: a command is only as verified as the work it delegated.
-    const RANK = { verified: 0, conditional: 1, unverified: 2 } as const;
-    const statusOf = (st: Step): keyof typeof RANK => {
-      let s: keyof typeof RANK = S.ruleStatus.get(st.rule)?.status ?? "unverified";
-      for (const sub of st.sub?.steps ?? []) { const t = statusOf(sub); if (RANK[t] > RANK[s]) s = t; }
-      return s;
-    };
     const stepRow = (st: Step, label: string, status: string, term?: TermRef): HTMLElement => {
       const row = h("div", "step");
       row.append(h("span", "no", label));
@@ -563,17 +566,25 @@ function renderCellBody(cell: Cell) {
       row.append(el);
       return row;
     };
+    // Nested derivations (rref's row operations, integrate's finder and its check) render below
+    // their step, indented one level per depth and numbered 1.2, 1.2.3, …
+    const renderSub = (st: Step, label: string, top: number, depth: number) => {
+      st.sub?.steps.forEach((sub, k) => {
+        const l = `${label}.${k + 1}`;
+        const srow = stepRow(sub, l, statusOf(sub));
+        srow.classList.add("sub");
+        srow.style.marginLeft = `${26 * depth}px`;
+        srow.title = sub.explanation.replace(/\$/g, "");
+        srow.addEventListener("click", () => void explain(cell, { kind: "step", index: top }, []));
+        work.append(srow);
+        renderSub(sub, l, top, depth + 1);
+      });
+    };
     cell.steps.forEach((st, n) => {
       const row = stepRow(st, String(n + 1), statusOf(st), { kind: "step", index: n });
       row.addEventListener("click", () => void explain(cell, { kind: "step", index: n }, []));
       work.append(row);
-      st.sub?.steps.forEach((sub, k) => {
-        const srow = stepRow(sub, `${n + 1}.${k + 1}`, statusOf(sub));
-        srow.classList.add("sub");
-        srow.title = sub.explanation.replace(/\$/g, "");
-        srow.addEventListener("click", () => void explain(cell, { kind: "step", index: n }, []));
-        work.append(srow);
-      });
+      renderSub(st, String(n + 1), n, 1);
     });
     body.append(work);
   }
@@ -746,8 +757,8 @@ function renderPanel() {
   // Proof status of the rules that touched the selection
   const c3 = h("div", "col");
   const used = [...new Set(sel.related.map((s) => s.rule))];
-  const stats = used.map((r) => S.ruleStatus.get(r)?.status ?? "unverified");
-  const overall = stats.length === 0 ? "verified" : stats.includes("unverified") ? "unverified" : stats.includes("conditional") ? "conditional" : "verified";
+  const stats = sel.related.map(statusOf);
+  const overall = stats.length === 0 ? "verified" : stats.includes("unverified") ? "unverified" : stats.includes("conditional") ? "conditional" : stats.includes("checked") ? "checked" : "verified";
   const head3 = h("div"); head3.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:10px";
   head3.append(h("h3", undefined, "Proof status"), h("span", `checkbadge ${overall}`, overall));
   (head3.firstElementChild as HTMLElement).style.margin = "0";

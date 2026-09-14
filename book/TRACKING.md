@@ -123,5 +123,22 @@ M7 linear algebra over ℚ verified (elimination preserves solution set).
    proving echelon form, `det`/`la.mul` over ℚ, and giving matrices a value in the ℝ semantics (which would give
    `diff.matrix` content).
 M8 integration as a verified *checker* (`deriv (integrate f) = f`), not a verified integrator.
+   DONE 2026-09-14: `Antiderivative.lean` (the finder: sums, constant factors, powers, `a^u`, the elementary table, each
+   under a linear substitution — `int.*` steps, nothing proved), `cmdIntegrate` (Pipeline.lean: differentiate the
+   candidate with the pipeline and accept only if the normal form *is* the integrand), `Integrate.lean` (the claim
+   `cmdIntegrate_spec`: an accepted `F` has `norm (diff F x) = ok f`, three standard axioms), and
+   `proofs/Proofs/Integrate.lean` (`integrate_deriv`: hence `deriv F = f` at every point where the check's
+   differentiation is sound — the hypothesis the rule statuses of that derivation state rule by rule, M3/M4). The
+   notebook shows the finder's steps as `checked` (a new status: a guess verified by a later step), the `int.check`
+   step with the differentiation nested under it, and the command inheriting the weakest status below it.
+   Findings: (1) the pipeline could not check with itself — a rule set cannot contain a rule that normalizes with that
+   set — so the pipeline became `pipelineRulesWith norm`, generic in the checker's normalizer, the termination theorem
+   became `pipelineOrderedWith norm` for every `norm`, and the knot closes after the proof: the checker is the pipeline
+   with nested `integrate` refused, the notebook's pipeline is the pipeline with that checker, and neither has a step
+   budget; (2) the check is exact, so a correct guess can be refused — `∫ tan x` is, because `d/dx (−ln cos x)`
+   normalizes to `sin x / cos x`, which the engine does not identify with `tan x`; that is the right failure mode
+   (never a wrong answer) and a pointer at what `simp.function` lacks; (3) `x^a` is accepted through
+   `simp.collect-powers` cancelling `(a+1)/(a+1)`, so its check inherits that rule's side condition (`a ≠ −1`) — the
+   statuses say so without anyone writing it down. Open: products (integration by parts), `sin² x`, rational functions.
 Open: radical simplification (sqrt 8 → 2√2), user functions with parameters, plotting, design file import.
 Six-month cut line: M5 — reached 2026-09-13.

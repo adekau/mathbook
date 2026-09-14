@@ -2,7 +2,7 @@ import MathEngine.Pipeline
 /-!
 # Termination of the notebook pipeline
 
-`pipelineOrdered : Ordered pipelineRules` — every rule of the pipeline decreases the tiered
+`pipelineOrderedWith norm : Ordered (pipelineRulesWith norm)` — every rule of the pipeline decreases the tiered
 ordering `μ` (Order.lean) on a node whose children are normal. The proof is one lemma per rule,
 grouped by the tier that does the work:
 
@@ -19,19 +19,21 @@ any position the matrix rules do not evaluate).
 namespace MathEngine
 open Expr
 
+variable {norm : Norm}
+
 -- ---------------------------------------------------------------------------
 -- Membership
 -- ---------------------------------------------------------------------------
 
-theorem mem_pipeline_iff (r : PlainRule) : r ∈ pipelineRules ↔
-    r = cmdSimplify ∨ r = cmdExpand ∨ r = cmdRref ∨ r = cmdN ∨ r = cmdSubst ∨
+theorem mem_pipeline_iff (r : PlainRule) : r ∈ (pipelineRulesWith norm) ↔
+    r = cmdSimplify ∨ r = cmdExpand ∨ r = cmdRref ∨ r = cmdN ∨ r = cmdSubst ∨ r = cmdIntegrate norm ∨
     r = diffHigherOrder ∨ r = diffConstant ∨ r = diffVariable ∨ r = diffSum ∨ r = diffConstMul ∨
     r = diffProduct ∨ r = diffPower ∨ r = diffChain ∨ r = diffMatrix ∨
     r = laAdd ∨ r = laScalarMul ∨ r = laMul ∨ r = laTranspose ∨ r = laDet ∨ r = laPow ∨
     r = scalarOnly flatten.toPlain ∨ r = scalarOnly identity.toPlain ∨ r = scalarOnly foldConstants.toPlain ∨
     r = scalarOnly functionRules.toPlain ∨ r = scalarOnly powerRules.toPlain ∨ r = scalarOnly collectPowers.toPlain ∨
     r = scalarOnly collectTerms.toPlain ∨ r = scalarOnly parityPowMul ∨ r = scalarOnly parityPowPow ∨ r = laContext := by
-  simp [pipelineRules, commandRules, diffRules, matrixRules, simpPlain, simpRules, parityPlain, parityRules, contextRules]
+  simp [pipelineRulesWith, commandRulesWith, diffRules, matrixRules, simpPlain, simpRules, parityPlain, parityRules, contextRules]
 
 -- ---------------------------------------------------------------------------
 -- Clean terms: nothing the first three tiers count
@@ -165,11 +167,11 @@ theorem muLt_of_clean {r e : Expr} (hr : Clean r) (he : Clean e)
 -- Normal forms of the pipeline
 -- ---------------------------------------------------------------------------
 
-theorem laContext_mem : laContext ∈ pipelineRules := (mem_pipeline_iff _).2 (by simp)
-theorem diffHigherOrder_mem : diffHigherOrder ∈ pipelineRules := (mem_pipeline_iff _).2 (by simp)
+theorem laContext_mem : laContext ∈ (pipelineRulesWith norm) := (mem_pipeline_iff _).2 (by simp)
+theorem diffHigherOrder_mem : diffHigherOrder ∈ (pipelineRulesWith norm) := (mem_pipeline_iff _).2 (by simp)
 
 /-- A node with a matrix literal among its children is never normal. -/
-theorem not_noFire_of_lit_child {e : Expr} (h : (children e).any isMatrix = true) : ¬ NoFire pipelineRules e := by
+theorem not_noFire_of_lit_child {e : Expr} (h : (children e).any isMatrix = true) : ¬ NoFire (pipelineRulesWith norm) e := by
   intro hnf
   have := hnf laContext laContext_mem
   cases e with
@@ -178,10 +180,10 @@ theorem not_noFire_of_lit_child {e : Expr} (h : (children e).any isMatrix = true
 
 /-- A command node is never normal: every command evaluates or refuses. -/
 theorem not_noFire_of_cmd {f : String} {es : List Expr} (h : cmdNames.contains f = true) :
-    ¬ NoFire pipelineRules (.fn f es) := by
+    ¬ NoFire (pipelineRulesWith norm) (.fn f es) := by
   intro hnf
   simp [cmdNames] at h
-  rcases h with rfl | rfl | rfl | rfl | rfl
+  rcases h with rfl | rfl | rfl | rfl | rfl | rfl
   · have := hnf cmdSimplify ((mem_pipeline_iff _).2 (by simp))
     match es, this with
     | [_], h => simp [cmdSimplify] at h
@@ -209,9 +211,14 @@ theorem not_noFire_of_cmd {f : String} {es : List Expr} (h : cmdNames.contains f
     | [_, .num _, _], h | [_, .add _, _], h | [_, .mul _, _], h | [_, .pow _ _, _], h | [_, .fn _ _, _], h
     | [_, .matrix _, _], h => simp [cmdSubst] at h
     | [], h | [_], h | [_, _], h | _ :: _ :: _ :: _ :: _, h => simp [cmdSubst] at h
+  · have := hnf (cmdIntegrate norm) ((mem_pipeline_iff _).2 (by simp))
+    match es, this with
+    | [_, .var _], h => simp only [cmdIntegrate, Option.map_eq_none_iff] at h; split at h <;> (try split at h) <;> (try split at h) <;> simp at h
+    | [_, .num _], h | [_, .add _], h | [_, .mul _], h | [_, .pow _ _], h | [_, .fn _ _], h | [_, .matrix _], h => simp [cmdIntegrate] at h
+    | [], h | [_], h | _ :: _ :: _ :: _, h => simp [cmdIntegrate] at h
 
 /-- A `diff` of the wrong arity is never normal. -/
-theorem not_noFire_of_d3 {es : List Expr} (h : es.length ≠ 2) : ¬ NoFire pipelineRules (.fn "diff" es) := by
+theorem not_noFire_of_d3 {es : List Expr} (h : es.length ≠ 2) : ¬ NoFire (pipelineRulesWith norm) (.fn "diff" es) := by
   intro hnf
   have := hnf diffHigherOrder diffHigherOrder_mem
   match es, h, this with
@@ -226,7 +233,7 @@ theorem not_noFire_of_d3 {es : List Expr} (h : es.length ≠ 2) : ¬ NoFire pipe
   | _ :: _ :: _ :: _ :: _, _, h => simp [diffHigherOrder] at h
 
 /-- The structural content of normality: nothing the counting tiers see, except a literal at the root. -/
-theorem normal_facts {e : Expr} (h : Normal pipelineRules e) :
+theorem normal_facts {e : Expr} (h : Normal (pipelineRulesWith norm) e) :
     count cmdOwn e = 0 ∧ count d3Own e = 0 ∧ (∀ c ∈ children e, Clean c) := by
   induction h with
   | mk e hnf hc ih =>
@@ -259,7 +266,7 @@ theorem normal_facts {e : Expr} (h : Normal pipelineRules e) :
         · rfl
       | _ => rfl
 
-theorem Clean.of_normal {e : Expr} (h : Normal pipelineRules e) (hm : isMatrix e = false) : Clean e := by
+theorem Clean.of_normal {e : Expr} (h : Normal (pipelineRulesWith norm) e) (hm : isMatrix e = false) : Clean e := by
   obtain ⟨h1, h2, h3⟩ := normal_facts h
   refine ⟨h1, h2, ?_⟩
   have := hasLit_withChildren e (children e) rfl
@@ -268,7 +275,7 @@ theorem Clean.of_normal {e : Expr} (h : Normal pipelineRules e) (hm : isMatrix e
   exact fun d hd => (h3 d hd).lit
 
 /-- What a rule may assume about the node it fires on. -/
-theorem childrenNormal_facts {e : Expr} (h : ChildrenNormal pipelineRules e) :
+theorem childrenNormal_facts {e : Expr} (h : ChildrenNormal (pipelineRulesWith norm) e) :
     (∀ c ∈ children e, isMatrix c = false → Clean c) ∧ (∀ c ∈ children e, ∀ d ∈ children c, Clean d) :=
   ⟨fun c hc hm => Clean.of_normal (h c hc) hm, fun c hc => (normal_facts (h c hc)).2.2⟩
 
@@ -277,8 +284,8 @@ theorem childrenNormal_facts {e : Expr} (h : ChildrenNormal pipelineRules e) :
 -- ---------------------------------------------------------------------------
 
 /-- `r` decreases `μ` on nodes with normal children. -/
-def Dec (r : PlainRule) : Prop :=
-  ∀ e res, ChildrenNormal pipelineRules e → r.apply e = some res → res.error = none → MuLt (μ res.result) (μ e)
+def Dec (norm : Norm) (r : PlainRule) : Prop :=
+  ∀ e res, ChildrenNormal (pipelineRulesWith norm) e → r.apply e = some res → res.error = none → MuLt (μ res.result) (μ e)
 
 theorem checked_spec {r r' : RuleResult} (h : checked r = r') (he : r'.error = none) :
     r' = r ∧ count cmdOwn r'.result = 0 := by
@@ -291,7 +298,7 @@ theorem checked_spec {r r' : RuleResult} (h : checked r = r') (he : r'.error = n
 
 /-- Tier 1: a command node with normal children has `cmdCount = 1`; a checked output has 0. -/
 theorem dec_cmd {r : PlainRule} (hname : ∀ e res, r.apply e = some res → ∃ f es, e = .fn f es ∧ cmdNames.contains f = true)
-    (hchk : ∀ e res, r.apply e = some res → ∃ r₀, res = checked r₀) : Dec r := by
+    (hchk : ∀ e res, r.apply e = some res → ∃ r₀, res = checked r₀) : Dec norm r := by
   intro e res hcn happ herr
   obtain ⟨f, es, rfl, hf⟩ := hname e res happ
   obtain ⟨r₀, rfl⟩ := hchk _ _ happ
@@ -304,7 +311,7 @@ theorem dec_cmd {r : PlainRule} (hname : ∀ e res, r.apply e = some res → ∃
   simp only [μ, cmdCount]
   exact Prod.Lex.left _ _ (by rw [hzero, this]; exact Nat.zero_lt_one)
 
-theorem dec_cmdSimplify : Dec cmdSimplify := dec_cmd
+theorem dec_cmdSimplify : Dec norm cmdSimplify := dec_cmd
   (fun e res h => by
     unfold cmdSimplify at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
     split at h
@@ -314,7 +321,7 @@ theorem dec_cmdSimplify : Dec cmdSimplify := dec_cmd
   (fun e res h => by
     unfold cmdSimplify at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
 
-theorem dec_cmdExpand : Dec cmdExpand := dec_cmd
+theorem dec_cmdExpand : Dec norm cmdExpand := dec_cmd
   (fun e res h => by
     unfold cmdExpand at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
     split at h
@@ -324,7 +331,7 @@ theorem dec_cmdExpand : Dec cmdExpand := dec_cmd
   (fun e res h => by
     unfold cmdExpand at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
 
-theorem dec_cmdRref : Dec cmdRref := dec_cmd
+theorem dec_cmdRref : Dec norm cmdRref := dec_cmd
   (fun e res h => by
     unfold cmdRref at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
     split at h
@@ -334,7 +341,7 @@ theorem dec_cmdRref : Dec cmdRref := dec_cmd
   (fun e res h => by
     unfold cmdRref at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
 
-theorem dec_cmdN : Dec cmdN := dec_cmd
+theorem dec_cmdN : Dec norm cmdN := dec_cmd
   (fun e res h => by
     unfold cmdN at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
     split at h
@@ -344,7 +351,7 @@ theorem dec_cmdN : Dec cmdN := dec_cmd
   (fun e res h => by
     unfold cmdN at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
 
-theorem dec_cmdSubst : Dec cmdSubst := dec_cmd
+theorem dec_cmdSubst : Dec norm cmdSubst := dec_cmd
   (fun e res h => by
     unfold cmdSubst at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
     split at h
@@ -353,6 +360,17 @@ theorem dec_cmdSubst : Dec cmdSubst := dec_cmd
     · simp at h)
   (fun e res h => by
     unfold cmdSubst at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
+
+theorem dec_cmdIntegrate : Dec norm (cmdIntegrate norm) := dec_cmd
+  (fun e res h => by
+    unfold cmdIntegrate at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
+    split at h
+    · split at h <;> (try split at h) <;> (try split at h) <;> exact ⟨_, _, rfl, by decide⟩
+    · exact ⟨_, _, rfl, by decide⟩
+    · exact ⟨_, _, rfl, by decide⟩
+    · simp at h)
+  (fun e res h => by
+    unfold cmdIntegrate at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
 
 -- ---------------------------------------------------------------------------
 -- Tier 2: diff.higher-order
@@ -369,7 +387,7 @@ theorem count_foldD (own : Expr → Nat) (h0 : ∀ r, own (.fn "diff" [r, .var x
   | zero => rfl
   | succ k ih => rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil, count_D, h0, hv, ih]; omega
 
-theorem dec_diffHigherOrder : Dec diffHigherOrder := by
+theorem dec_diffHigherOrder : Dec norm diffHigherOrder := by
   intro e res hcn happ herr
   unfold diffHigherOrder at happ
   dsimp only at happ
@@ -410,7 +428,7 @@ theorem checkedLit_spec {e : Expr} {r r' : RuleResult} (h : checkedLit e r = r')
 
 /-- A rule whose node carries no command and no malformed `diff`, and whose output is `checkedLit`. -/
 theorem dec_lit {r : PlainRule} (hshape : ∀ e res, r.apply e = some res → cmdOwn e = 0 ∧ d3Own e = 0)
-    (hchk : ∀ e res, r.apply e = some res → ∃ r₀, res = checkedLit e r₀) : Dec r := by
+    (hchk : ∀ e res, r.apply e = some res → ∃ r₀, res = checkedLit e r₀) : Dec norm r := by
   intro e res hcn happ herr
   obtain ⟨h1, h2⟩ := hshape e res happ
   obtain ⟨r₀, rfl⟩ := hchk _ _ happ
@@ -430,7 +448,7 @@ theorem lit_apply {e : Expr} {res : RuleResult} {body : Option RuleResult}
   | none => simp at h
   | some r₀ => exact ⟨r₀, rfl, by simpa using h.symm⟩
 
-theorem dec_laAdd : Dec laAdd := dec_lit
+theorem dec_laAdd : Dec norm laAdd := dec_lit
   (fun e res h => by
     unfold laAdd at h; obtain ⟨r₀, h, _⟩ := lit_apply h
     split at h
@@ -438,7 +456,7 @@ theorem dec_laAdd : Dec laAdd := dec_lit
     · simp at h)
   (fun e res h => by unfold laAdd at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
 
-theorem dec_laScalarMul : Dec laScalarMul := dec_lit
+theorem dec_laScalarMul : Dec norm laScalarMul := dec_lit
   (fun e res h => by
     unfold laScalarMul at h; obtain ⟨r₀, h, _⟩ := lit_apply h
     split at h
@@ -446,7 +464,7 @@ theorem dec_laScalarMul : Dec laScalarMul := dec_lit
     · simp at h)
   (fun e res h => by unfold laScalarMul at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
 
-theorem dec_laMul : Dec laMul := dec_lit
+theorem dec_laMul : Dec norm laMul := dec_lit
   (fun e res h => by
     unfold laMul at h; obtain ⟨r₀, h, _⟩ := lit_apply h
     split at h
@@ -454,7 +472,7 @@ theorem dec_laMul : Dec laMul := dec_lit
     · simp at h)
   (fun e res h => by unfold laMul at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
 
-theorem dec_laTranspose : Dec laTranspose := dec_lit
+theorem dec_laTranspose : Dec norm laTranspose := dec_lit
   (fun e res h => by
     unfold laTranspose at h; obtain ⟨r₀, h, _⟩ := lit_apply h
     split at h
@@ -462,7 +480,7 @@ theorem dec_laTranspose : Dec laTranspose := dec_lit
     · simp at h)
   (fun e res h => by unfold laTranspose at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
 
-theorem dec_laDet : Dec laDet := dec_lit
+theorem dec_laDet : Dec norm laDet := dec_lit
   (fun e res h => by
     unfold laDet at h; obtain ⟨r₀, h, _⟩ := lit_apply h
     split at h
@@ -470,7 +488,7 @@ theorem dec_laDet : Dec laDet := dec_lit
     · simp at h)
   (fun e res h => by unfold laDet at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
 
-theorem dec_laPow : Dec laPow := dec_lit
+theorem dec_laPow : Dec norm laPow := dec_lit
   (fun e res h => by
     unfold laPow at h; obtain ⟨r₀, h, _⟩ := lit_apply h
     split at h
@@ -484,7 +502,7 @@ theorem target_spec {e : Expr} {p : Expr × String} (h : target e = some p) : e 
   · simp only [Option.some.injEq] at h; subst h; rfl
   · simp at h
 
-theorem dec_diffMatrix : Dec diffMatrix := dec_lit
+theorem dec_diffMatrix : Dec norm diffMatrix := dec_lit
   (fun e res h => by
     unfold diffMatrix at h; obtain ⟨r₀, h, _⟩ := lit_apply h
     simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
@@ -493,7 +511,7 @@ theorem dec_diffMatrix : Dec diffMatrix := dec_lit
   (fun e res h => by unfold diffMatrix at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
 
 /-- `la.context` only refuses. -/
-theorem dec_laContext : Dec laContext := by
+theorem dec_laContext : Dec norm laContext := by
   intro e res hcn happ herr
   unfold laContext at happ
   dsimp only at happ
@@ -564,7 +582,7 @@ theorem M_add_ne_nil {es : List Expr} (h : es ≠ []) : M (.add es) = ML es := b
 -- ---------------------------------------------------------------------------
 
 /-- The node a `diff.*` rule fires on, when its body is not a literal, is clean. -/
-theorem diff_clean {body : Expr} {x : String} (hcn : ChildrenNormal pipelineRules (.fn "diff" [body, .var x]))
+theorem diff_clean {body : Expr} {x : String} (hcn : ChildrenNormal (pipelineRulesWith norm) (.fn "diff" [body, .var x]))
     (hm : isMatrix body = false) : Clean body ∧ Clean (.fn "diff" [body, .var x]) :=
   have hb : Clean body := Clean.of_normal (hcn body (by simp [children])) hm
   ⟨hb, Clean.diff hb (Clean.var x)⟩
@@ -579,7 +597,7 @@ theorem M.zero' : M (.num Q.zero) = 2 := M.zero
 theorem M.one' : M (.num Q.one) = 1 := by simp [M.num, Q_one_isOne]
 theorem M.one : M Expr.one = 1 := by simp [Expr.one, M.num, Q_one_isOne]
 
-theorem dec_diffConstant : Dec diffConstant := by
+theorem dec_diffConstant : Dec norm diffConstant := by
   intro e res hcn happ herr
   unfold diffConstant rule at happ
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at happ
@@ -613,7 +631,7 @@ theorem dec_diffConstant : Dec diffConstant := by
       exact key _
   · simp at happ
 
-theorem dec_diffVariable : Dec diffVariable := by
+theorem dec_diffVariable : Dec norm diffVariable := by
   intro e res hcn happ herr
   unfold diffVariable rule at happ
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at happ
@@ -641,7 +659,7 @@ theorem ML_map_D (x : String) (es : List Expr) :
     simp only [D, M.diff, M.var, three_pow_add_three, List.map_cons, List.sum_cons, List.length_cons]
     omega
 
-theorem dec_diffSum : Dec diffSum := by
+theorem dec_diffSum : Dec norm diffSum := by
   intro e res hcn happ herr
   unfold diffSum rule at happ
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at happ
@@ -756,16 +774,16 @@ theorem M_ge_ten_of_dependsOn {e : Expr} {x : String} (h : e.dependsOn x = true)
 -- Normal-form facts the power rule needs
 -- ---------------------------------------------------------------------------
 
-theorem powerRules_mem : scalarOnly powerRules.toPlain ∈ pipelineRules := (mem_pipeline_iff _).2 (by simp)
-theorem identity_mem : scalarOnly identity.toPlain ∈ pipelineRules := (mem_pipeline_iff _).2 (by simp)
+theorem powerRules_mem : scalarOnly powerRules.toPlain ∈ (pipelineRulesWith norm) := (mem_pipeline_iff _).2 (by simp)
+theorem identity_mem : scalarOnly identity.toPlain ∈ (pipelineRulesWith norm) := (mem_pipeline_iff _).2 (by simp)
 
 /-- A normal node has no matrix literal among its children (`la.context` would fire). -/
-theorem normal_scalar {e : Expr} (h : Normal pipelineRules e) : (children e).any isMatrix = false := by
+theorem normal_scalar {e : Expr} (h : Normal (pipelineRulesWith norm) e) : (children e).any isMatrix = false := by
   cases hm : (children e).any isMatrix with
   | false => rfl
   | true => exact absurd h.noFire (not_noFire_of_lit_child hm)
 
-theorem normal_pow_facts {b x : Expr} (h : Normal pipelineRules (.pow b x)) :
+theorem normal_pow_facts {b x : Expr} (h : Normal (pipelineRulesWith norm) (.pow b x)) :
     isZero x = false ∧ isOne x = false ∧ isOne b = false := by
   have := h.noFire _ powerRules_mem
   simp only [scalarOnly, Rule.toPlain, powerRules, powerApply, powerAt, normal_scalar h, Bool.false_eq_true,
@@ -778,7 +796,7 @@ theorem normal_pow_facts {b x : Expr} (h : Normal pipelineRules (.pow b x)) :
   · cases hz : isZero x <;> cases ho : isOne x <;> cases hb : isOne b <;> simp_all
 
 /-- A normal power of numerals has a non-integer exponent (else `powNumeric` evaluates it). -/
-theorem normal_pow_num {p q : Q} (h : Normal pipelineRules (.pow (.num p) (.num q))) : q.isInt = false := by
+theorem normal_pow_num {p q : Q} (h : Normal (pipelineRulesWith norm) (.pow (.num p) (.num q))) : q.isInt = false := by
   have := h.noFire _ powerRules_mem
   cases hq : q.isInt with
   | false => rfl
@@ -788,7 +806,7 @@ theorem normal_pow_num {p q : Q} (h : Normal pipelineRules (.pow (.num p) (.num 
     repeat' split at this
     all_goals simp at this
 
-theorem normal_add_len {es : List Expr} (h : Normal pipelineRules (.add es)) : 2 ≤ es.length := by
+theorem normal_add_len {es : List Expr} (h : Normal (pipelineRulesWith norm) (.add es)) : 2 ≤ es.length := by
   have := h.noFire _ identity_mem
   simp only [scalarOnly, Rule.toPlain, identity, normal_scalar h, Bool.false_eq_true, ↓reduceIte] at this
   match es, this with
@@ -796,7 +814,7 @@ theorem normal_add_len {es : List Expr} (h : Normal pipelineRules (.add es)) : 2
   | [_], h => simp [identityApply] at h
   | _ :: _ :: _, _ => simp
 
-theorem normal_mul_len {es : List Expr} (h : Normal pipelineRules (.mul es)) : 2 ≤ es.length := by
+theorem normal_mul_len {es : List Expr} (h : Normal (pipelineRulesWith norm) (.mul es)) : 2 ≤ es.length := by
   have := h.noFire _ identity_mem
   simp only [scalarOnly, Rule.toPlain, identity, normal_scalar h, Bool.false_eq_true, ↓reduceIte] at this
   match es, this with
@@ -804,9 +822,9 @@ theorem normal_mul_len {es : List Expr} (h : Normal pipelineRules (.mul es)) : 2
   | [_], h => simp [identityApply] at h
   | _ :: _ :: _, _ => simp
 
-theorem foldConstants_mem : scalarOnly foldConstants.toPlain ∈ pipelineRules := (mem_pipeline_iff _).2 (by simp)
+theorem foldConstants_mem : scalarOnly foldConstants.toPlain ∈ (pipelineRulesWith norm) := (mem_pipeline_iff _).2 (by simp)
 
-theorem normal_add_nums {es : List Expr} (h : Normal pipelineRules (.add es)) : (es.filter isNum).length < 2 := by
+theorem normal_add_nums {es : List Expr} (h : Normal (pipelineRulesWith norm) (.add es)) : (es.filter isNum).length < 2 := by
   have := h.noFire _ foldConstants_mem
   simp only [scalarOnly, Rule.toPlain, foldConstants, foldApply, normal_scalar h, Bool.false_eq_true,
     ↓reduceIte] at this
@@ -814,7 +832,7 @@ theorem normal_add_nums {es : List Expr} (h : Normal pipelineRules (.add es)) : 
   · simp at this
   · omega
 
-theorem normal_mul_nums {es : List Expr} (h : Normal pipelineRules (.mul es)) : (es.filter isNum).length < 2 := by
+theorem normal_mul_nums {es : List Expr} (h : Normal (pipelineRulesWith norm) (.mul es)) : (es.filter isNum).length < 2 := by
   have := h.noFire _ foldConstants_mem
   simp only [scalarOnly, Rule.toPlain, foldConstants, foldApply, normal_scalar h, Bool.false_eq_true,
     ↓reduceIte] at this
@@ -824,7 +842,7 @@ theorem normal_mul_nums {es : List Expr} (h : Normal pipelineRules (.mul es)) : 
 
 /-- A normal term other than the literal `1` weighs at least 2 (so that a numeric exponent, being
 neither 0 nor 1 in a normal power, always weighs 2). -/
-theorem M_ge_two_of_normal {e : Expr} (h : Normal pipelineRules e) (h1 : isOne e = false) : 2 ≤ M e := by
+theorem M_ge_two_of_normal {e : Expr} (h : Normal (pipelineRulesWith norm) e) (h1 : isOne e = false) : 2 ≤ M e := by
   induction h with
   | mk e hnf hc ih =>
     cases e with
@@ -857,7 +875,7 @@ theorem M_ge_two_of_normal {e : Expr} (h : Normal pipelineRules e) (h1 : isOne e
 theorem Clean.filter {es : List Expr} (p : Expr → Bool) (h : ∀ c ∈ es, Clean c) : ∀ c ∈ es.filter p, Clean c :=
   fun c hc => h c (List.mem_filter.mp hc).1
 
-theorem dec_diffConstMul : Dec diffConstMul := by
+theorem dec_diffConstMul : Dec norm diffConstMul := by
   intro e res hcn happ herr
   unfold diffConstMul rule at happ
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at happ
@@ -935,7 +953,7 @@ theorem ML_prodTerms_le (x : String) : ∀ (l acc : List Expr),
     rw [Nat.add_mul, Nat.one_mul]
     omega
 
-theorem dec_diffProduct : Dec diffProduct := by
+theorem dec_diffProduct : Dec norm diffProduct := by
   intro e res hcn happ herr
   unfold diffProduct rule at happ
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at happ
@@ -1025,7 +1043,7 @@ theorem innerOf_cases (u : Expr) (x : String) : innerOf u x = [] ∨ innerOf u x
   | var y => by_cases hy : (y == x) = true <;> simp [hy]
   | _ => exact Or.inr rfl
 
-theorem dec_diffChain : Dec diffChain := by
+theorem dec_diffChain : Dec norm diffChain := by
   intro e res hcn happ herr
   unfold diffChain rule at happ
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at happ
@@ -1074,7 +1092,7 @@ theorem dec_diffChain : Dec diffChain := by
     · simp at happ
   · simp at happ
 
-theorem dec_diffPower : Dec diffPower := by
+theorem dec_diffPower : Dec norm diffPower := by
   intro e res hcn happ herr
   unfold diffPower rule at happ
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at happ
@@ -1086,7 +1104,7 @@ theorem dec_diffPower : Dec diffPower := by
     obtain ⟨hb, he⟩ := diff_clean hcn rfl
     have hbase : Clean base := hb.child (by simp [children])
     have hexp : Clean exp := hb.child (by simp [children])
-    have hnorm : Normal pipelineRules (.pow base exp) := hcn _ (by simp [children])
+    have hnorm : Normal (pipelineRulesWith norm) (.pow base exp) := hcn _ (by simp [children])
     obtain ⟨_, hx1, hb1⟩ := normal_pow_facts hnorm
     have hMe2 : 2 ≤ M exp := M_ge_two_of_normal (hnorm.children exp (by simp [children])) hx1
     have hMb2 : 2 ≤ M base := M_ge_two_of_normal (hnorm.children base (by simp [children])) hb1
@@ -1335,7 +1353,7 @@ theorem nums_weight (nums : List Expr) (hn : ∀ e ∈ nums, isNum e = true) (h2
 -- Big bases weigh at least 9 in a normal term
 -- ---------------------------------------------------------------------------
 
-theorem bigBase_of_normal {e : Expr} (h : Normal pipelineRules e) (hn : isNum e = false) : bigBase e = true := by
+theorem bigBase_of_normal {e : Expr} (h : Normal (pipelineRulesWith norm) e) (hn : isNum e = false) : bigBase e = true := by
   cases e with
   | num _ => simp [isNum] at hn
   | add es =>
@@ -1357,7 +1375,7 @@ theorem filter_isNum_length_lt {es : List Expr} (hlen : 2 ≤ es.length) (hnums 
     obtain ⟨he, hne⟩ := Classical.not_imp.mp he'
     exact ⟨e, he, by cases hn : isNum e with | false => rfl | true => exact absurd hn hne⟩
 
-theorem M_ge_nine_of_normal {e : Expr} (h : Normal pipelineRules e) (hn : isNum e = false) : 9 ≤ M e := by
+theorem M_ge_nine_of_normal {e : Expr} (h : Normal (pipelineRulesWith norm) e) (hn : isNum e = false) : 9 ≤ M e := by
   induction h with
   | mk e hnf hc ih =>
     cases e with
@@ -1419,7 +1437,7 @@ theorem M_ge_nine_of_normal {e : Expr} (h : Normal pipelineRules e) (hn : isNum 
 
 /-- A `scalarOnly` rule fires only on literal-free nodes; with normal children such a node is clean
 provided its head is not a command or a malformed `diff`. -/
-theorem clean_of_scalar {e : Expr} (hcn : ChildrenNormal pipelineRules e) (hm : (children e).any isMatrix = false)
+theorem clean_of_scalar {e : Expr} (hcn : ChildrenNormal (pipelineRulesWith norm) e) (hm : (children e).any isMatrix = false)
     (h1 : cmdOwn e = 0) (h2 : d3Own e = 0) (hnm : isMatrix e = false) : Clean e ∧ ∀ c ∈ children e, Clean c := by
   have hcs : ∀ c ∈ children e, Clean c := fun c hc =>
     Clean.of_normal (hcn c hc) (by
@@ -1434,8 +1452,8 @@ theorem clean_of_scalar {e : Expr} (hcn : ChildrenNormal pipelineRules e) (hm : 
     rw [this, (hasLitList_eq_false_iff _).2 fun c hc => (hcs c hc).lit, hnm]; rfl
 
 theorem dec_scalar {r : PlainRule}
-    (hdec : ∀ e res, ChildrenNormal pipelineRules e → (children e).any isMatrix = false →
-      r.apply e = some res → res.error = none → MuLt (μ res.result) (μ e)) : Dec (scalarOnly r) := by
+    (hdec : ∀ e res, ChildrenNormal (pipelineRulesWith norm) e → (children e).any isMatrix = false →
+      r.apply e = some res → res.error = none → MuLt (μ res.result) (μ e)) : Dec norm (scalarOnly r) := by
   intro e res hcn happ herr
   simp only [scalarOnly] at happ
   split at happ
@@ -1471,7 +1489,7 @@ theorem sizeList_length_le : ∀ es : List Expr, es.length ≤ sizeList es
 
 -- simp.fold-constants ------------------------------------------------------
 
-theorem dec_foldConstants : Dec (scalarOnly foldConstants.toPlain) := dec_scalar fun e res hcn hm happ herr => by
+theorem dec_foldConstants : Dec norm (scalarOnly foldConstants.toPlain) := dec_scalar fun e res hcn hm happ herr => by
   simp only [Rule.toPlain, foldConstants, foldApply] at happ
   split at happ
   · rename_i es
@@ -1599,7 +1617,7 @@ theorem Clean.flatMap_unMul {es : List Expr} (h : ∀ c ∈ es, Clean c) : ∀ c
   | mul xs => exact (h _ he).child (by simpa [unMul, children] using hce)
   | _ => simp [unMul] at hce; subst hce; exact h _ he
 
-theorem dec_flatten : Dec (scalarOnly flatten.toPlain) := dec_scalar fun e res hcn hm happ herr => by
+theorem dec_flatten : Dec norm (scalarOnly flatten.toPlain) := dec_scalar fun e res hcn hm happ herr => by
   simp only [Rule.toPlain, flatten, flattenApply] at happ
   split at happ
   · rename_i es
@@ -1666,7 +1684,7 @@ theorem M_addN_le' (l : List Expr) : M (addN l) ≤ ML l + (if l = [] then 3 els
   | [] => simp [addN, M.add_nil]
   | a :: b :: l => simp [addN, M.add_cons, ML.cons]
 
-theorem dec_identity : Dec (scalarOnly identity.toPlain) := dec_scalar fun e res hcn hm happ herr => by
+theorem dec_identity : Dec norm (scalarOnly identity.toPlain) := dec_scalar fun e res hcn hm happ herr => by
   simp only [Rule.toPlain, identity, identityApply] at happ
   split at happ
   -- add [] → 0
@@ -1756,7 +1774,7 @@ theorem dec_identity : Dec (scalarOnly identity.toPlain) := dec_scalar fun e res
 theorem Q_half_isOne : (Q.ofRat (mkRat 1 2)).isOne = false := by decide
 theorem Q_half_isInt : (Q.ofRat (mkRat 1 2)).isInt = false := by decide
 
-theorem dec_functionRules : Dec (scalarOnly functionRules.toPlain) := dec_scalar fun e res hcn hm happ herr => by
+theorem dec_functionRules : Dec norm (scalarOnly functionRules.toPlain) := dec_scalar fun e res hcn hm happ herr => by
   simp only [Rule.toPlain, functionRules, functionApply] at happ
   split at happ
   -- sqrt a
@@ -1794,7 +1812,7 @@ theorem dec_functionRules : Dec (scalarOnly functionRules.toPlain) := dec_scalar
           · exact Clean.fn₁ (by decide) (by decide) hb
         apply muLt_of_clean hres he
         left
-        have hnorm : Normal pipelineRules (.pow b p) := hcn _ (by simp [children])
+        have hnorm : Normal (pipelineRulesWith norm) (.pow b p) := hcn _ (by simp [children])
         obtain ⟨_, hp1, hb1⟩ := normal_pow_facts hnorm
         have hMp := M_ge_two_of_normal (hnorm.children p (by simp [children])) hp1
         have hMb := M_ge_two_of_normal (hnorm.children b (by simp [children])) hb1
@@ -1851,15 +1869,15 @@ theorem M_num_of_isZero {q : Q} (h : isZero (.num q) = true) : M (.num q) = 2 :=
   rw [M.num, h1, h2]; rfl
 
 
-theorem dec_powerRules : Dec (scalarOnly powerRules.toPlain) := dec_scalar fun e res hcn hm happ herr => by
+theorem dec_powerRules : Dec norm (scalarOnly powerRules.toPlain) := dec_scalar fun e res hcn hm happ herr => by
   simp only [Rule.toPlain, powerRules, powerApply] at happ
   split at happ
   · rename_i b x
     obtain ⟨he, hcs⟩ := clean_of_scalar hcn hm rfl rfl rfl
     have hb : Clean b := hcs b (by simp [children])
     have hx : Clean x := hcs x (by simp [children])
-    have hnb : Normal pipelineRules b := hcn b (by simp [children])
-    have hnx : Normal pipelineRules x := hcn x (by simp [children])
+    have hnb : Normal (pipelineRulesWith norm) b := hcn b (by simp [children])
+    have hnx : Normal (pipelineRulesWith norm) x := hcn x (by simp [children])
     have hMb := M.pos b; have hMx := M.pos x
     simp only [powerAt] at happ
     split at happ
@@ -2040,7 +2058,7 @@ theorem mergePowers_spec : ∀ (es l : List Expr) (t : Expr), mergePowers es = s
         · exact hcs c List.mem_cons_self
         · exact ih.2 (fun d hd => hcs d (List.mem_cons_of_mem _ hd)) c hc
 
-theorem dec_collectPowers : Dec (scalarOnly collectPowers.toPlain) := dec_scalar fun e res hcn hm happ herr => by
+theorem dec_collectPowers : Dec norm (scalarOnly collectPowers.toPlain) := dec_scalar fun e res hcn hm happ herr => by
   simp only [Rule.toPlain, collectPowers, collectPowersApply] at happ
   split at happ
   · rename_i es
@@ -2068,7 +2086,7 @@ theorem coeffRest_M {e : Expr} {c : Q} {t : Expr} (h : coeffRest e = (c, t)) (hb
   · exact ⟨by rw [M.one']; exact Nat.le_refl _, fun hc => hc⟩
 
 /-- The base of a like-term in a normal node weighs at least 9. -/
-theorem coeffRest_nine {e : Expr} {c : Q} {t : Expr} (hn : Normal pipelineRules e) (h : coeffRest e = (c, t))
+theorem coeffRest_nine {e : Expr} {c : Q} {t : Expr} (hn : Normal (pipelineRulesWith norm) e) (h : coeffRest e = (c, t))
     (hb : bigBase t = true) : 9 ≤ M t := by
   rcases coeffRest_cases e c t h with ⟨_, rfl⟩ | ⟨r, rfl, rfl⟩ | ⟨rfl, _⟩
   · simp [bigBase, Expr.one] at hb
@@ -2107,7 +2125,7 @@ theorem mergeTerms_ne_nil : ∀ (es l : List Expr) (t : Expr), mergeTerms es = s
       obtain ⟨⟨l', t'⟩, _, hp⟩ := h
       simp only [Prod.mk.injEq] at hp; obtain ⟨rfl, _⟩ := hp; simp
 
-theorem mergeTerms_spec : ∀ (es l : List Expr) (t : Expr), (∀ c ∈ es, Normal pipelineRules c) →
+theorem mergeTerms_spec : ∀ (es l : List Expr) (t : Expr), (∀ c ∈ es, Normal (pipelineRulesWith norm) c) →
     mergeTerms es = some (l, t) →
     ML l + 1 ≤ ML es ∧ ((∀ c ∈ es, Clean c) → ∀ c ∈ l, Clean c)
   | [], _, _, _, h => by simp [mergeTerms] at h
@@ -2158,7 +2176,7 @@ theorem mergeTerms_spec : ∀ (es l : List Expr) (t : Expr), (∀ c ∈ es, Norm
       · exact hcs d List.mem_cons_self
       · exact ih.2 (fun k hk => hcs k (List.mem_cons_of_mem _ hk)) d hd
 
-theorem dec_collectTerms : Dec (scalarOnly collectTerms.toPlain) := dec_scalar fun e res hcn hm happ herr => by
+theorem dec_collectTerms : Dec norm (scalarOnly collectTerms.toPlain) := dec_scalar fun e res hcn hm happ herr => by
   simp only [Rule.toPlain, collectTerms, collectTermsApply] at happ
   split at happ
   · rename_i es
@@ -2167,7 +2185,7 @@ theorem dec_collectTerms : Dec (scalarOnly collectTerms.toPlain) := dec_scalar f
       simp only [Option.some.injEq] at happ; subst happ; (try dsimp only)
       obtain ⟨he, hcs⟩ := clean_of_scalar hcn hm rfl rfl rfl
       simp only [children] at hcs
-      have hn : ∀ c ∈ es, Normal pipelineRules c := fun c hc => hcn c (by simpa [children] using hc)
+      have hn : ∀ c ∈ es, Normal (pipelineRulesWith norm) c := fun c hc => hcn c (by simpa [children] using hc)
       obtain ⟨hM, hcl⟩ := mergeTerms_spec es l t hn hmt
       apply muLt_of_clean (Clean.add (hcl hcs)) he
       left
@@ -2179,7 +2197,7 @@ theorem dec_collectTerms : Dec (scalarOnly collectTerms.toPlain) := dec_scalar f
 
 -- the parity rules ------------------------------------------------------------------
 
-theorem dec_parityPowMul : Dec (scalarOnly parityPowMul) := dec_scalar fun e res hcn hm happ herr => by
+theorem dec_parityPowMul : Dec norm (scalarOnly parityPowMul) := dec_scalar fun e res hcn hm happ herr => by
   simp only [parityPowMul] at happ
   split at happ
   · rename_i fs n
@@ -2212,7 +2230,7 @@ theorem dec_parityPowMul : Dec (scalarOnly parityPowMul) := dec_scalar fun e res
     · simp at happ
   · simp at happ
 
-theorem dec_parityPowPow : Dec (scalarOnly parityPowPow) := dec_scalar fun e res hcn hm happ herr => by
+theorem dec_parityPowPow : Dec norm (scalarOnly parityPowPow) := dec_scalar fun e res hcn hm happ herr => by
   simp only [parityPowPow] at happ
   split at happ
   · rename_i b m n
@@ -2230,7 +2248,7 @@ theorem dec_parityPowPow : Dec (scalarOnly parityPowPow) := dec_scalar fun e res
       left
       have hn2 : M (.num n) = 2 := by
         simp only [M.num, hn.1.2, hn.1.1.1, Bool.false_eq_true, ↓reduceIte]
-      have hnorm : Normal pipelineRules (.pow b m) := hcn _ (by simp [children])
+      have hnorm : Normal (pipelineRulesWith norm) (.pow b m) := hcn _ (by simp [children])
       have hm9 : 9 ≤ M m := M_ge_nine_of_normal (hnorm.children m (by simp [children])) hn.2
       have hm8 : M (.mul [m, .num n]) = M m + 8 := by
         rw [M.mul, ML.cons, ML.cons, ML.nil, hn2]; simp only [List.length_cons, List.length_nil]; omega
@@ -2249,15 +2267,16 @@ theorem dec_parityPowPow : Dec (scalarOnly parityPowPow) := dec_scalar fun e res
 
 /-- **Every rule of the notebook pipeline decreases `μ` on a node whose children are normal.**
 With `normalizeT`'s innermost strategy this is exactly what makes cell evaluation terminate. -/
-theorem pipelineOrdered : Ordered pipelineRules := ⟨fun r hr => by
+theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := ⟨fun r hr => by
   rw [mem_pipeline_iff] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact dec_cmdSimplify
   · exact dec_cmdExpand
   · exact dec_cmdRref
   · exact dec_cmdN
   · exact dec_cmdSubst
+  · exact dec_cmdIntegrate
   · exact dec_diffHigherOrder
   · exact dec_diffConstant
   · exact dec_diffVariable

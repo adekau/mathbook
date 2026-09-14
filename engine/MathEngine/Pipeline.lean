@@ -3,6 +3,7 @@ import MathEngine.DiffRules
 import MathEngine.LinAlg
 import MathEngine.ExpandRules
 import MathEngine.Numeric
+import MathEngine.Antiderivative
 import MathEngine.Terminate
 /-!
 # The notebook pipeline: commands as rules, and the combined rule set
@@ -11,9 +12,14 @@ Notebook commands are rules too: they fire on `fn` nodes with reserved names (`c
 such node either evaluates or refuses, so a normal form never contains one — the fact the
 termination proof (`PipelineOrder.lean`) needs about the command tier.
 
-`pipelineRules` is what a cell is normalized with, under `normalizeT` (Terminate.lean): innermost,
-with the tiered ordering of `Order.lean`, no step budget. Only the `expand` command's nested set
-still runs on `normalizeFuel` (book/TRACKING.md, M5 decision).
+`pipelineRulesWith norm` is what a cell is normalized with, under `normalizeT` (Terminate.lean):
+innermost, with the tiered ordering of `Order.lean`, no step budget. Only the `expand` command's
+nested set still runs on `normalizeFuel` (book/TRACKING.md, M5 decision).
+
+The parameter `norm` is the normalizer the `integrate` command checks its candidates with. It cannot
+be the pipeline itself (the pipeline is being defined), so `Integrate.lean` closes the knot after the
+termination proof: the checker is the pipeline with nested `integrate` refused, and `pipelineRules`
+is the pipeline with that checker.
 -/
 namespace MathEngine
 open Expr
@@ -39,7 +45,7 @@ def simpPlain : List PlainRule := simpRules.map fun r => scalarOnly r.toPlain
 def parityPlain : List PlainRule := parityRules.map scalarOnly
 def expandSet : List PlainRule := expandRules ++ simpPlain ++ parityRules
 
-/-- Notebook commands: `simplify`, `expand`, `rref`, `N`, `subst`. -/
+/-- Notebook commands: `simplify`, `expand`, `rref`, `N`, `subst`, `integrate`. -/
 def cmdSimplify : PlainRule :=
   { name := "cmd.simplify", apply := fun e => Option.map checked <|
       match e with
@@ -86,11 +92,36 @@ def cmdSubst : PlainRule :=
       | .fn "subst" _ => some (refuse "subst takes (expression, variable, value)")
       | _ => none }
 
-def commandRules : List PlainRule := [cmdSimplify, cmdExpand, cmdRref, cmdN, cmdSubst]
+/-- A normalizer with its derivation, as the `integrate` command needs one. -/
+abbrev Norm := Expr → Except String (Expr × Option Derivation)
+
+/-- `integrate(f, x)`: a candidate from the unverified finder (`Antiderivative.lean`), accepted only
+if `norm` takes its derivative back to `f` — exactly, since both are normal forms of the same
+normalizer. The claim is `cmdIntegrate_spec` (Integrate.lean); the finder's steps are the
+sub-derivation, ending with the `int.check` step that carries the differentiation. -/
+def cmdIntegrate (norm : Norm) : PlainRule :=
+  { name := "cmd.integrate", apply := fun e => Option.map checked <|
+      match e with
+      | .fn "integrate" [f, .var x] =>
+        match Anti.anti x f with
+        | none => some (refuse s!"integrate: no antiderivative of {f.toText} found by the available rules (sums, constant factors, powers, the elementary table, linear substitution)")
+        | some (F, steps) =>
+          match norm (D F x) with
+          | .error msg => some (refuse s!"integrate: the candidate {F.toText} could not be differentiated: {msg}")
+          | .ok (g, sub) =>
+            if equal g f then
+              let check : Step := ⟨"int.check", s!"Check: $\\frac\{d}\{d{x}}$ of the candidate simplifies to the integrand, so the candidate is accepted. This step carries the claim; the finder's steps above are unverified guesses.", [], D F x, g, sub⟩
+              some ⟨F, "Antiderivative found by the integration rules and accepted because its derivative simplifies back to the integrand (no constant of integration).", some ⟨Anti.integral f x, steps.push check, F⟩, none⟩
+            else some (refuse s!"integrate: the candidate {F.toText} was rejected: its derivative simplifies to {g.toText}, not to {f.toText}")
+      | .fn "integrate" [_, _] => some (refuse "integrate: the second argument must be a variable")
+      | .fn "integrate" _ => some (refuse "integrate takes an integrand and a variable")
+      | _ => none }
+
+def commandRulesWith (norm : Norm) : List PlainRule := [cmdSimplify, cmdExpand, cmdRref, cmdN, cmdSubst, cmdIntegrate norm]
 
 /-- The matrix rules precede `simp` as in the reference (so `A·A` is a product, not `A^2`); the
 catch-all `la.context` must come after every rule that handles a literal, so it is last. -/
-def pipelineRules : List PlainRule := commandRules ++ diffRules ++ matrixRules ++ simpPlain ++ parityPlain ++ contextRules
+def pipelineRulesWith (norm : Norm) : List PlainRule := commandRulesWith norm ++ diffRules ++ matrixRules ++ simpPlain ++ parityPlain ++ contextRules
 
 
 end MathEngine
