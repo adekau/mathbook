@@ -44,7 +44,13 @@ jobs:
           restore-keys: |
             wasm-${{ hashFiles('engine/lean-toolchain', 'engine/wasm/**', 'scripts/build-lean-wasm-runtime.sh') }}-
       - run: npm ci
-      - name: Build the engine for wasm (elan installs the pinned toolchain on first use)
+      - name: Install the pinned Lean toolchain and show the tool versions
+        run: |
+          elan toolchain install "$(cat engine/lean-toolchain)"
+          (cd engine && lean --version && lake --version)
+          emcc --version | head -1
+          nproc
+      - name: Build the engine for wasm
         run: npm run wasm
       - name: Bundle the notebook
         run: npm run bundle
