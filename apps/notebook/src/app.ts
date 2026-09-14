@@ -823,7 +823,15 @@ function markActive() {
 
 /** A step's explanation for the row: the Lean names (in backticks, usually parenthesized) belong in the panel, not here. */
 function plainWhy(md: string): string {
-  return md.replace(/\s*\([^()]*`[^`]*`[^()]*\)/g, "").replace(/`[^`]*`/g, "").replace(/\s+([.,;:])/g, "$1").trim();
+  let out = "";
+  for (let i = 0; i < md.length; i++) {
+    if (md[i] === "(") {
+      const j = md.indexOf(")", i);
+      if (j > i && md.slice(i, j).includes("`")) { i = j; out = out.trimEnd(); continue; }
+    }
+    out += md[i];
+  }
+  return out.replace(/`([^`]*)`/g, "$1").replace(/\s+([.,;:])/g, "$1").trim();
 }
 
 /** Re-render everything below a cell's input, leaving the input element untouched. */
