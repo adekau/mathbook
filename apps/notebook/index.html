@@ -237,6 +237,21 @@ svg .curve { fill:none; stroke:var(--acc); stroke-width:2; stroke-linejoin:round
 .cell:hover .cellacts, .cell.active .cellacts { opacity:1; pointer-events:auto; }
 .cellacts span { display:inline-flex; align-items:center; gap:4px; height:20px; font-size:9.5px; font-weight:600; font-family:var(--font); color:var(--p-btn-ink); background:linear-gradient(180deg, var(--p-btn-a), var(--p-btn-b)); border:1px solid var(--p-btn-br); border-radius:3px; padding:0 7px; cursor:pointer; box-shadow:0 1px 0 var(--p-hl) inset, 0 1px 2px var(--p-sh); }
 .cellacts span.more { padding:0 6px; font-size:12px; font-weight:700; }
+.modal { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.35); }
+.modalcard { width:min(560px, 92vw); max-height:80vh; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow:var(--pop); padding:16px 18px; font-family:var(--font); color:var(--ink); }
+.modalcard h3 { margin:0 0 10px; font-size:14px; }
+.modalcard .muted { color:var(--ink-mut); font-size:12.5px; }
+.liblist { overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+.librow { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:7px; cursor:pointer; }
+.librow:hover { background:var(--hov); }
+.librow .main { flex:1; min-width:0; }
+.librow .name { font-family:var(--mono); font-size:12.5px; }
+.librow .when { font-size:11px; color:var(--ink-mut); margin-top:2px; }
+.librow .del { font-size:11px; color:var(--danger); opacity:0; }
+.librow:hover .del { opacity:1; }
+.modalfoot { display:flex; align-items:center; gap:8px; margin-top:14px; }
+.modalfoot button { font:12px var(--font); padding:5px 12px; border-radius:5px; border:1px solid var(--btn-edge); background:var(--btn); color:var(--ink-2); cursor:pointer; }
+.modalfoot button.primary { background:var(--primary); color:var(--pri-ink); border-color:var(--pri-edge); }
 .cellmenu { position:absolute; z-index:30; min-width:200px; padding:5px; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; box-shadow:var(--pop); font-family:var(--font); }
 .cellmenu .item { position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 10px; border-radius:5px; font-size:12.5px; color:var(--ink); cursor:default; white-space:nowrap; }
 .cellmenu .item:hover { background:var(--hov); }

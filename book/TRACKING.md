@@ -285,3 +285,9 @@ Notebook tabs (2026-09-14): several notebooks open at once, one tab each, each w
    is italic with a `*` while the notebook differs from its last save or open; the browser autosave keeps every open
    tab, which is current, and the unsaved marks; a restored notebook re-runs its cells when its tab is first shown
    and, if it was clean, stays clean.
+Cell menu, browser library, Pages (2026-09-14): each cell has a ⋮ menu (send to any scene or a new one, duplicate,
+   move, copy input / output / output as LaTeX, clear output, delete). File › Save keeps the notebook in the
+   browser's local storage under its name (`chalkmath.library`; Cmd/Ctrl+S), File › Open is a picker over those
+   with delete, and Export / Import move `.chalk` files in and out. `.github/workflows/pages.yml` builds the wasm
+   engine (runtime cached) and publishes `apps/notebook/dist` to GitHub Pages; the repository needs Settings ›
+   Pages › Source set to "GitHub Actions" once.

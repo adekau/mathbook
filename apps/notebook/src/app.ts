@@ -558,6 +558,79 @@ async function restartKernel() {
   log("ok", "kernel restarted: the session is empty");
 }
 
+// ---------------------------------------------------------------------------
+// The library: notebooks saved in the browser (local storage), by name
+// ---------------------------------------------------------------------------
+
+interface LibraryEntry { file: ChalkFile; savedAt: string }
+type Library = Record<string, LibraryEntry>;
+function readLibrary(): Library {
+  try { return JSON.parse(localStorage.getItem("chalkmath.library") ?? "{}") as Library; } catch { return {}; }
+}
+function writeLibrary(lib: Library): boolean {
+  try { localStorage.setItem("chalkmath.library", JSON.stringify(lib)); return true; }
+  catch { log("err", "could not save: the browser's storage is full or unavailable"); return false; }
+}
+
+/** Save the current notebook in the browser under its name. */
+function saveNotebook() {
+  const text = serializeNotebook();
+  const lib = readLibrary();
+  lib[S.docName] = { file: JSON.parse(text) as ChalkFile, savedAt: new Date().toISOString() };
+  if (!writeLibrary(lib)) return;
+  const d = currentDoc(); if (d) d.savedText = text;
+  renderTabs(); autosave();
+  log("ok", `saved ${S.docName} in this browser`);
+}
+function saveNotebookAs() {
+  const name = window.prompt("Save notebook as", S.docName);
+  if (!name) return;
+  S.docName = name.endsWith(".chalk") ? name : `${name.replace(/\.lemma$/, "")}.chalk`;
+  const d = currentDoc(); if (d) d.name = S.docName;
+  renderChrome(); saveNotebook();
+}
+
+/** Open a saved notebook: a small picker over the library, with a delete for each entry. */
+function openNotebook() {
+  closeModal();
+  const lib = readLibrary();
+  const names = Object.keys(lib).sort((a, b) => (lib[b]!.savedAt > lib[a]!.savedAt ? 1 : -1));
+  const box = h("div", "modal");
+  const card = h("div", "modalcard");
+  card.append(h("h3", undefined, "Open a notebook"));
+  if (!names.length) card.append(h("p", "muted", "Nothing saved in this browser yet. File › Save keeps the current notebook here; File › Import opens a .chalk file."));
+  const list = h("div", "liblist");
+  for (const name of names) {
+    const row = h("div", "librow");
+    const when = new Date(lib[name]!.savedAt);
+    const main = h("div", "main");
+    main.append(h("div", "name", name), h("div", "when", `${lib[name]!.file.cells.length} cells · saved ${when.toLocaleString()}`));
+    main.addEventListener("click", () => { closeModal(); openFromLibrary(name); });
+    const del = h("span", "del", "delete"); del.title = "Remove from this browser";
+    del.addEventListener("click", (ev) => { ev.stopPropagation(); if (window.confirm(`Delete ${name} from this browser?`)) { const l = readLibrary(); delete l[name]; writeLibrary(l); openNotebook(); } });
+    row.append(main, del);
+    list.append(row);
+  }
+  card.append(list);
+  const foot = h("div", "modalfoot");
+  const imp = h("button", undefined, "Import from file…"); imp.addEventListener("click", () => { closeModal(); importNotebook(); });
+  const close = h("button", "primary", "Close"); close.addEventListener("click", closeModal);
+  foot.append(imp, h("div", "spacer"), close);
+  card.append(foot);
+  box.append(card);
+  box.addEventListener("click", (ev) => { if (ev.target === box) closeModal(); });
+  document.body.append(box);
+}
+function closeModal() { document.querySelectorAll(".modal").forEach((m) => m.remove()); }
+
+/** A notebook from the library becomes a tab (or replaces an untouched one); one already open is shown. */
+function openFromLibrary(name: string) {
+  const already = S.docs.findIndex((d) => d.name === name);
+  if (already >= 0) { loadDoc(already); switchTab("notebook"); return; }
+  const entry = readLibrary()[name]; if (!entry) return;
+  void loadNotebook(JSON.stringify(entry.file), name);
+}
+
 function download(name: string, text: string) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
@@ -565,20 +638,9 @@ function download(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function saveNotebook() {
-  const text = serializeNotebook();
-  download(S.docName, text);
-  const d = currentDoc(); if (d) d.savedText = text;
-  renderTabs(); autosave();
-  log("ok", `saved ${S.docName}`);
-}
-function saveNotebookAs() {
-  const name = window.prompt("Save notebook as", S.docName);
-  if (!name) return;
-  S.docName = name.endsWith(".chalk") ? name : `${name.replace(/\.lemma$/, "")}.chalk`;
-  renderChrome(); saveNotebook();
-}
-function openNotebook() {
+/** Export the current notebook as a .chalk file (a download). */
+function exportNotebook() { download(S.docName, serializeNotebook()); log("ok", `exported ${S.docName}`); }
+function importNotebook() {
   const inp = document.createElement("input");
   inp.type = "file"; inp.accept = ".chalk,.lemma,.json,application/json";
   inp.addEventListener("change", () => {
@@ -694,7 +756,7 @@ function renderChrome() {
   brand.append(mark, h("span", "name", "ChalkMath"));
   const menus = h("div", "menus");
   const MENUS: Record<string, [string, () => void][]> = {
-    File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs]],
+    File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs], ["Export to file…", exportNotebook], ["Import from file…", importNotebook]],
     Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
     View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }],
       [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("chalkmath.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }],
@@ -2070,6 +2132,10 @@ renderPanelHead();
 renderPanel();
 renderView();
 document.addEventListener("click", () => { if (S.menu) { S.menu = null; renderChrome(); } closeCellMenu(); });
+document.addEventListener("keydown", (ev) => {
+  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "s") { ev.preventDefault(); if (ev.shiftKey) saveNotebookAs(); else saveNotebook(); }
+  if (ev.key === "Escape") closeModal();
+});
 const saved = restoreAutosave();
 let restoredActive = 0;
 if (saved) {

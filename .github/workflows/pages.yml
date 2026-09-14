@@ -1,0 +1,61 @@
+name: Deploy ChalkMath to GitHub Pages
+
+# Builds the notebook — the Lean engine compiled to WebAssembly, then the static page — and publishes
+# apps/notebook/dist. The wasm runtime (Lean's runtime + Init for wasm32, built from source by
+# scripts/build-lean-wasm-runtime.sh) is cached between runs; the first run takes ~15 minutes.
+# One-time setup on the repository: Settings › Pages › Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths: ["engine/**", "apps/**", "packages/**", "scripts/**", "package.json", "package-lock.json", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: Install elan (the Lean toolchain pinned in engine/lean-toolchain)
+        run: |
+          curl -sSfL https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          ./elan-init -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - uses: mymindstorm/setup-emsdk@v14
+        with: { version: latest, actions-cache-folder: emsdk-cache }
+      - name: Cache the wasm runtime and the engine build
+        uses: actions/cache@v4
+        with:
+          path: |
+            engine/toolchains
+            engine/.lake
+          key: wasm-${{ hashFiles('engine/lean-toolchain', 'engine/wasm/**', 'scripts/build-lean-wasm-runtime.sh') }}-${{ hashFiles('engine/**/*.lean') }}
+          restore-keys: |
+            wasm-${{ hashFiles('engine/lean-toolchain', 'engine/wasm/**', 'scripts/build-lean-wasm-runtime.sh') }}-
+      - run: npm ci
+      - name: Build the engine for wasm (elan installs the pinned toolchain on first use)
+        run: npm run wasm
+      - name: Bundle the notebook
+        run: npm run bundle
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: apps/notebook/dist }
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
