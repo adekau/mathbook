@@ -190,12 +190,12 @@ const S = {
   busy: false,
   comp: null as { cell: Cell; items: CompItem[]; index: number; x: number; y: number } | null,
   theme: "dark" as "dark" | "light",
-  docName: "lesson-04.lemma",
+  docName: "untitled.chalk",
   deBruijn: false,
   /** Show the engine's rendering of the parsed input under each cell (View menu). */
-  showEcho: (() => { try { return localStorage.getItem("lemma.echo") !== "off"; } catch { return true; } })(),
+  showEcho: (() => { try { return localStorage.getItem("chalkmath.echo") !== "off"; } catch { return true; } })(),
   /** Size of rendered mathematics in the cells (View menu): small, normal or large. */
-  outSize: (() => { try { return (localStorage.getItem("lemma.outsize") as "s" | "m" | "l" | null) ?? "m"; } catch { return "m" as const; } })() as "s" | "m" | "l",
+  outSize: (() => { try { return (localStorage.getItem("chalkmath.outsize") as "s" | "m" | "l" | null) ?? "m"; } catch { return "m" as const; } })() as "s" | "m" | "l",
   menu: null as string | null,
   studio: { scenes: [] as Scene[], active: 0, playing: false, t: 0, speed: 1, codeOpen: true, copied: false },
 };
@@ -221,11 +221,11 @@ function log(level: LogLine["level"], text: string) {
 function applyTheme(t: "dark" | "light") {
   S.theme = t;
   document.documentElement.setAttribute("data-theme", t);
-  try { localStorage.setItem("lemma.theme", t); } catch { /* private mode */ }
+  try { localStorage.setItem("chalkmath.theme", t); } catch { /* private mode */ }
 }
 function initTheme() {
   let t: string | null = null;
-  try { t = localStorage.getItem("lemma.theme"); } catch { /* private mode */ }
+  try { t = localStorage.getItem("chalkmath.theme") ?? localStorage.getItem("lemma.theme"); } catch { /* private mode */ }
   applyTheme(t === "light" ? "light" : "dark");
 }
 
@@ -375,18 +375,19 @@ function wireTerm(host: HTMLElement, cell: Cell, term: TermRef) {
 }
 
 // ---------------------------------------------------------------------------
-// Notebook files (.lemma): sources, outputs and studio scenes as JSON
+// Notebook files (.chalk): sources, outputs and studio scenes as JSON
 // ---------------------------------------------------------------------------
 
-interface LemmaFile {
-  lemma: 1; name: string;
+interface ChalkFile {
+  /** Format version. Files written as `.lemma` before the rename carry `lemma: 1` instead and still open. */
+  chalk?: 1; lemma?: 1; name: string;
   cells: { src: string; showWork: boolean; label: number | null; outLatex?: string | undefined; outText?: string | undefined; form?: string | undefined; echoLatex?: string | undefined; steps?: Step[] | undefined; error?: Cell["error"] | undefined; plot?: PlotData | undefined }[];
   scenes: Scene[];
 }
 
 function serializeNotebook(): string {
-  const doc: LemmaFile = {
-    lemma: 1, name: S.docName,
+  const doc: ChalkFile = {
+    chalk: 1, name: S.docName,
     cells: S.cells.map((c) => ({ src: c.input?.value ?? c.src, showWork: c.showWork, label: c.label, outLatex: c.outLatex, outText: c.outText, form: c.form, echoLatex: c.echoLatex, steps: c.steps, error: c.error, plot: c.plot })),
     scenes: ST.scenes,
   };
@@ -396,11 +397,11 @@ function serializeNotebook(): string {
 /** Replace the notebook with a file's contents: saved outputs show at once, then every cell is
  *  re-run in order so the engine's session (and with it `explain`) matches what is shown. */
 async function loadNotebook(text: string, name?: string) {
-  let doc: LemmaFile;
-  try { doc = JSON.parse(text) as LemmaFile; } catch { log("err", "not a .lemma file: invalid JSON"); return; }
-  if (doc.lemma !== 1 || !Array.isArray(doc.cells)) { log("err", "not a .lemma file"); return; }
+  let doc: ChalkFile;
+  try { doc = JSON.parse(text) as ChalkFile; } catch { log("err", "not a .chalk file: invalid JSON"); return; }
+  if ((doc.chalk !== 1 && doc.lemma !== 1) || !Array.isArray(doc.cells)) { log("err", "not a .chalk file"); return; }
   await restartKernel();
-  S.docName = name ?? doc.name ?? "untitled.lemma";
+  S.docName = name ?? doc.name ?? "untitled.chalk";
   S.cells = [];
   for (const c of doc.cells) {
     const cell = addCell(c.src);
@@ -442,12 +443,12 @@ function saveNotebook() { download(S.docName, serializeNotebook()); log("ok", `s
 function saveNotebookAs() {
   const name = window.prompt("Save notebook as", S.docName);
   if (!name) return;
-  S.docName = name.endsWith(".lemma") ? name : `${name}.lemma`;
+  S.docName = name.endsWith(".chalk") ? name : `${name.replace(/\.lemma$/, "")}.chalk`;
   renderChrome(); saveNotebook();
 }
 function openNotebook() {
   const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".lemma,.json,application/json";
+  inp.type = "file"; inp.accept = ".chalk,.lemma,.json,application/json";
   inp.addEventListener("change", () => {
     const f = inp.files?.[0]; if (!f) return;
     void f.text().then((t) => loadNotebook(t, f.name));
@@ -457,7 +458,7 @@ function openNotebook() {
 function newNotebook() {
   void (async () => {
     await restartKernel();
-    S.docName = "untitled.lemma"; S.cells = []; addCell(); ST.scenes = []; ST.active = 0;
+    S.docName = "untitled.chalk"; S.cells = []; addCell(); ST.scenes = []; ST.active = 0;
     renderChrome(); renderCells(); renderSidebar();
     autosave();
     log("ok", "new notebook");
@@ -466,10 +467,10 @@ function newNotebook() {
 
 /** The notebook survives a reload: autosaved to the browser after every run or edit. */
 function autosave() {
-  try { localStorage.setItem("lemma.autosave", serializeNotebook()); } catch { /* storage may be unavailable */ }
+  try { localStorage.setItem("chalkmath.autosave", serializeNotebook()); } catch { /* storage may be unavailable */ }
 }
 function restoreAutosave(): string | null {
-  try { return localStorage.getItem("lemma.autosave"); } catch { return null; }
+  try { return localStorage.getItem("chalkmath.autosave") ?? localStorage.getItem("lemma.autosave"); } catch { return null; }
 }
 
 // ---------------------------------------------------------------------------
@@ -554,16 +555,16 @@ function renderChrome() {
   // title bar
   const tb = $(".titlebar"); tb.innerHTML = "";
   const brand = h("div", "brand");
-  brand.append(h("span", "mark"), h("span", "name", "Lemma"));
+  brand.append(h("span", "mark"), h("span", "name", "ChalkMath"));
   const menus = h("div", "menus");
   const MENUS: Record<string, [string, () => void][]> = {
     File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs]],
     Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
     View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }],
-      [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("lemma.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }],
+      [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("chalkmath.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }],
       ...(["s", "m", "l"] as const).map((sz): [string, () => void] => [`${S.outSize === sz ? "✓ " : "   "}Math size: ${{ s: "small", m: "normal", l: "large" }[sz]}`, () => {
         S.outSize = sz; document.documentElement.dataset["outsize"] = sz;
-        try { localStorage.setItem("lemma.outsize", sz); } catch { /* private mode */ }
+        try { localStorage.setItem("chalkmath.outsize", sz); } catch { /* private mode */ }
         renderChrome();
       }])],
     Run: [["Run all", () => void runAll()], ["Run cell", () => { const c = S.cells[S.active]; if (c) void runCell(c); }]],
@@ -592,7 +593,7 @@ function renderChrome() {
   const state = S.busy ? "running" : S.caps ? "idle" : "offline";
   dot.style.background = S.busy ? "var(--acc)" : S.caps ? "var(--ok)" : "var(--danger)";
   const sel = document.createElement("select");
-  for (const [v, label] of [["lean-worker", "lemma-engine · wasm"], ["http", "lemma-engine · http"]] as const) {
+  for (const [v, label] of [["lean-worker", "kernel · wasm"], ["http", "kernel · http"]] as const) {
     const o = document.createElement("option"); o.value = v; o.textContent = label; o.selected = S.engineMode === v; sel.append(o);
   }
   sel.addEventListener("change", () => { S.engineMode = sel.value as typeof S.engineMode; void connect(); });
@@ -635,26 +636,20 @@ function renderChrome() {
     mk("Clear", "Clear all outputs", clearOutputs),
     mk("+ Cell", "Add a cell", () => { const c = addCell(); focusCell(S.cells.indexOf(c)); }),
   );
-  const done = S.cells.filter((c) => c.outLatex || c.error).length;
-  tl.append(group, h("div", "vsep"), h("span", "count", `${S.cells.length} cells · ${done} evaluated`),
-    h("div", "spacer"), h("span", "hint", "Type to autocomplete · Enter runs the cell"));
+  tl.append(group, h("div", "spacer"), h("span", "hint", "Enter runs the cell"));
 
   // status bar
   const sb = $(".statusbar"); sb.innerHTML = "";
   const rules = new Set(S.cells.flatMap((c) => c.steps ?? []).map((s) => s.rule));
+  const done = S.cells.filter((c) => c.outLatex || c.error).length;
   sb.append(
     h("span", undefined, `Mode: ${S.tab}`), h("span", "pipe", "|"),
     h("span", undefined, `Cell ${S.active + 1}`), h("span", "pipe", "|"),
-    h("span", undefined, `${S.cells.length} cells`),
+    h("span", undefined, `${S.cells.length} cells · ${done} evaluated`),
     h("div", "spacer"),
     h("span", "rules", `${rules.size} rules applied`), h("span", "pipe", "|"),
-    h("span", undefined, S.caps?.verified ? "exact arithmetic · verified engine" : "exact arithmetic"),
+    h("span", undefined, "type \\ for symbols · Tab completes"),
   );
-  if (S.caps?.termination) {
-    const t = h("span", undefined, S.caps.termination.status === "proven" ? "· termination proven" : "· step budget");
-    t.title = S.caps.termination.summary + (S.caps.termination.theorem ? ` (${S.caps.termination.theorem})` : "");
-    sb.append(h("span", "pipe", "|"), t);
-  }
 }
 
 function renderView() {
@@ -1492,7 +1487,7 @@ function manimSceneCode(scene: Scene | null): string {
   if (!on.length) return '# This scene has no shots yet.\n# Open the notebook and press "→ Scene" on an evaluated cell.';
   const cls = pyName(scene.name);
   const q = (s: string) => s.replace(/"/g, "'");
-  const L = ["from manim import *", ...(on.some((s) => s.plot) ? ["import numpy as np"] : []), "", "", `class ${cls}(Scene):`, `    """${q(scene.name)} — storyboard generated by Lemma Manim Studio."""`, "", "    def construct(self):"];
+  const L = ["from manim import *", ...(on.some((s) => s.plot) ? ["import numpy as np"] : []), "", "", `class ${cls}(Scene):`, `    """${q(scene.name)} — storyboard generated by ChalkMath Manim Studio."""`, "", "    def construct(self):"];
   let first = true;
   for (const s of on) {
     L.push(`        # ${q(s.label)}`);
@@ -1634,7 +1629,7 @@ function renderStudio() {
   const ch = h("div", "codehead");
   const title = h("span", "title", ST.codeOpen ? "▾ Manim scene" : "▸ Manim scene");
   title.addEventListener("click", () => { ST.codeOpen = !ST.codeOpen; renderStudio(); });
-  const file = h("span", "file", scene ? `${pyName(scene.name).toLowerCase()}.py` : "lemma_scene.py");
+  const file = h("span", "file", scene ? `${pyName(scene.name).toLowerCase()}.py` : "chalkmath_scene.py");
   const cmd = h("span", "cmd", scene ? `manim -pqh ${pyName(scene.name).toLowerCase()}.py` : "");
   const copy = h("span", "pbtn", ST.copied ? "Copied" : "Copy");
   copy.addEventListener("click", () => {
@@ -1873,7 +1868,7 @@ const saved = restoreAutosave();
 if (saved) {
   // sources and outputs come back at once; the engine session is rebuilt by re-running once connected
   try {
-    const doc = JSON.parse(saved) as LemmaFile;
+    const doc = JSON.parse(saved) as ChalkFile;
     S.docName = doc.name ?? S.docName;
     for (const c of doc.cells) { const cell = addCell(c.src); cell.showWork = c.showWork ?? false; cell.label = c.label ?? null; if (c.outLatex) cell.outLatex = c.outLatex; if (c.outText) cell.outText = c.outText; if (c.form) cell.form = c.form; if (c.echoLatex) cell.echoLatex = c.echoLatex; if (c.steps) cell.steps = c.steps; if (c.plot) cell.plot = c.plot; }
     nextLabel = Math.max(0, ...S.cells.map((c) => c.label ?? 0)) + 1;

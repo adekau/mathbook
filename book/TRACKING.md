@@ -274,3 +274,8 @@ Trig and exp powers in `integrate` (2026-09-14, Alex: "the word", then `integrat
    and `ℯ` are identifiers (`ℯ` parses as `exp(1)`, so `ln ℯ = 1` and `d/dx ℯ^x = ℯ^x` come from the exp rules and
    `N(ℯ)` from the table; the printer shows `exp(1)` as `e`/`ℯ`), and the notebook's `\` completions cover `\pi`,
    `\e`, `\phi` and the Greek alphabet.
+Renamed (2026-09-14, Alex: "ChalkMath, chalkmath.com is available"): the notebook is ChalkMath; files are `.chalk`
+   (`chalk: 1`; old `.lemma` files with `lemma: 1` still open); local storage keys are `chalkmath.*` with the old
+   ones read as a fallback; the engine selector says "kernel · wasm / http". Toolbar trimmed to the Enter hint;
+   cell counts moved to the status bar; the "exact arithmetic · verified engine · termination proven" line is gone
+   (the statuses on the steps say it where it matters). Light-theme button edges darkened.

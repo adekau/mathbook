@@ -44,7 +44,7 @@ recorded a derivation, and described the picture; nothing in the drawing evaluat
 
 \section{Files, and the session behind them}
 
-A notebook file is JSON: the cells' sources, their saved outputs and derivations, and the studio's
+A notebook file (\texttt{.chalk}) is JSON: the cells' sources, their saved outputs and derivations, and the studio's
 scenes. Opening one shows the saved outputs at once and then re-runs every cell in order, so that
 the engine's session --- and with it \texttt{explain}, which needs the derivation to be in the
 engine's memory --- matches what is on screen. The notebook also autosaves to the browser after
