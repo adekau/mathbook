@@ -52,8 +52,10 @@ jobs:
           nproc
       - name: Build the engine for wasm
         run: npm run wasm
-      - name: Bundle the notebook
-        run: npm run bundle
+      - name: Build the workspace packages, then bundle the notebook
+        run: |
+          npm run build
+          npm run bundle
       - uses: actions/upload-pages-artifact@v3
         with: { path: apps/notebook/dist }
   deploy:
