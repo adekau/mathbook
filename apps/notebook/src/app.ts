@@ -809,11 +809,14 @@ class Morph {
   private readonly addedEls: { el: HTMLElement; g: Glyph }[] = [];
   private readonly writeEls: { el: HTMLElement; g: Glyph }[] = [];
 
-  constructor(prevTex: string | null, curTex: string, fontSize: number) {
+  private readonly H: number;
+
+  constructor(prevTex: string | null, curTex: string, fontSize: number, height?: number) {
     this.B = measure(curTex, fontSize);
     this.A = prevTex ? measure(prevTex, fontSize) : { glyphs: [], w: 0, h: 0 };
+    this.H = height ?? Math.max(this.A.h, this.B.h);
     this.el = document.createElement("div");
-    this.el.style.cssText = `position:relative; height:${Math.max(this.A.h, this.B.h)}px; margin:0 auto`;
+    this.el.style.cssText = `position:relative; height:${this.H}px; margin:0 auto`;
     if (!this.A.glyphs.length) {
       for (const g of this.B.glyphs) { const e = glyphEl(g); this.writeEls.push({ el: e, g }); this.el.append(e); }
       this.gone = ""; this.added = "";
@@ -838,10 +841,13 @@ class Morph {
       if (g.rule) el.style.background = color; else el.style.color = color;
     };
     const q = clamp01(p);
+    // every expression is centred vertically in the scene's common height, so a shot boundary
+    // (where one morph hands over to the next) moves nothing
+    const oyB = (this.H - this.B.h) / 2, oyA = (this.H - this.A.h) / 2;
     if (this.writeEls.length) {
       this.el.style.width = `${this.B.w}px`;
       const n = this.writeEls.length, span = Math.max(1, n * 0.55);
-      this.writeEls.forEach(({ el, g }, i) => put(el, g, g.x, g.y, clamp01((q * (n + span) - i) / span), ink));
+      this.writeEls.forEach(({ el, g }, i) => put(el, g, g.x, g.y + oyB, clamp01((q * (n + span) - i) / span), ink));
       return;
     }
     const e = easeIO(q);
@@ -849,20 +855,36 @@ class Morph {
     this.el.style.width = `${W}px`;
     const offA = (W - this.A.w) / 2, offB = (W - this.B.w) / 2;
     for (const { el, a, b } of this.pairs) {
-      put(el, b, (a.x + offA) + ((b.x + offB) - (a.x + offA)) * e, a.y + (b.y - a.y) * e, 1, ink);
+      put(el, b, (a.x + offA) + ((b.x + offB) - (a.x + offA)) * e, (a.y + oyA) + ((b.y + oyB) - (a.y + oyA)) * e, 1, ink);
       if (b.rule) el.style.width = `${a.w + (b.w - a.w) * e}px`;
     }
-    for (const { el, g } of this.goneEls) put(el, g, g.x + offA, g.y, clamp01(1 - q * 1.9), gone, 1 - 0.25 * clamp01(q * 1.9));
-    for (const { el, g } of this.addedEls) { const o = clamp01((q - 0.38) / 0.5); put(el, g, g.x + offB, g.y, o, o > 0.94 ? ink : added); }
+    for (const { el, g } of this.goneEls) put(el, g, g.x + offA, g.y + oyA, clamp01(1 - q * 1.9), gone, 1 - 0.25 * clamp01(q * 1.9));
+    for (const { el, g } of this.addedEls) { const o = clamp01((q - 0.38) / 0.5); put(el, g, g.x + offB, g.y + oyB, o, o > 0.94 ? ink : added); }
   }
 }
 
-let liveMorph: { key: string; morph: Morph } | null = null;
-function morphFor(prevTex: string | null, curTex: string, fontSize: number): Morph {
-  const key = `${fontSize}|${prevTex ?? ""}→${curTex}`;
-  if (liveMorph?.key !== key) liveMorph = { key, morph: new Morph(prevTex, curTex, fontSize) };
-  return liveMorph.morph;
+const STAGE_FONT = 34;
+
+/**
+ * Everything a scene's playback needs, built before the first frame: every term measured, one
+ * height for the whole scene, and one Morph per shot (from the shot before it, or written on).
+ * Doing this lazily at each shot boundary is what makes playback hitch there.
+ */
+interface Prepared { key: string; morphs: Map<number, Morph>; H: number }
+let prepared: Prepared | null = null;
+function prepare(on: Live[]): Prepared {
+  const key = on.map((s) => `${s.id}:${s.anim}:${s.tex}`).join("|");
+  if (prepared?.key === key) return prepared;
+  const H = Math.max(1, ...on.map((s) => measure(s.tex, STAGE_FONT).h));
+  const morphs = new Map<number, Morph>();
+  on.forEach((s, i) => {
+    const writeOn = i === 0 || s.anim === "Write" || s.anim === "Create";
+    morphs.set(s.id, new Morph(writeOn ? null : on[i - 1]!.tex, s.tex, STAGE_FONT, H));
+  });
+  prepared = { key, morphs, H };
+  return prepared;
 }
+let stageShot: number | null = null;
 
 // ---------------------------------------------------------------------------
 // Manim Studio: scenes, shots, playback, code
@@ -1124,6 +1146,7 @@ function renderStage() {
   const foot = stage.querySelector(".foot") as HTMLElement;
   const label = stage.querySelector(".label") as HTMLElement;
   if (!on.length) {
+    stageShot = null;
     center.innerHTML = ""; foot.innerHTML = "";
     label.textContent = "1920×1080 · —";
     const empty = h("div", "empty");
@@ -1140,12 +1163,9 @@ function renderStage() {
   let cur = on[0]!, ci = 0;
   for (let k = 0; k < on.length; k++) if (t >= on[k]!.start - 1e-6) { cur = on[k]!; ci = k; }
   const p = Math.max(0, Math.min(1, (t - cur.start) / Math.max(0.001, cur.dur)));
-  const writeOn = ci === 0 || cur.anim === "Write" || cur.anim === "Create";
-  const prev = !writeOn && ci > 0 ? on[ci - 1]! : null;
   label.textContent = `1920×1080 · shot ${ci + 1} of ${on.length}`;
 
-  const fontSize = 34;
-  const morph = morphFor(prev ? prev.tex : null, cur.tex, fontSize);
+  const morph = prepare(on).morphs.get(cur.id)!;
   let box = center.querySelector(".morph") as HTMLElement | null;
   if (!box || box.firstElementChild !== morph.el) {
     center.innerHTML = "";
@@ -1156,11 +1176,15 @@ function renderStage() {
   const need = morph.width;
   box.style.transform = `scale(${need > avail ? Math.max(0.42, avail / need) : 1})`;
 
-  foot.innerHTML = "";
+  if (stageShot !== cur.id || !foot.childElementCount) {
+    stageShot = cur.id;
+    foot.innerHTML = "";
+    if (ci > 0) foot.append(h("span", "caption", cur.label));
+    if (morph.gone) foot.append(h("span", "mark gone", `− ${morph.gone}`));
+    if (morph.added) foot.append(h("span", "mark added", `+ ${morph.added}`));
+  }
   const capOpacity = String(Math.min(1, p * 3));
-  if (ci > 0) { const c = h("span", "caption", cur.label); c.style.opacity = capOpacity; foot.append(c); }
-  if (morph.gone) { const m = h("span", "mark gone", `− ${morph.gone}`); m.style.opacity = capOpacity; foot.append(m); }
-  if (morph.added) { const m = h("span", "mark added", `+ ${morph.added}`); m.style.opacity = capOpacity; foot.append(m); }
+  for (const c of Array.from(foot.children)) (c as HTMLElement).style.opacity = capOpacity;
 
   const done = t >= total - 1e-6;
   $(".studio .shotlist")?.querySelectorAll<HTMLElement>(".shot").forEach((r) => {
