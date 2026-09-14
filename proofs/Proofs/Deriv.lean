@@ -54,6 +54,7 @@ mutual
     | ρ, .fn f es => fnD ρ f es
     | _, .matrix _ => 0
   def fnD : EnvR → String → List Expr → ℝ
+    | _, f, [] => constR f
     | ρ, f, [a] => applyFn f (evalD ρ a)
     | ρ, f, [g, v] =>
       if f = "diff" then
@@ -80,7 +81,7 @@ end
 @[simp] theorem fnD_one (ρ : EnvR) (f : String) (a : Expr) : fnD ρ f [a] = applyFn f (evalD ρ a) := rfl
 theorem fnD_two (ρ : EnvR) (f : String) (g v : Expr) :
     fnD ρ f [g, v] = if f = "diff" then (match v with | .var x => deriv (fun t => evalD (upd ρ x t) g) (ρ x) | _ => 0) else 0 := rfl
-@[simp] theorem fnD_nil (ρ : EnvR) (f : String) : fnD ρ f [] = 0 := rfl
+@[simp] theorem fnD_nil (ρ : EnvR) (f : String) : fnD ρ f [] = constR f := rfl
 @[simp] theorem fnD_long (ρ : EnvR) (f : String) (a b c : Expr) (r : List Expr) :
     fnD ρ f (a :: b :: c :: r) = 0 := rfl
 @[simp] theorem fnD_two_ne (ρ : EnvR) {f : String} (g v : Expr) (h : f ≠ "diff") : fnD ρ f [g, v] = 0 := by
@@ -153,7 +154,7 @@ mutual
     | .fn f es, h => by
       obtain ⟨hne, hl⟩ := h
       match es, hl with
-      | [], _ => simp [evalR]
+      | [], _ => rfl
       | [a], ⟨ha, _⟩ => simp only [evalD_fn, fnD_one, evalR_fn₁, evalD_eq_evalR ρ ha]
       | [g, v], _ => simp [fnD_two_ne _ _ _ hne, evalR]
       | _ :: _ :: _ :: _, _ => simp [evalR]

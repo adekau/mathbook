@@ -47,6 +47,7 @@ const DOCS: Doc[] = [
   { name: "exp", sig: "exp(x)", blurb: "Its own derivative and its own antiderivative.", ref: "https://mathworld.wolfram.com/ExponentialFunction.html", examples: ["diff(exp(2x), x)", "ln(exp(x))"] },
   { name: "ln", sig: "ln(x)", blurb: "Natural logarithm. Derivative 1/x.", ref: "https://mathworld.wolfram.com/NaturalLogarithm.html", examples: ["diff(ln(x), x)"] },
   { name: "abs", sig: "abs(x)", blurb: "Absolute value; folds on numeric arguments.", examples: ["abs(-3)"] },
+  { name: "i", sig: "i · conj(z) · re(z) · im(z) · abs(z) · pi · ℯ", blurb: "The imaginary unit, with i² = −1. Gaussian numerals a + b·i multiply, divide and take powers exactly; conj, re, im and abs read them; sin, cos and tan take exact values at rational multiples of π; and exp(iθ) becomes cos θ + i sin θ where both are exact, so ℯ^(π i) is −1. A cell that mentions i is read over ℂ and shows each rule's status there.", examples: ["ℯ^(pi*i)", "(1+i)*(2-i)", "abs(3+4i)", "cos(pi/3)"] },
   { name: "%", sig: "% · %% · %n", blurb: "The previous output, the one before it, or Out[n]: Mathematica's output references. The engine numbers every evaluation and substitutes the value before anything else happens, so the input interpretation shows what % stood for.", examples: ["diff(%, x)", "rref(%)", "%1 + %2"] },
   { name: "let", sig: "let name = e · let f(x, y) = e", blurb: "Binds a name in this session, or defines a function of its parameters. Later cells substitute the value or expand the call.", examples: ["let f = x^3 - 3x", "let sq(x) = x^2 + 1", "diff(sq(x), x)"] },
 ];
@@ -141,6 +142,8 @@ interface Cell {
   outText?: string;
   /** How the output is displayed: matrix | pmatrix | grid | table | input, or standard. */
   form?: string;
+  /** "complex" when the cell mentions `i`: its steps are judged by the rules' statuses over ℂ. */
+  semantics?: "real" | "complex";
   echoLatex?: string;
   steps?: Step[];
   error?: { message: string; span?: { start: number; end: number } };
@@ -159,11 +162,19 @@ interface Selection {
  *  the weakest status among them: a command is only as verified as the work it delegated. */
 const RANK = { verified: 0, checked: 1, conditional: 2, unverified: 3 } as const;
 type Status = keyof typeof RANK;
-function statusOf(st: Step): Status {
-  let s: Status = S.ruleStatus.get(st.rule)?.status ?? "unverified";
-  for (const sub of st.sub?.steps ?? []) { const t = statusOf(sub); if (RANK[t] > RANK[s]) s = t; }
+/** A rule's status and note in a cell's semantics: over ℝ, or over ℂ for a cell that mentions `i`. */
+function ruleStatusIn(rule: string, cx: boolean): { status: Status; note: string } {
+  const r = S.ruleStatus.get(rule);
+  if (!r) return { status: "unverified", note: "No soundness theorem yet." };
+  if (!cx) return { status: r.status, note: r.note };
+  return r.complex ?? { status: "unverified", note: `Proved over ℝ only (${r.status}); this cell is read over ℂ, where the rule has no theorem yet.` };
+}
+function statusOf(st: Step, cx = false): Status {
+  let s: Status = ruleStatusIn(st.rule, cx).status;
+  for (const sub of st.sub?.steps ?? []) { const t = statusOf(sub, cx); if (RANK[t] > RANK[s]) s = t; }
   return s;
 }
+const cellComplex = (cell: Cell | undefined) => cell?.semantics === "complex";
 const sameStep = (a: Step, b: Step) => a.rule === b.rule && a.explanation === b.explanation && a.path.join(".") === b.path.join(".");
 const termKey = (t: TermRef) => t.kind === "step" ? `step${t.index}` : t.kind;
 interface LogLine { time: string; level: "rpc" | "ok" | "err"; text: string }
@@ -288,6 +299,7 @@ async function runCell(cell: Cell) {
       cell.label = r.label ?? cell.label ?? nextLabel++;
       cell.outLatex = r.rendered.latex;
       cell.outText = r.rendered.text;
+      cell.semantics = "semantics" in r && r.semantics === "complex" ? "complex" : "real";
       cell.echoLatex = r.inputRendered?.latex;
       cell.steps = r.derivation?.steps ?? [];
       delete cell.error;
@@ -501,14 +513,14 @@ function renderTabs() {
 interface ChalkFile {
   /** Format version. Files written as `.lemma` before the rename carry `lemma: 1` instead and still open. */
   chalk?: 1; lemma?: 1; name: string;
-  cells: { src: string; showWork: boolean; label: number | null; outLatex?: string | undefined; outText?: string | undefined; form?: string | undefined; echoLatex?: string | undefined; steps?: Step[] | undefined; error?: Cell["error"] | undefined; plot?: PlotData | undefined }[];
+  cells: { src: string; showWork: boolean; label: number | null; outLatex?: string | undefined; outText?: string | undefined; form?: string | undefined; semantics?: "real" | "complex" | undefined; echoLatex?: string | undefined; steps?: Step[] | undefined; error?: Cell["error"] | undefined; plot?: PlotData | undefined }[];
   scenes: Scene[];
 }
 
 function serializeNotebook(): string {
   const doc: ChalkFile = {
     chalk: 1, name: S.docName,
-    cells: S.cells.map((c) => ({ src: c.input?.value ?? c.src, showWork: c.showWork, label: c.label, outLatex: c.outLatex, outText: c.outText, form: c.form, echoLatex: c.echoLatex, steps: c.steps, error: c.error, plot: c.plot })),
+    cells: S.cells.map((c) => ({ src: c.input?.value ?? c.src, showWork: c.showWork, label: c.label, outLatex: c.outLatex, outText: c.outText, form: c.form, semantics: c.semantics, echoLatex: c.echoLatex, steps: c.steps, error: c.error, plot: c.plot })),
     scenes: ST.scenes,
   };
   return JSON.stringify(doc, null, 2);
@@ -542,6 +554,7 @@ function cellsFromFile(doc: ChalkFile): Cell[] {
     if (c.outLatex) cell.outLatex = c.outLatex;
     if (c.outText) cell.outText = c.outText;
     if (c.form) cell.form = c.form;
+    if (c.semantics) cell.semantics = c.semantics;
     if (c.echoLatex) cell.echoLatex = c.echoLatex;
     if (c.steps) cell.steps = c.steps;
     if (c.error) cell.error = c.error;
@@ -1059,7 +1072,7 @@ function renderCellBody(cell: Cell) {
       const rulecol = h("span", "rulecol");
       const rule = h("span", "rule");
       const mark = h("span", `vmark ${status}`);
-      mark.title = S.ruleStatus.get(st.rule)?.note ?? "No soundness theorem yet.";
+      mark.title = ruleStatusIn(st.rule, cellComplex(cell)).note;
       rule.append(mark, document.createTextNode(st.rule));
       rulecol.append(rule);
       // what the rule did, in the row itself (the panel repeats it in full)
@@ -1091,7 +1104,7 @@ function renderCellBody(cell: Cell) {
     const renderSub = (st: Step, label: string, top: number, depth: number) => {
       st.sub?.steps.forEach((sub, k) => {
         const l = `${label}.${k + 1}`;
-        const srow = stepRow(sub, l, statusOf(sub), undefined, { steps: st.sub!.steps, index: k, top });
+        const srow = stepRow(sub, l, statusOf(sub, cellComplex(cell)), undefined, { steps: st.sub!.steps, index: k, top });
         srow.classList.add("sub");
         srow.style.marginLeft = `${26 * depth}px`;
         srow.title = sub.explanation.replace(/\$/g, "");
@@ -1101,7 +1114,7 @@ function renderCellBody(cell: Cell) {
       });
     };
     cell.steps.forEach((st, n) => {
-      const row = stepRow(st, String(n + 1), statusOf(st), { kind: "step", index: n });
+      const row = stepRow(st, String(n + 1), statusOf(st, cellComplex(cell)), { kind: "step", index: n });
       row.addEventListener("click", () => void explain(cell, { kind: "step", index: n }, []));
       work.append(row);
       renderSub(st, String(n + 1), n, 1);
@@ -1319,13 +1332,14 @@ function renderSubPanel(body: HTMLElement, sel: Selection & { sub: NonNullable<S
   c2.append(trail);
   grid.append(c2);
   const c3 = h("div", "col");
-  const status = statusOf(st);
+  const cx = cellComplex(cell);
+  const status = statusOf(st, cx);
   const head3 = h("div"); head3.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:10px";
-  head3.append(h("h3", undefined, "Proof status"), h("span", `checkbadge ${status}`, status));
+  head3.append(h("h3", undefined, cx ? "Proof status over ℂ" : "Proof status"), h("span", `checkbadge ${status}`, status));
   (head3.firstElementChild as HTMLElement).style.margin = "0";
   c3.append(head3);
   const rs = h("div", "rulestat");
-  rs.append(h("span", `vmark ${status}`), h("span", "n", st.rule), h("span", "note", S.ruleStatus.get(st.rule)?.note ?? "No soundness theorem yet."));
+  rs.append(h("span", `vmark ${status}`), h("span", "n", st.rule), h("span", "note", ruleStatusIn(st.rule, cx).note));
   c3.append(rs);
   grid.append(c3);
   body.append(grid);
@@ -1419,21 +1433,21 @@ function renderPanel() {
 
   // Proof status of the rules that touched the selection
   const c3 = h("div", "col");
+  const cx = cellComplex(cell);
   const used = [...new Set(sel.related.map((s) => s.rule))];
-  const stats = sel.related.map(statusOf);
+  const stats = sel.related.map((s) => statusOf(s, cx));
   const overall = stats.length === 0 ? "verified" : stats.includes("unverified") ? "unverified" : stats.includes("conditional") ? "conditional" : stats.includes("checked") ? "checked" : "verified";
   const head3 = h("div"); head3.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:10px";
-  head3.append(h("h3", undefined, "Proof status"), h("span", `checkbadge ${overall}`, overall));
+  head3.append(h("h3", undefined, cx ? "Proof status over ℂ" : "Proof status"), h("span", `checkbadge ${overall}`, overall));
   (head3.firstElementChild as HTMLElement).style.margin = "0";
   c3.append(head3);
   if (used.length === 0) {
     c3.append(h("p", undefined, "Nothing to check: no rewrite produced this subterm."));
   } else {
     for (const r of used) {
-      const st = S.ruleStatus.get(r);
+      const st = ruleStatusIn(r, cx);
       const row = h("div", "rulestat");
-      row.append(h("span", `vmark ${st?.status ?? "unverified"}`), h("span", "n", r),
-        h("span", "note", st?.note ?? "No soundness theorem yet."));
+      row.append(h("span", `vmark ${st.status}`), h("span", "n", r), h("span", "note", st.note));
       c3.append(row);
     }
   }

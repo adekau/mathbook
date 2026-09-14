@@ -6,6 +6,8 @@ import Proofs.Deriv
 import Proofs.Integrate
 import Proofs.Expand
 import Proofs.Radical
+import Proofs.Cx
+import Proofs.CxRules
 /-!
 # Proofs about the engine (skeleton)
 

@@ -44,7 +44,7 @@ structure Tok where
   deriving Repr, Inhabited
 
 def builtinFunctions : List String :=
-  ["sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs",
+  ["sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs", "conj", "re", "im",
    "diff", "simplify", "expand", "N", "det", "rref", "transpose", "solve", "subst", "integrate", "plot"]
 
 /-- Lexer over the character list; `i` is the byte-free character index used for spans. -/
@@ -144,7 +144,8 @@ mutual
         discard next
         let args ← callArgs
         pure (.fn t.s args)
-      else if t.s == "pi" then pure (.var "π")
+      else if t.s == "pi" || t.s == "π" then pure (.fn "π" [])   -- a constant, not a variable: no binding, both semantics read it
+      else if t.s == "i" then pure (.fn "i" [])                   -- the imaginary unit (Mathematica's I)
       else if t.s == "ℯ" then pure (.fn "exp" [Expr.one])   -- Euler's number is exp(1): every rule about exp applies
       else pure (.var t.s)
     | .op =>

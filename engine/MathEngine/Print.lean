@@ -146,6 +146,12 @@ mutual
       let as := (enum args).map fun (i, a) => child a i P_ADD
       match name, args, as with
       | "sqrt", [_], [a] => (T.sqrt a, P_ATOM)
+      | "π", [], _ => (if T.times != "*" then "\\pi" else "π", P_ATOM)
+      | "i", [], _ => ("i", P_ATOM)
+      | "conj", [_], [a] => (if T.times != "*" then s!"\\overline\{{a}}" else s!"conj({a})", P_ATOM)
+      | "re", [_], [a] => (if T.times != "*" then s!"\\operatorname\{Re}\\left({a}\\right)" else s!"re({a})", P_ATOM)
+      | "im", [_], [a] => (if T.times != "*" then s!"\\operatorname\{Im}\\left({a}\\right)" else s!"im({a})", P_ATOM)
+      | "abs", [_], [a] => (if T.times != "*" then s!"\\left|{a}\\right|" else s!"abs({a})", P_ATOM)
       | "exp", [.num q], _ => if q.isOne then (if T.times != "*" then "e" else "ℯ", P_ATOM) else (T.fn name as, P_ATOM)
       | "diff", [_, .var _], [a, x] =>
         if T.times != "*" then (s!"\\frac\{d}\{d{x}}\\left({a}\\right)", P_MUL) else (T.fn name as, P_ATOM)

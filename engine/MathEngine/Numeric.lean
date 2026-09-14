@@ -44,6 +44,8 @@ partial def evalNumeric (env : List (String × Float)) : Expr → Except String 
     match fns.lookup f with
     | some g => do pure (g (← evalNumeric env a))
     | none => .error s!"cannot evaluate '{f}' numerically"
+  | .fn "π" [] => .ok 3.141592653589793
+  | .fn "i" [] => .error "cannot evaluate i numerically: N works over the reals"
   | .fn f _ => .error s!"cannot evaluate '{f}' numerically"
   | .matrix _ => .error "N() of a matrix: apply N to entries instead"
 

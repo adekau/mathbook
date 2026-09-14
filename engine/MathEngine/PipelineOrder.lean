@@ -30,12 +30,14 @@ theorem mem_pipeline_iff (r : PlainRule) : r ∈ (pipelineRulesWith norm) ↔
     r = diffHigherOrder ∨ r = diffConstant ∨ r = diffVariable ∨ r = diffSum ∨ r = diffConstMul ∨
     r = diffProduct ∨ r = diffPower ∨ r = diffChain ∨ r = diffMatrix ∨
     r = laAdd ∨ r = laScalarMul ∨ r = laMul ∨ r = laTranspose ∨ r = laDet ∨ r = laPow ∨
+    r = scalarOnly iPower ∨ r = scalarOnly cxArith ∨ r = scalarOnly cxPow ∨ r = scalarOnly cxConj ∨ r = scalarOnly cxReIm ∨
+    r = scalarOnly cxAbs ∨ r = scalarOnly exactTrig ∨ r = scalarOnly euler ∨ r = scalarOnly eulerPower ∨
     r = scalarOnly flatten.toPlain ∨ r = scalarOnly identity.toPlain ∨ r = scalarOnly foldConstants.toPlain ∨
     r = scalarOnly functionRules.toPlain ∨ r = scalarOnly powerRules.toPlain ∨ r = scalarOnly collectPowers.toPlain ∨
     r = scalarOnly collectTerms.toPlain ∨ r = scalarOnly parityPowMul ∨ r = scalarOnly parityPowPow ∨
     r = scalarOnly radicalBase ∨ r = scalarOnly collectRadicals ∨ r = scalarOnly mulRadicals ∨ r = laContext := by
   simp [pipelineRulesWith, commandRulesWith, diffRules, matrixRules, simpPlain, simpRules, parityPlain, parityRules,
-    radicalPlain, radicalRules, contextRules]
+    radicalPlain, radicalRules, complexPlain, complexRules, contextRules]
 
 -- ---------------------------------------------------------------------------
 -- Clean terms: nothing the first three tiers count
@@ -2398,6 +2400,223 @@ theorem dec_mulRadicals : Dec norm (scalarOnly mulRadicals) := dec_scalar fun e 
   · simp at happ
 
 -- ---------------------------------------------------------------------------
+-- cx.*: the complex rules, each guarded by the decrease its proof needs
+-- ---------------------------------------------------------------------------
+
+theorem cmdOwn_of_not_cmd (f : String) (es : List Expr) (h : cmdNames.contains f = false) : cmdOwn (.fn f es) = 0 := by
+  simp only [cmdOwn, h, Bool.false_eq_true, ↓reduceIte]
+theorem d3Own_of_ne (f : String) (es : List Expr) (h : f ≠ "diff") : d3Own (.fn f es) = 0 := by
+  simp [d3Own, h]
+
+theorem Clean.iE : Clean iE := Clean.fn (by decide) (fun h => absurd h (by decide)) (by simp)
+
+theorem Clean.unMul {s : Expr} (h : Clean s) : ∀ c ∈ unMul s, Clean c := by
+  intro c hc
+  cases s
+  case mul xs => exact h.child hc
+  all_goals
+    have hc' := List.mem_singleton.mp hc
+    subst hc'; exact h
+
+theorem imE_clean (q : Q) : Clean (imE q) := by
+  unfold imE
+  split
+  · exact Clean.iE
+  · split <;> exact Clean.mul (fun c hc => by
+      simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hc
+      rcases hc with rfl | rfl
+      · exact Clean.num _
+      · exact Clean.iE)
+
+theorem gaussE_clean (g : Gauss) : Clean (gaussE g) := by
+  unfold gaussE
+  split
+  · exact Clean.num _
+  · split
+    · exact imE_clean _
+    · exact Clean.add (fun c hc => by
+        simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hc
+        rcases hc with rfl | rfl
+        · exact Clean.num _
+        · exact imE_clean _)
+
+theorem radE_clean (c : Q) (r : Nat) : Clean (radE c r) := by
+  unfold radE
+  split
+  · exact Clean.num _
+  · split
+    · exact Clean.num _
+    · split
+      · exact Clean.pow (Clean.num _) (Clean.num _)
+      · exact Clean.mul (fun t ht => by
+          simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at ht
+          rcases ht with rfl | rfl
+          · exact Clean.num _
+          · exact Clean.pow (Clean.num _) (Clean.num _))
+
+theorem trigValue_clean {f : String} {q : Q} {v : Expr} (h : trigValue f q = some v) : Clean v := by
+  unfold trigValue at h
+  simp only [Option.map_eq_some_iff] at h
+  obtain ⟨⟨c, r⟩, -, rfl⟩ := h
+  exact radE_clean _ _
+
+theorem imagOf_clean {s : Expr} (hs : Clean s) : Clean (imagOf s) := by
+  unfold imagOf
+  split
+  · exact Clean.num _
+  · split
+    · exact Clean.iE
+    · exact Clean.mulN (fun t ht => by
+        simp only [List.mem_append, List.mem_singleton] at ht
+        rcases ht with ht | rfl
+        · exact hs.unMul t ht
+        · exact Clean.iE)
+
+theorem eulerValue_clean {c s : Expr} (hc : Clean c) (hs : Clean s) : Clean (eulerValue c s) := by
+  unfold eulerValue
+  split
+  · exact Clean.num _
+  · exact Clean.addN (Clean.filter _ fun t ht => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at ht
+      rcases ht with rfl | rfl
+      · exact hc
+      · exact imagOf_clean hs)
+
+theorem gaussMul_clean {a b m : Expr} (h : gaussMul a b = some m) : Clean m := by
+  unfold gaussMul at h
+  split at h
+  · split at h
+    · simp at h
+    · simp only [Option.some.injEq] at h; subst h; exact gaussE_clean _
+  · simp at h
+
+/-- A guarded rule fires only with `M res < M e`, and clean terms then decrease `μ`. -/
+theorem dec_guarded {res e : Expr} {why : String} {r : RuleResult}
+    (h : guarded res e why = some r) (hres : Clean res) (he : Clean e) : MuLt (μ r.result) (μ e) := by
+  unfold guarded at h
+  split at h
+  · rename_i hg; simp only [Option.some.injEq] at h; subst h; exact muLt_of_clean hres he (Or.inl hg)
+  · simp at h
+
+theorem dec_iPower : Dec norm (scalarOnly iPower) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [iPower] at happ
+  split at happ
+  · split at happ
+    · (try dsimp only at happ)
+      exact dec_guarded happ (gaussE_clean _) (Clean.pow Clean.iE (Clean.num _))
+    · simp at happ
+  · simp at happ
+
+theorem dec_cxArith : Dec norm (scalarOnly cxArith) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [cxArith] at happ
+  split at happ
+  · rename_i es
+    split at happ
+    · rename_i m others hfp
+      obtain ⟨he, hcs⟩ := clean_of_scalar hcn hm rfl rfl rfl
+      obtain ⟨s, t, hst, hperm⟩ := findPair_perm _ es hfp
+      have hres : Clean (mulN (m :: others)) := Clean.mulN fun c hc => by
+        simp only [List.mem_cons] at hc; rcases hc with rfl | hc
+        · exact gaussMul_clean hst
+        · exact hcs c (by simp only [children]; exact hperm.mem_iff.2 (by simp [hc]))
+      exact dec_guarded happ hres he
+    · simp at happ
+  · simp at happ
+
+theorem dec_cxPow : Dec norm (scalarOnly cxPow) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [cxPow] at happ
+  split at happ
+  · split at happ
+    · split at happ
+      · split at happ
+        · simp at happ
+        · obtain ⟨he, -⟩ := clean_of_scalar hcn hm rfl rfl rfl
+          exact dec_guarded happ (gaussE_clean _) he
+      · simp at happ
+    · simp at happ
+  · simp at happ
+
+theorem dec_cxConj : Dec norm (scalarOnly cxConj) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [cxConj] at happ
+  split at happ
+  · rename_i z
+    obtain ⟨he, hcs⟩ := clean_of_scalar hcn hm (cmdOwn_of_not_cmd _ _ (by decide)) (d3Own_of_ne _ _ (by decide)) rfl
+    exact dec_guarded happ ((hcs (.fn "conj" [z]) (by simp [children])).child (by simp [children])) he
+  · rename_i z
+    split at happ
+    · obtain ⟨he, -⟩ := clean_of_scalar hcn hm (cmdOwn_of_not_cmd _ _ (by decide)) (d3Own_of_ne _ _ (by decide)) rfl
+      exact dec_guarded happ (gaussE_clean _) he
+    · simp at happ
+  · simp at happ
+
+theorem dec_cxReIm : Dec norm (scalarOnly cxReIm) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [cxReIm] at happ
+  split at happ
+  · split at happ
+    · obtain ⟨he, -⟩ := clean_of_scalar hcn hm (cmdOwn_of_not_cmd _ _ (by decide)) (d3Own_of_ne _ _ (by decide)) rfl
+      exact dec_guarded happ (Clean.num _) he
+    · simp at happ
+  · split at happ
+    · obtain ⟨he, -⟩ := clean_of_scalar hcn hm (cmdOwn_of_not_cmd _ _ (by decide)) (d3Own_of_ne _ _ (by decide)) rfl
+      exact dec_guarded happ (Clean.num _) he
+    · simp at happ
+  · simp at happ
+
+theorem dec_cxAbs : Dec norm (scalarOnly cxAbs) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [cxAbs] at happ
+  split at happ
+  · split at happ
+    · split at happ
+      · simp at happ
+      · obtain ⟨he, -⟩ := clean_of_scalar hcn hm (cmdOwn_of_not_cmd _ _ (by decide)) (d3Own_of_ne _ _ (by decide)) rfl
+        exact dec_guarded happ (Clean.pow (Clean.num _) (Clean.num _)) he
+    · simp at happ
+  · simp at happ
+
+theorem dec_exactTrig : Dec norm (scalarOnly exactTrig) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [exactTrig] at happ
+  split at happ
+  · rename_i f a
+    split at happ
+    · rename_i hf
+      split at happ
+      · split at happ
+        · rename_i v hv
+          have hf' : cmdNames.contains f = false ∧ f ≠ "diff" := by
+            simp only [Bool.or_eq_true, beq_iff_eq] at hf
+            rcases hf with (rfl | rfl) | rfl <;> exact ⟨by decide, by decide⟩
+          obtain ⟨he, -⟩ := clean_of_scalar hcn hm (cmdOwn_of_not_cmd _ _ hf'.1) (d3Own_of_ne _ _ hf'.2) rfl
+          exact dec_guarded happ (trigValue_clean hv) he
+        · simp at happ
+      · simp at happ
+    · simp at happ
+  · simp at happ
+
+theorem dec_euler : Dec norm (scalarOnly euler) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [euler] at happ
+  split at happ
+  · split at happ
+    · simp at happ
+    · split at happ
+      · simp at happ
+      · split at happ
+        · rename_i c s hc hs
+          obtain ⟨he, -⟩ := clean_of_scalar hcn hm (cmdOwn_of_not_cmd _ _ (by decide)) (d3Own_of_ne _ _ (by decide)) rfl
+          exact dec_guarded happ (eulerValue_clean (trigValue_clean hc) (trigValue_clean hs)) he
+        · simp at happ
+  · simp at happ
+
+theorem dec_eulerPower : Dec norm (scalarOnly eulerPower) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [eulerPower] at happ
+  split at happ
+  · rename_i q b
+    split at happ
+    · obtain ⟨he, hcs⟩ := clean_of_scalar hcn hm rfl rfl rfl
+      exact dec_guarded happ (Clean.fn₁ (by decide) (by decide) (hcs b (by simp [children]))) he
+    · simp at happ
+  · simp at happ
+
+-- ---------------------------------------------------------------------------
 -- The theorem
 -- ---------------------------------------------------------------------------
 
@@ -2406,7 +2625,8 @@ With `normalizeT`'s innermost strategy this is exactly what makes cell evaluatio
 theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := ⟨fun r hr => by
   rw [mem_pipeline_iff] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact dec_cmdSimplify
   · exact dec_cmdExpand
   · exact dec_cmdRref
@@ -2428,6 +2648,15 @@ theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := 
   · exact dec_laTranspose
   · exact dec_laDet
   · exact dec_laPow
+  · exact dec_iPower
+  · exact dec_cxArith
+  · exact dec_cxPow
+  · exact dec_cxConj
+  · exact dec_cxReIm
+  · exact dec_cxAbs
+  · exact dec_exactTrig
+  · exact dec_euler
+  · exact dec_eulerPower
   · exact dec_flatten
   · exact dec_identity
   · exact dec_foldConstants

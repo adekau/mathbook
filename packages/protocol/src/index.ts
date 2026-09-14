@@ -78,6 +78,10 @@ export interface RuleStatus {
    *  engine omits are unverified. */
   status: "verified" | "conditional" | "checked" | "unverified";
   note: string;
+  /** The rule's status over ℂ, when it has a theorem there (`proofs/Proofs/Cx.lean`). A cell whose
+   *  input or output mentions `i` is read in the complex semantics and shows this instead; a rule
+   *  without it is unverified in such a cell. Optional (rule 5). */
+  complex?: { status: "verified" | "conditional" | "checked" | "unverified"; note: string };
 }
 
 export interface EngineCapabilities {
@@ -122,6 +126,9 @@ export interface EvaluateResult {
   /** The evaluation's number in the session — Mathematica's `In[n]`/`Out[n]` — which `%`, `%%`
    *  and `%n` in later cells refer to. Every evaluation takes one, error or not. Optional (rule 5). */
   label?: number;
+  /** Which semantics the cell is read in: "complex" when the input or output mentions `i`,
+   *  otherwise "real". Decides which of a rule's statuses applies. Optional (rule 5). */
+  semantics?: "real" | "complex";
 }
 
 export interface EvaluateError {

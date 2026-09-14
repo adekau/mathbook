@@ -291,3 +291,19 @@ Cell menu, browser library, Pages (2026-09-14): each cell has a ⋮ menu (send t
    with delete, and Export / Import move `.chalk` files in and out. `.github/workflows/pages.yml` builds the wasm
    engine (runtime cached) and publishes `apps/notebook/dist` to GitHub Pages; the repository needs Settings ›
    Pages › Source set to "GitHub Actions" once.
+Complex numbers (2026-09-14, Alex: the logo `e^(π i)` could not be computed; chose "complex arithmetic"). `i` and `π`
+   are constants (`fn "i" []`, `fn "π" []`, rank between numerals and variables in the canonical order; `sumRank`
+   puts `b·i` after the numerals in a sum so `2 + 3i` reads as written). `ComplexRules.lean`: Gaussian rationals
+   (`gauss?`, `gaussE`), `cx.i-power`, `cx.arithmetic` (products, with an integer power of a Gaussian numeral as a
+   factor — that is how `1/(1+i)` arrives, and the only affordable form: the bare `(1+i)^(-1)` weighs less than
+   `1/2 − i/2`, so the complex rules run before the identity rule strips the leading 1), `cx.power`,
+   `cx.conjugate`, `cx.re-im`, `cx.abs`, `cx.exact-trig` (rational multiples of π by period, half turn, reflection,
+   reference table), `cx.euler` (only where both values are exact — the general formula duplicates θ, which the
+   ordering cannot pay for; Mathematica does the same), `cx.euler-power` (`ℯ^b = exp b`). Every rule self-guards
+   with `M res < M e`; the nine decrease lemmas are a split on the guard. A third semantics `evalC` (Cx.lean, with
+   `Complex.cpow` = principal branch) and `CxRules.lean`: all nine rules verified over ℂ, exact-trig and euler-power
+   over ℝ too; the four algebraic simp rules and `simp.power` ported to ℂ; `ln(exp x) = x` refuted at `x = 2πi`
+   (`not_functionRules_soundC`). The reply carries `semantics: "complex"` when a cell mentions `i`; rule statuses
+   have a `complex` column; the notebook shows it for such cells and "proved over ℝ only" for the rest. Book: a new
+   chapter, complex numbers and Euler's identity (Part I). Not proved over ℂ: collect-powers (needs `b ≠ 0`,
+   `Complex.cpow_add`), radicals, expand, the derivative rules (no complex derivative semantics).

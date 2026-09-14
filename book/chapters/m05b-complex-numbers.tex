@@ -1,0 +1,183 @@
+\chapter{Complex Numbers and Euler's Identity}\label{ch:cx}
+
+$e^{i\pi} + 1 = 0$ is the identity on the cover of this book's notebook, and for most of the
+project the engine could not compute it, because it had no $i$. Adding one is not a matter of a
+symbol. Every theorem in the preceding chapters is about real numbers; a term containing $i$ has no
+real meaning, and the rules that are safe over $\mathbb{R}$ are not all safe over $\mathbb{C}$.
+This chapter relearns the complex numbers from their construction, proves Euler's formula from the
+exponential series, and then meets the engine's answer to the problem of meaning: a third
+semantics, and a ledger with two columns.
+
+\section{The construction}
+
+\begin{definition}
+  $\mathbb{C}$ is the set $\mathbb{R}^2$ with $(a, b) + (c, d) = (a + c, b + d)$ and
+  $(a, b)(c, d) = (ac - bd, ad + bc)$. Write $a + bi$ for $(a, b)$, so that $i = (0, 1)$ and
+  $i^2 = (-1, 0) = -1$.
+\end{definition}
+
+\begin{theorem}
+  $\mathbb{C}$ is a field.
+\end{theorem}
+\begin{proof}
+  The ring axioms are coordinate computations, each a polynomial identity in four or six real
+  variables; associativity of multiplication is the longest and is still one line. The inverse of
+  $z = a + bi \neq 0$ is
+  \[
+    z^{-1} = \frac{a - bi}{a^2 + b^2},
+  \]
+  since $(a + bi)(a - bi) = a^2 + b^2 > 0$; that is the only place the field structure of
+  $\mathbb{R}$ beyond a ring is used.
+\end{proof}
+
+The equivalent description, which explains why the rules look the way they do, is that $\mathbb{C}
+= \mathbb{R}[x]/(x^2 + 1)$: polynomials in a formal $x$, reduced by the single relation $x^2 = -1$.
+Every polynomial in $i$ collapses to a linear one, $a + bi$, and that collapse is what the engine's
+arithmetic rule performs.
+
+\begin{definition}
+  The conjugate of $z = a + bi$ is $\bar z = a - bi$; the modulus is $|z| = \sqrt{a^2 + b^2} =
+  \sqrt{z\bar z}$; the real and imaginary parts are $\operatorname{Re} z = a = \frac{z + \bar
+  z}{2}$ and $\operatorname{Im} z = b = \frac{z - \bar z}{2i}$.
+\end{definition}
+
+Conjugation is a ring automorphism, $\overline{zw} = \bar z \bar w$ and $\overline{z + w} = \bar z
++ \bar w$, because it is the other root of $x^2 + 1$; and $|zw| = |z||w|$ follows by taking
+$\sqrt{\cdot}$ of $zw\,\overline{zw} = z\bar z\, w \bar w$.
+
+\section{The exponential, once more}
+
+The series of Chapter~\ref{ch:explog} converges for every complex $z$ by the same ratio test, and
+the functional equation $\exp(z + w) = \exp z \exp w$ has the same proof. Splitting the series of
+$\exp(i\theta)$ for real $\theta$ into even and odd powers of $i$ gives
+
+\begin{theorem}[Euler's formula]
+  For real $\theta$, $\exp(i\theta) = \cos\theta + i \sin\theta$.
+\end{theorem}
+\begin{proof}
+  $i^n$ cycles through $1, i, -1, -i$, so
+  \[
+    \sum_{n \ge 0} \frac{(i\theta)^n}{n!}
+      = \sum_{k \ge 0} (-1)^k \frac{\theta^{2k}}{(2k)!} + i \sum_{k \ge 0} (-1)^k \frac{\theta^{2k+1}}{(2k+1)!}
+      = \cos\theta + i\sin\theta,
+  \]
+  the rearrangement being justified by absolute convergence, and the two series being the
+  definitions of $\cos$ and $\sin$.
+\end{proof}
+
+With $\theta = \pi$ and the values $\cos\pi = -1$, $\sin\pi = 0$: $e^{i\pi} = -1$. The identity is
+two facts, then --- Euler's formula, and the exact values of the trigonometric functions at $\pi$
+--- and the engine needs both as rules.
+
+\section{Exact values on the unit circle}
+
+$\sin$ and $\cos$ at $0, \pi/6, \pi/4, \pi/3, \pi/2$ are the five values every student memorizes:
+$\sin$ runs $0, \frac{1}{2}, \frac{\sqrt 2}{2}, \frac{\sqrt 3}{2}, 1$ and $\cos$ runs them
+backwards. Everything else at a rational multiple of $\pi$ follows from four symmetries:
+periodicity $\sin(\theta + 2\pi) = \sin\theta$, the half-turn $\sin(\theta + \pi) = -\sin\theta$,
+$\cos(\theta + \pi) = -\cos\theta$, and the reflection $\sin(\pi - \theta) = \sin\theta$,
+$\cos(\pi - \theta) = -\cos\theta$. Given $q\pi$, reduce $q$ modulo $2$, then by the half-turn into
+$[0, 1)$, then by the reflection into $[0, \frac{1}{2}]$, and look up. The engine's rule
+\rn{cx.exact-trig} does exactly this reduction on the rational $q$, and its proof over
+$\mathbb{R}$ is the four Mathlib identities (\lc{Real.sin_add_int_mul_two_pi},
+\lc{Real.sin_add_pi}, \lc{Real.sin_pi_sub} and their cosine forms) followed by the five table
+entries (\lc{Real.sin_pi_div_six} and friends). $\tan$ is the quotient where the cosine is not
+zero.
+
+\section{Why the ordering does not object}
+
+Euler's formula in general, $\exp(i\theta) \to \cos\theta + i\sin\theta$, duplicates $\theta$, and
+Chapter~\ref{ch:wf} explained why no weight of the engine's shape can pay for a duplication. The
+rule \rn{cx.euler} therefore fires only where both values are \emph{exact}: the result then
+contains no $\theta$ at all, and the exponential node it replaces outweighs any Gaussian numeral.
+This is also what Mathematica does: \texttt{Exp[I x]} stays as it is, \texttt{Exp[I Pi]} becomes
+$-1$.
+
+The same accounting shapes the arithmetic. $i^2 \to -1$, a product of two Gaussian numerals, an
+integer power, a conjugate, a modulus --- each replaces a node by a smaller Gaussian numeral. One
+case is not affordable: $(1 + i)^{-1} \to \frac{1}{2} - \frac{1}{2} i$ weighs more after than
+before, because non-integer numerals are heavy (Chapter~\ref{ch:cannot} explains why they must
+be). But $1/(1 + i)$ arrives as the product $1 \cdot (1 + i)^{-1}$, and the product with its
+leading $1$ still on it is heavy enough; so the arithmetic rule treats an integer power of a
+Gaussian numeral as a Gaussian factor of a product, and runs before the identity rule that would
+strip the $1$. Rule order inside the pipeline is not part of the termination proof, which is per
+rule, so this costs nothing.
+
+\section{A third semantics}
+
+\begin{minted}{lean}
+def evalC (ρ : EnvC) : Expr → ℂ
+  | .num q => (q.val : ℂ)
+  | .var x => ρ x
+  | .add es => sumC ρ es
+  | .mul es => prodC ρ es
+  | .pow b e => (evalC ρ b) ^ (evalC ρ e)
+  | .fn f [] => constC f          -- π ↦ Real.pi, i ↦ Complex.I
+  | .fn f [a] => applyFnC f (evalC ρ a)
+  | .fn _ _ => 0
+  | .matrix _ => 0
+\end{minted}
+
+Powers are Mathlib's \lc{Complex.cpow}, the principal branch: $z^w = \exp(w \log z)$ with the
+logarithm's imaginary part in $(-\pi, \pi]$. That choice has consequences a real-number rule never
+met. $(e^a)^b = e^{ab}$ is false in general --- $(e^{2\pi i})^{1/2} = 1^{1/2} = 1$ while $e^{\pi i}
+= -1$ --- so the rule $\ln(e^x) \to x$ of Chapter~\ref{ch:explog}, unconditional over $\mathbb{R}$
+for the exponential's argument, is refuted over $\mathbb{C}$ at $x = 2\pi i$. And $b^m b^n =
+b^{m+n}$, which needed $b > 0$ over $\mathbb{R}$, needs only $b \neq 0$ over $\mathbb{C}$
+(\lc{Complex.cpow_add}): a weaker condition in a bigger field, because the principal branch is
+chosen consistently.
+
+So the ledger acquires a second column. Every rule has its status over $\mathbb{R}$ as before, and
+a rule with a theorem over $\mathbb{C}$ has a second status there. The four algebraic rules of the
+simplifier and the structural power rules are verified in both. Collecting powers is conditional
+in both, with different conditions. The function rule is conditional in both, for different
+reasons. The complex rules of this chapter are verified over $\mathbb{C}$ and have no status over
+$\mathbb{R}$, where $i$ means nothing. And a cell whose input or output mentions $i$ is read in
+the complex semantics: the notebook shows, for every step, the rule's status \emph{there}, and a
+rule proved only over $\mathbb{R}$ shows as unverified in such a cell, with a note saying so.
+That is the honest state, and it is the cost of adding a number.
+
+\begin{minted}{lean}
+theorem euler_soundC (ρ : EnvC) {e : Expr} {res : RuleResult}
+    (h : euler.apply e = some res) : evalC ρ res.result = evalC ρ e
+theorem exactTrig_soundR (ρ : EnvR) {e : Expr} {res : RuleResult}
+    (h : exactTrig.apply e = some res) : evalR ρ res.result = evalR ρ e
+theorem not_functionRules_soundC : ¬ RuleSoundC functionRules
+\end{minted}
+
+\begin{trybox}
+\begin{minted}{text}
+ℯ^(pi*i)
+exp(i*pi/4)
+(1+i)*(2-i)
+1/(1+i)
+abs(3+4i)
+cos(7pi/6)
+\end{minted}
+  Type \texttt{\textbackslash e} and \texttt{\textbackslash pi} for the constants. Open the work
+  for the first: the power becomes an exponential, then Euler's formula fires because both values
+  are exact. Click a step and see "Proof status over ℂ".
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[The quotient]
+  $\mathbb{C} = \mathbb{R}[x]/(x^2+1)$: show that every class has a unique representative of
+  degree at most $1$, and that the multiplication of representatives is the one in the definition.
+\end{exercisebox}
+
+\begin{exercisebox}[Principal values]
+  Compute $i^i$ with the principal branch, and find two complex $a, b$ for which
+  $(e^a)^b \neq e^{ab}$ with $|a|$ as small as you can make it.
+\end{exercisebox}
+
+\begin{exercisebox}[The table]
+  Prove $\sin\frac{\pi}{6} = \frac{1}{2}$ from $\sin 3\theta = 3\sin\theta - 4\sin^3\theta$, and
+  $\cos\frac{\pi}{4} = \frac{\sqrt 2}{2}$ from $\cos 2\theta = 2\cos^2\theta - 1$.
+\end{exercisebox}
+
+\begin{exercisebox}[Where the ordering stops]
+  Show that with the engine's weights $(1 + i)^{-1}$ weighs less than $\frac{1}{2} - \frac{1}{2}i$,
+  and that $1 \cdot (1 + i)^{-1}$ weighs more. Which weight would have to change to make the bare
+  inverse a rule, and what would that change break?
+\end{exercisebox}

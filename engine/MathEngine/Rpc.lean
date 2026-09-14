@@ -24,14 +24,18 @@ that the row operation preserves the solution set. Rules absent from this list a
 def ruleStatus : Json :=
   let entry (name status note : String) : Json :=
     .obj #[("rule", .str name), ("status", .str status), ("note", .str note)]
+  -- a rule with a theorem over ℂ as well (`proofs/Proofs/Cx.lean`): the status a cell containing `i` shows
+  let entryC (name status note cstatus cnote : String) : Json :=
+    .obj #[("rule", .str name), ("status", .str status), ("note", .str note),
+           ("complex", .obj #[("status", .str cstatus), ("note", .str cnote)])]
   .arr #[
-    entry "simp.flatten" "verified" "Associativity of + and ·.",
-    entry "simp.identity" "verified" "The additive and multiplicative identities and the annihilator.",
-    entry "simp.fold-constants" "verified" "Exact rational arithmetic; ℚ embeds in ℝ.",
-    entry "simp.collect-like-terms" "verified" "Distributivity: a·t + b·t = (a+b)·t.",
-    entry "simp.power" "verified" "Includes exact roots; the root search returns only checked roots.",
+    entryC "simp.flatten" "verified" "Associativity of + and ·." "verified" "Associativity, in any field (flatten_soundC).",
+    entryC "simp.identity" "verified" "The additive and multiplicative identities and the annihilator." "verified" "The identities and the annihilator, in any field (identity_soundC).",
+    entryC "simp.fold-constants" "verified" "Exact rational arithmetic; ℚ embeds in ℝ." "verified" "ℚ embeds in ℂ (foldConstants_soundC).",
+    entryC "simp.collect-like-terms" "verified" "Distributivity: a·t + b·t = (a+b)·t." "verified" "Distributivity (collectTerms_soundC).",
+    entryC "simp.power" "verified" "Includes exact roots; the root search returns only checked roots." "verified" "The principal branch agrees with the real power on the positive rational bases the exact roots use (powerRules_soundC).",
     entry "simp.collect-powers" "conditional" "b^m·b^n = b^(m+n) needs a positive base: at b = 0 it turns 0 into 1.",
-    entry "simp.function" "conditional" "exp(ln x) = x needs 0 < x: at x = -1 it turns -1 into 1. The other cases, sin/cos = tan among them, are unconditional.",
+    entryC "simp.function" "conditional" "exp(ln x) = x needs 0 < x: at x = -1 it turns -1 into 1. The other cases, sin/cos = tan among them, are unconditional." "unverified" "ln(exp x) = x is false on the principal branch: at x = 2πi it turns 2πi into 0 (not_functionRules_soundC).",
     entry "diff.constant" "verified" "A term the variable does not occur in has derivative 0.",
     entry "diff.variable" "verified" "The identity function has slope 1 everywhere.",
     entry "diff.constant-multiple" "verified" "Constant factors pull out; no differentiability needed.",
@@ -79,6 +83,15 @@ def ruleStatus : Json :=
     entry "order.monotone" "verified" "Every pair x ≤ y of the order checked; the witness is reported when it fails.",
     entry "order.iterate" "verified" "One step of the Kleene chain; each element of the chain is below every fixed point (iter_le_fixed).",
     entry "order.fixed" "verified" "The chain stopped at a fixed point (checked), which iter_le_fixed makes the least (dually, the greatest).",
+    entryC "cx.i-power" "unverified" "i has no real meaning; read in ℂ." "verified" "i² = −1 (Complex.I_sq); the powers cycle.",
+    entryC "cx.arithmetic" "unverified" "i has no real meaning; read in ℂ." "verified" "Products of Gaussian rationals, by the field laws and i² = −1.",
+    entryC "cx.power" "unverified" "i has no real meaning; read in ℂ." "verified" "Integer powers and inverses of Gaussian rationals; 1/(a+bi) = (a−bi)/(a²+b²).",
+    entryC "cx.conjugate" "unverified" "i has no real meaning; read in ℂ." "verified" "Conjugation of a Gaussian rational, and conj ∘ conj = id.",
+    entryC "cx.re-im" "unverified" "i has no real meaning; read in ℂ." "verified" "Real and imaginary parts of a Gaussian rational.",
+    entryC "cx.abs" "unverified" "i has no real meaning; read in ℂ." "verified" "|a + bi| = √(a² + b²) (Complex.abs_apply, normSq).",
+    entryC "cx.exact-trig" "verified" "sin, cos, tan at rational multiples of π: period, reflections and the reference angles (Real.sin_pi_div_four and friends)." "verified" "The real values, cast (Complex.ofReal_sin, ofReal_cos)." ,
+    entryC "cx.euler" "unverified" "i has no real meaning; read in ℂ." "verified" "Euler's formula exp(iθ) = cos θ + i sin θ (Complex.exp_mul_I) with the exact values.",
+    entryC "cx.euler-power" "verified" "(e¹)^b = e^b (Real.rpow_def_of_pos)." "verified" "(e¹)^b = e^b (Complex.cpow_def, log_exp with Im 1 = 0).",
     entry "lambda.delta" "verified" "Unfolding a definition replaces a free name by its term; nothing to prove beyond that.",
     entry "lambda.beta" "unverified" "β-reduction with capture-avoiding substitution; the substitution lemma is not yet proved.",
     entry "lambda.alpha-beta" "unverified" "A binder renamed to avoid capture, then β; the renaming is not yet proved to preserve α-equivalence."]
@@ -178,7 +191,8 @@ where
       | .error (code, msg, span) => (st, errorJson code msg span)
       | .ok (stmt, out, d) =>
         let paths := params.getBool "paths"
-        let res := #[("ok", .bool true), ("value", out.toJson), ("rendered", Rendered.toJson out paths)]
+        let sem := if mentionsI d.input || mentionsI out then "complex" else "real"
+        let res := #[("ok", .bool true), ("value", out.toJson), ("rendered", Rendered.toJson out paths), ("semantics", .str sem)]
         let res := if params.getBool "showWork" then
             (res.push ("derivation", d.toJson paths)).push ("inputRendered", Rendered.toJson d.input paths)
           else res

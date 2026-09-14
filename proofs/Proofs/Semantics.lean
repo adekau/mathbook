@@ -46,6 +46,12 @@ def applyFn (f : String) (x : ℝ) : ℝ :=
 @[simp] theorem applyFn_sqrt (x : ℝ) : applyFn "sqrt" x = Real.sqrt x := by simp [applyFn]
 @[simp] theorem applyFn_abs (x : ℝ) : applyFn "abs" x = |x| := by simp [applyFn]
 
+/-- The constants: `π` is `Real.pi`; any other 0-ary function node (`i`, which has no real
+meaning) is the junk value 0. Shared by `evalR` and `evalD`, so the two agree definitionally. -/
+def constR (f : String) : ℝ := if f = "π" then Real.pi else 0
+
+@[simp] theorem constR_pi : constR "π" = Real.pi := by simp [constR]
+
 mutual
   /-- Meaning of an expression in ℝ. Exponentiation is `Real.rpow`, which agrees with integer and
   natural powers (`Real.rpow_intCast`) and gives `Real.sqrt` its `x ^ (1/2)` reading. -/
@@ -55,6 +61,7 @@ mutual
     | .add es => sumR ρ es
     | .mul es => prodR ρ es
     | .pow b e => (evalR ρ b) ^ (evalR ρ e)
+    | .fn f [] => constR f
     | .fn f [a] => applyFn f (evalR ρ a)
     | .fn _ _ => 0
     | .matrix _ => 0
@@ -74,6 +81,7 @@ end
     evalR ρ (.pow b e) = (evalR ρ b) ^ (evalR ρ e) := rfl
 @[simp] theorem evalR_fn₁ (ρ : EnvR) (f : String) (a : Expr) :
     evalR ρ (.fn f [a]) = applyFn f (evalR ρ a) := rfl
+@[simp] theorem evalR_fn₀ (ρ : EnvR) (f : String) : evalR ρ (.fn f []) = constR f := rfl
 @[simp] theorem evalR_matrix (ρ : EnvR) (rows : List (List Expr)) : evalR ρ (.matrix rows) = 0 := rfl
 @[simp] theorem sumR_nil (ρ : EnvR) : sumR ρ [] = 0 := rfl
 @[simp] theorem sumR_cons (ρ : EnvR) (e : Expr) (es : List Expr) :

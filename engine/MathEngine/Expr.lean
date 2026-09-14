@@ -134,7 +134,7 @@ def dependsOn (e : Expr) (x : String) : Bool := (freeVars e).contains x
 
 /-- Numbers first, then variables, then compound terms — `KIND_RANK` in `ast.ts`. -/
 def kindRank : Expr → Nat
-  | .num _ => 0 | .var _ => 1 | .pow _ _ => 2 | .fn _ _ => 3 | .mul _ => 4 | .add _ => 5 | .matrix _ => 6
+  | .num _ => 0 | .fn _ [] => 1 | .var _ => 2 | .pow _ _ => 3 | .fn _ _ => 4 | .mul _ => 5 | .add _ => 6 | .matrix _ => 7
 
 /-- A total order on expressions (the canonical argument order). -/
 partial def compare (a b : Expr) : Ordering :=
