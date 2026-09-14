@@ -19,7 +19,7 @@ needs two facts about the measure, both proved below for every weight assignment
   silently inside the loop without being a rule.
 
 The notebook pipeline needs a different argument (rules that duplicate subterms): see `Order.lean`
-and `Terminate.lean`. `normalizeFuel` below remains only for the `expand` command's nested rule set.
+and `Terminate.lean`. There is no fuel-based rewriter any more.
 -/
 namespace MathEngine
 open Expr
@@ -51,7 +51,7 @@ structure RuleResult where
   /-- Steps taken inside this rewrite (e.g. the row operations behind an `rref` command). -/
   sub : Option Derivation := none
   /-- A rule may refuse the whole evaluation (the reference throws, e.g. on a dimension mismatch).
-  Only `normalizeFuel` honours this; verified rule sets never set it. -/
+  The tiered rewriter (`normalizeT`) honours this; verified rule sets never set it. -/
   error : Option String := none
 
 -- ---------------------------------------------------------------------------
@@ -320,7 +320,7 @@ def derive (rules : List (Rule W)) (e : Expr) : Derivation :=
   ⟨e, steps, out⟩
 
 -- ---------------------------------------------------------------------------
--- Fuel-based variant, used only by the `expand` command's nested set (book/TRACKING.md)
+-- Plain rules: a rule without a bundled proof, for the tiered rewriter of `Terminate.lean`
 -- ---------------------------------------------------------------------------
 
 structure PlainRule where
@@ -332,64 +332,6 @@ def fireP (rules : List PlainRule) (e : Expr) : Option (PlainRule × RuleResult)
   match rules with
   | [] => none
   | r :: rs => match r.apply e with | some res => some (r, res) | none => fireP rs e
-
-/-- Result of a fuel-bounded normalization. `exhausted` means a rule wanted to fire with no fuel left;
-`error` is a rule's refusal (`RuleResult.error`). -/
-structure FuelState where
-  steps : Array RawStep := #[]
-  exhausted : Bool := false
-  error : Option String := none
-
-mutual
-  def normAtF (rules : List PlainRule) (fuel : Nat) (e : Expr) (path : Path) (st : FuelState) : Expr × FuelState :=
-    let (cs, st₀) := normChildrenF rules fuel (children e) path 0 st
-    let e₀ := withChildren e cs
-    let e₁ := canon e₀
-    let st₁ := if equal e₁ e₀ then st₀ else { st₀ with steps := st₀.steps.push ⟨"simp.sort", true, "commutativity", path, e₁, none⟩ }
-    if st₁.error.isSome then (e₁, st₁) else
-    match fireP rules e₁ with
-    | none => (e₁, st₁)
-    | some (rule, res) =>
-      if res.error.isSome then (e₁, { st₁ with error := res.error }) else
-      match fuel with
-      | 0 => (e₁, { st₁ with exhausted := true })
-      | fuel' + 1 =>
-        let st₂ := { st₁ with steps := st₁.steps.push ⟨rule.name, rule.silent, res.explanation, path, res.result, res.sub⟩ }
-        normAtF rules fuel' res.result path st₂
-  termination_by (fuel, size e, 0)
-  decreasing_by
-    · exact Prod.Lex.right _ (Prod.Lex.left _ _ (sizeList_children_lt e))
-    · exact Prod.Lex.left _ _ (Nat.lt_succ_self _)
-
-  def normChildrenF (rules : List PlainRule) (fuel : Nat) (cs : List Expr) (path : Path) (i : Nat) (st : FuelState) : List Expr × FuelState :=
-    match cs with
-    | [] => ([], st)
-    | c :: cs' =>
-      let (c', st₁) := normAtF rules fuel c (path ++ [i]) st
-      let (cs'', st₂) := normChildrenF rules fuel cs' path (i + 1) st₁
-      (c' :: cs'', st₂)
-  termination_by (fuel, sizeList cs, 1)
-  decreasing_by
-    · exact Prod.Lex.right _ (lex_of_le (by simp only [sizeList]; omega) (fun _ => Nat.zero_lt_one))
-    · exact Prod.Lex.right _ (Prod.Lex.left _ _ (by simp only [sizeList]; have := size_pos c; omega))
-end
-
-/-- Fuel-bounded normalization. Fails if the fuel ran out or a rule refused. -/
-def normalizeFuel (rules : List PlainRule) (fuel : Nat) (e : Expr) : TraceM (Except String Expr) := do
-  let (out, st) := normAtF rules fuel e [] {}
-  match st.error with
-  | some msg => pure (.error msg)
-  | none =>
-    if st.exhausted then pure (.error s!"rewriting exceeded {fuel} steps (non-terminating rule set?)") else
-    let (steps, _) := buildSteps e st.steps
-    modify (· ++ steps)
-    pure (.ok out)
-
-/-- Run a nested normalization and package its steps as a sub-derivation (the reference's `trace.nested`). -/
-def nested (rules : List PlainRule) (fuel : Nat) (e : Expr) : Except String (Expr × Option Derivation) :=
-  match (normalizeFuel rules fuel e).run #[] with
-  | (.error msg, _) => .error msg
-  | (.ok out, steps) => .ok (out, if steps.isEmpty then none else some ⟨e, steps, out⟩)
 
 /-- A verified rule, forgetting its proof. -/
 def Rule.toPlain (r : Rule W) : PlainRule := { name := r.name, silent := r.silent, apply := r.apply }

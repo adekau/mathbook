@@ -16,7 +16,7 @@ satisfy `SemEqR.congr`, which is the law M3's fold (`normalize_sound_for`) is bu
 So this file *extends* rather than edits: `evalD` agrees with `evalR` everywhere except that it
 reads `diff`, and `evalD_eq_evalR` proves the two agree on every diff-free term. That is the same
 shape as M1 → M3, where `evalR_of_eval?` showed the integer fragment was a restriction of ℝ. The
-`diff.*` rules run under `normalizeFuel`, never under the verified `normalize`, so they never need
+`diff.*` rules run under the tiered rewriter `normalizeT`, never under the additive `normalize`, so they never need
 the congruence in the first place.
 
 As in M3, the interesting result is which rules need a hypothesis. `deriv` is junk-valued off the

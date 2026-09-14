@@ -46,8 +46,9 @@ differential test with zero mismatches.
   That hypothesis is what lets the product rule duplicate its body. The theorem is
   `pipelineOrdered` (`PipelineOrder.lean`), one lemma per rule. Rules that delegate to unverified
   code (commands, matrix arithmetic) have their outputs *checked* for the tier they must decrease
-  rather than proved. The only remaining step budget is the `expand` command's nested set,
-  recorded in `book/TRACKING.md`.
+  rather than proved. There is no step budget anywhere: `expand` distributes by a total function
+  (`Expand.dist`, proved sound over ℝ in `proofs/Proofs/Expand.lean`) and the pipeline collects
+  the result.
 - **Elimination is verified over ℚ by construction.** `LinAlgQ.lean` writes Gauss–Jordan as a
   list of the three elementary row operations, each invertible (the degenerate parameters are the
   identity), and proves `sol_rref`: the reduced matrix has the input's solution set. The `rref`

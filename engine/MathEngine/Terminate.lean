@@ -13,7 +13,7 @@ ordering `μ` of `Order.lean` rather than one additive measure. Two things diffe
   `normAtT` returns its output together with `μ output ≤ μ input` and `Normal output`, and the
   recursive call after a firing uses exactly those facts.
 * **Rules may refuse.** A refusal (`RuleResult.error`) stops normalization with that message, as
-  `normalizeFuel` did; nothing is proven about the term in that case, and nothing needs to be.
+  the old fuel-based rewriter did; nothing is proven about the term in that case, and nothing needs to be.
 
 Nothing here is `partial`, and there is no step budget: the recursion is well-founded on
 `(μ e, phase, remaining children)`.

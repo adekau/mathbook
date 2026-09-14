@@ -85,7 +85,7 @@ M5 termination: measure-decreasing proof replaces the step budget (connects to t
      makes every `la.*` rule a strict decrease and `M` never sees a matrix.
    - Honest boundaries: commands (which call the fuel-based expand set, elimination, floats) and the matrix rules
      (unverified arithmetic until M7) have their outputs checked at run time for exactly the property the proof needs
-     (`checked`, `checkedLit`); a failure surfaces as an error, never as non-termination. Scalar rules skip nodes with a
+     (`checked`, `checkedLit`); a failure surfaces as an error, never as non-termination. (The expand set left fuel on 2026-09-14, see the open items below.) Scalar rules skip nodes with a
      matrix child (`scalarOnly`), and `la.context` refuses a literal anywhere no matrix rule handles it, so a normal term
      is literal-free below its root — the lemma the third tier rests on.
    - Behaviour changes, all deliberate: `det` and `M^k` on literals are one step each; `la.mul` multiplies the first two
@@ -140,5 +140,22 @@ M8 integration as a verified *checker* (`deriv (integrate f) = f`), not a verifi
    (never a wrong answer) and a pointer at what `simp.function` lacks; (3) `x^a` is accepted through
    `simp.collect-powers` cancelling `(a+1)/(a+1)`, so its check inherits that rule's side condition (`a ≠ −1`) — the
    statuses say so without anyone writing it down. Open: products (integration by parts), `sin² x`, rational functions.
-Open: radical simplification (sqrt 8 → 2√2), user functions with parameters, plotting, design file import.
+Open items after M8 (2026-09-14, Alex: "go through the open items before the book"):
+- expand off fuel — DONE 2026-09-14. Not a joint ordering: an interpretation under which `a(b+c) → ab + ac` decreases
+  makes `x·x → x²` increase, the M5 wall again. Instead `Expand.dist` (ExpandRules.lean) is one total, structurally
+  recursive function — children first, then multiply out a product whose factor is a sum, collecting like monomials
+  as the product is built factor by factor — and the pipeline collects the rest. The fuel rewriter is deleted; there
+  is no step budget anywhere. `proofs/Proofs/Expand.lean` proves `dist_sound` over ℝ (unconditional: distribution
+  holds in every commutative ring), so `cmd.expand` is now a verified step. Findings: (1) without collecting during
+  distribution the pipeline's collect-like-terms took the 4096 monomials of `(x+y)^12` one pair at a time at the root
+  with a full canonical sort each — minutes; collecting as a polynomial (sorted keys, coefficients folded) makes it
+  instant and cuts the recorded derivation from 49,143 steps to two; (2) a step-recording algorithm and a rewrite
+  system read the same in the notebook, which is the argument for doing it this way whenever a joint ordering would
+  be forced. Alex's decision (2026-09-14).
+- radical simplification (sqrt 8 → 2√2): Alex chose to retune M (2026-09-14) — pending.
+- echelon form of `LinQ.rref` proved rather than checked — pending.
+- integration: by parts, `sin² x`, rational functions; `tan` normal form — pending.
+- user functions with parameters — pending.
+- plotting (engine samples, notebook draws; studio Graph shot) — pending.
+- notebook file open/save — pending.
 Six-month cut line: M5 — reached 2026-09-13.

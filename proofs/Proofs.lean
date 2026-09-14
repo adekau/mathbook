@@ -4,6 +4,7 @@ import Proofs.Semantics
 import Proofs.SimpReal
 import Proofs.Deriv
 import Proofs.Integrate
+import Proofs.Expand
 /-!
 # Proofs about the engine (skeleton)
 

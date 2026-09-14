@@ -13,8 +13,8 @@ such node either evaluates or refuses, so a normal form never contains one — t
 termination proof (`PipelineOrder.lean`) needs about the command tier.
 
 `pipelineRulesWith norm` is what a cell is normalized with, under `normalizeT` (Terminate.lean):
-innermost, with the tiered ordering of `Order.lean`, no step budget. Only the `expand` command's
-nested set still runs on `normalizeFuel` (book/TRACKING.md, M5 decision).
+innermost, with the tiered ordering of `Order.lean`, no step budget anywhere (`expand` distributes
+by a total function and lets the pipeline collect the result).
 
 The parameter `norm` is the normalizer the `integrate` command checks its candidates with. It cannot
 be the pipeline itself (the pipeline is being defined), so `Integrate.lean` closes the knot after the
@@ -33,8 +33,6 @@ def checked (r : RuleResult) : RuleResult :=
   else if cmdCount r.result = 0 then r
   else refuse "a command produced a term that still contains a command"
 
-def maxSteps : Nat := 10000
-
 /-- In the pipeline, a scalar rule leaves nodes with a matrix literal among their children to the
 matrix rules (which evaluate or refuse every such node), so its termination proof only has to
 consider literal-free nodes. -/
@@ -43,7 +41,6 @@ def scalarOnly (r : PlainRule) : PlainRule :=
 
 def simpPlain : List PlainRule := simpRules.map fun r => scalarOnly r.toPlain
 def parityPlain : List PlainRule := parityRules.map scalarOnly
-def expandSet : List PlainRule := expandRules ++ simpPlain ++ parityRules
 
 /-- Notebook commands: `simplify`, `expand`, `rref`, `N`, `subst`, `integrate`. -/
 def cmdSimplify : PlainRule :=
@@ -57,9 +54,10 @@ def cmdExpand : PlainRule :=
   { name := "cmd.expand", apply := fun e => Option.map checked <|
       match e with
       | .fn "expand" [a] =>
-        match nested expandSet maxSteps a with
-        | .ok (out, sub) => some ⟨out, "Expand products and powers of sums by repeated distribution.", sub, none⟩
-        | .error msg => some ⟨a, "", none, some msg⟩
+        let out := Expand.dist a
+        let steps := Expand.steps a
+        some ⟨out, "Expand products and powers of sums by distribution; the pipeline collects the result.",
+          if steps.isEmpty then none else some ⟨a, steps, out⟩, none⟩
       | .fn "expand" _ => some (refuse "expand takes one argument")
       | _ => none }
 

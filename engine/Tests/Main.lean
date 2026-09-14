@@ -157,8 +157,6 @@ def tests : TestM Unit := do
     "test.unwrap@[0, 0] (x) -> (x), test.unwrap@[0] (x) -> x, test.unwrap@[] x -> x"
   check "rewrite: canonical order is silent" (derive [unwrap] (.add [y, x])).output.toText "x + y"
   check "rewrite: sums ordered by degree" (derive [unwrap] (.add [.ofInt 1, .pow x (.ofInt 2), .mul [.ofInt 3, x]])).output.toText "x^2 + 3*x + 1"
-  check "rewrite: fuel exhausted" (match (normalizeFuel [unwrapP] 0 (.add [x])).run' #[] with | .ok e => e.toText | .error _ => "exhausted") "exhausted"
-  check "rewrite: fuel sufficient" (match (normalizeFuel [unwrapP] 5 (.mul [.add [.add [x]]])).run' #[] with | .ok e => e.toText | .error _ => "exhausted") "x"
   -- step 3: simplify (rendered text after normalization, as the reference tests do)
   let simp (src : String) : String := match parse src with
     | .ok e => (simplify0 e).toText

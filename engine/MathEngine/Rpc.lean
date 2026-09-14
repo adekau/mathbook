@@ -48,6 +48,9 @@ def ruleStatus : Json :=
     entry "la.row-swap.symbolic" "unverified" "Symbolic entries: the pivot is assumed nonzero because simplify could not show it is zero.",
     entry "la.row-scale.symbolic" "unverified" "Symbolic entries: division by a pivot that is only assumed nonzero.",
     entry "la.row-add.symbolic" "unverified" "Symbolic entries: the arithmetic is the simplifier's, outside the ℚ theorem.",
+    entry "cmd.expand" "verified" "Distribution is a total function proved sound over ℝ (dist_sound, proofs/Proofs/Expand.lean); the collection afterwards is the pipeline's own steps with their statuses.",
+    entry "expand.distribute" "verified" "Multiplying out a product of sums and collecting like monomials: dist_sound.",
+    entry "expand.power" "verified" "A power of a sum is the sum multiplied by itself: dist_sound.",
     entry "cmd.integrate" "verified" "Accepted only when the candidate's derivative normalizes to the integrand, exactly (cmdIntegrate_spec); integrate_deriv reads that as deriv F = f wherever the differentiation steps shown are sound. The finder's own steps are guesses.",
     entry "int.check" "verified" "The differentiation of the candidate: this step carries the claim, with the statuses of its own steps.",
     entry "int.constant" "checked" "A guess from the finder; nothing is proved about it. Accepted only because int.check verifies the result by differentiation.",
@@ -64,7 +67,7 @@ def capabilities : Json :=
          ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate"]),
          ("ruleStatus", ruleStatus),
          ("termination", .obj #[("status", .str "proven"), ("theorem", .str "MathEngine.pipelineOrdered"),
-           ("summary", .str "Cell evaluation has no step budget: every pipeline rule decreases a five-tier ordering (commands, higher-order diff, matrix literals, the weight M, size) on nodes whose children are normal. Only the nested `expand` set still runs on fuel.")])]
+           ("summary", .str "Cell evaluation has no step budget: every pipeline rule decreases a five-tier ordering (commands, higher-order diff, matrix literals, the weight M, size) on nodes whose children are normal.")])]
 
 def Rendered.toJson (e : Expr) (paths : Bool) : Json :=
   .obj #[("text", .str e.toText), ("latex", .str (e.toLatex paths))]

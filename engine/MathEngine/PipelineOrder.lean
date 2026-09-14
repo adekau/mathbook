@@ -191,7 +191,7 @@ theorem not_noFire_of_cmd {f : String} {es : List Expr} (h : cmdNames.contains f
     | _ :: _ :: _, h => simp [cmdSimplify] at h
   · have := hnf cmdExpand ((mem_pipeline_iff _).2 (by simp))
     match es, this with
-    | [a], h => simp only [cmdExpand, Option.map_eq_none_iff] at h; split at h <;> simp at h
+    | [a], h => simp [cmdExpand] at h
     | [], h => simp [cmdExpand] at h
     | _ :: _ :: _, h => simp [cmdExpand] at h
   · have := hnf cmdRref ((mem_pipeline_iff _).2 (by simp))
