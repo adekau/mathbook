@@ -1,0 +1,170 @@
+\chapter{Echelon Form}\label{ch:echelon}
+
+Chapter~\ref{ch:systems} proved that elimination does not change the answer. This chapter proves
+that it arrives at one: the output is in reduced row echelon form, from which the solution set can
+be read off. On paper the proof is ``keep going until it is''; in Lean it is an invariant carried
+column by column, and the one lemma that made the invariant provable is about a detail the paper
+proof never mentions.
+
+\section{The definition}
+
+\begin{definition}[Reduced row echelon form]
+  A matrix is in reduced row echelon form (RREF) if:
+  \begin{enumerate}[nosep]
+    \item every zero row is below every nonzero row;
+    \item the first nonzero entry of each nonzero row (its \emph{pivot}) is $1$;
+    \item the pivot of each nonzero row is strictly to the right of the pivot of the row above;
+    \item each pivot is the only nonzero entry in its column.
+  \end{enumerate}
+\end{definition}
+
+Conditions 1--3 alone define \emph{row echelon form}; condition 4 is the ``reduced''. From an
+RREF matrix the solutions are immediate: the pivot columns' variables are determined by the
+others (the \emph{free} variables), one equation each, and the free variables are arbitrary. The
+number of pivots is the rank.
+
+\begin{theorem}[Existence]
+  Every matrix can be brought to RREF by elementary row operations.
+\end{theorem}
+\begin{proof}
+  Induction on the columns, maintaining: the first $p$ rows are in RREF with their pivots in
+  the columns seen so far, and every later row is zero in those columns. Initially $p = 0$. For
+  the next column $c$: if rows $p, p+1, \ldots$ are all zero in column $c$, the invariant holds
+  with $c$ added and $p$ unchanged. Otherwise pick a row $q \ge p$ with a nonzero entry, swap it
+  to row $p$, scale row $p$ to make the entry $1$, and add multiples of row $p$ to every other row
+  to clear column $c$. Rows above $p$ keep their pivots (their pivot columns are left of $c$,
+  where row $p$ is zero); rows below $p$ are now zero through column $c$; row $p$ is a pivot row
+  with pivot at $c$. So the invariant holds with $p + 1$.
+\end{proof}
+
+\begin{theorem}[Uniqueness]
+  The RREF of a matrix is unique.
+\end{theorem}
+
+Uniqueness is true and not proved by the engine; the standard argument is that two RREF matrices
+with the same row space have the same pivot columns and then the same rows. The engine's claim is
+existence, for its own algorithm.
+
+\section{The algorithm}
+
+\begin{minted}{lean}
+def columnBody (m : Mat) (col p q : Nat) : List Op :=
+  let swaps := if q = p then [] else [Op.swap q p]
+  let m1 := runOps swaps m
+  let piv := entry m1 p col
+  let scales := if piv = 1 then [] else [Op.scale p piv.inv]
+  let m2 := runOps scales m1
+  let factors := ((List.range m.length).filter fun i => i ≠ p ∧ entry m2 i col ≠ 0).map fun i => (i, -(entry m2 i col))
+  swaps ++ scales ++ factors.map fun x => Op.addMul x.1 p x.2
+
+def columnOps (m : Mat) (col p : Nat) : Option (List Op) :=
+  ((List.range m.length).find? fun i => p ≤ i && entry m i col != 0).map (columnBody m col p)
+
+def go (m : Mat) (col p : Nat) : Nat → List (Nat × Op)
+  | 0 => []
+  | k + 1 =>
+    if p ≥ m.length then [] else
+    match columnOps m col p with
+    | none => go m (col + 1) p k
+    | some ops => let tagged := ops.map (col, ·); tagged ++ go (run tagged m) (col + 1) (p + 1) k
+\end{minted}
+
+This is the proof's induction step as code: swap, scale, clear; or move on. The recursion is on
+the number of columns remaining, so it is structural and needs no fuel.
+
+\section{The invariant}
+
+\begin{minted}{lean}
+structure Inv (m : Mat) (p col : Nat) (pivs : List Nat) : Prop where
+  len    : pivs.length = p
+  lt     : ∀ c ∈ pivs, c < col
+  sorted : pivs.Pairwise (· < ·)
+  pivot  : ∀ i, i < p → entry m i (pivs.getD i 0) = 1
+  lead   : ∀ i, i < p → ∀ j, j < pivs.getD i 0 → entry m i j = 0
+  alone  : ∀ i, i < p → ∀ k, k ≠ i → entry m k (pivs.getD i 0) = 0
+  below  : ∀ i, p ≤ i → ∀ j, j < col → entry m i j = 0
+  p_le   : p ≤ m.length
+
+def IsRref (m : Mat) (w : Nat) : Prop := ∃ p pivs, Inv m p w pivs
+theorem rref_isRref (m : Mat) : IsRref (rref m) (ncols m)
+\end{minted}
+
+Match the clauses to the definition: \lc{pivot} and \lc{lead} are condition 2 (a leading $1$);
+\lc{sorted} is condition 3; \lc{alone} is condition 4; \lc{below} is condition 1 in the form
+``rows $\ge p$ are zero in every column seen''. When \lc{col} reaches the width, \lc{below} says
+the later rows are entirely zero, and \lc{IsRref} is the definition.
+
+The four transition lemmas are the four sentences of the paper proof: \lc{Inv.next_none} (no
+pivot: the column moves on), \lc{Inv.swap_ge} (swapping row $p$ with a row below keeps the
+invariant, since both are zero left of \lc{col}), \lc{Inv.scale_p} (scaling row $p$ keeps it),
+and \lc{Inv.next_some} (after clearing, one more pivot row). \lc{go_inv} folds them over the
+recursion.
+
+\section{The lemma the paper proof skips}
+
+The clearing step applies one row addition per nonzero entry, \emph{sequentially}. The paper proof
+says ``clear the column'' as if all the additions happened at once, and for the invariant that
+is what one wants: every row other than $p$ changes by its own multiple of row $p$, and row $p$
+itself does not change. Sequential application agrees with simultaneous application only because
+each addition touches a different row and reads row $p$, which none of them touches. The lemma
+that says so is:
+
+\begin{minted}{lean}
+theorem entry_clears {p : Nat} : ∀ (L : List (Nat × Rat)) (m : Mat), p < m.length →
+    (L.map Prod.fst).Nodup → (∀ x ∈ L, x.1 ≠ p) → (∀ x ∈ L, x.1 < m.length) →
+    ∀ k l, entry (runOps (L.map fun x => Op.addMul x.1 p x.2) m) k l =
+      match coeffOf k L with
+      | some c => entry m k l + c * entry m p l
+      | none => entry m k l
+\end{minted}
+
+The factors are read from the matrix \emph{before} any clearing (\lc{factors} is computed from
+\lc{m2}, not updated as the loop runs), and the list of rows has no duplicates and excludes $p$.
+With this lemma every clause of \lc{Inv} after the column step is checked one entry at a time,
+and the proof never follows the loop. It is the kind of lemma one only discovers by trying to
+prove the invariant without it.
+
+\section{Two remarks on the statement}
+
+The theorem is stated in the width of the \emph{input}, \lc{ncols m}, rather than of the output.
+That avoids proving that row operations preserve rectangularity, which the padding convention of
+Chapter~\ref{ch:systems} makes false in general (a padded row may be longer). For the rectangular
+matrices the parser admits, the two widths coincide.
+
+And the field algebra is again \lc{grind}'s. \lc{ring} is Mathlib's tactic, unavailable in the
+Init-only engine, and the rational identities that clearing needs --- that $a + (-a/b)\cdot b = 0$
+and the like --- are within \lc{grind}'s reach. The whole proof is 412 lines and imports nothing.
+
+\begin{logbox}[Before the proof]
+  The first version decided at run time whether the output was in RREF, and refused the
+  evaluation if not. That is the honest boundary of Chapter~\ref{ch:order}: check what the
+  proof needs, fail loudly. It was also a promise to come back, and the check is gone now.
+\end{logbox}
+
+\begin{trybox}
+\begin{minted}{text}
+rref([0,0,1;1,0,0])
+rref([2,4,6;1,2,3])
+rref([1,1,1;1,2,3;1,4,9])
+\end{minted}
+  The first needs a swap. The second has rank one. The third is a Vandermonde matrix; its RREF
+  is the identity, which is why polynomial interpolation through three points has one answer.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Reading off solutions]
+  Bring $\begin{pmatrix} 1 & 2 & 0 & 3 \\ 2 & 4 & 1 & 8 \end{pmatrix}$ to RREF by hand, name the
+  pivot and free variables, and write the solution set as a point plus a span.
+\end{exercisebox}
+
+\begin{exercisebox}[Uniqueness]
+  Prove that two matrices in RREF with the same row space are equal. (First show they have the
+  same pivot columns, by considering the leftmost column in which they differ.)
+\end{exercisebox}
+
+\begin{exercisebox}[Why the factors are read first]
+  Construct a $3 \times 1$ matrix on which reading the clearing factors \emph{after} each
+  addition, rather than before, would clear the column incorrectly if the pivot row were also
+  in the list.
+\end{exercisebox}

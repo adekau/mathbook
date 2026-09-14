@@ -1,0 +1,195 @@
+\chapter{Polynomials}\label{ch:poly}
+
+Collecting like terms is the first algebra anyone learns and the first rule that needed a real
+proof: $3x + 5x = 8x$ is the distributive law, and the distributive law is an axiom of a ring.
+Expansion --- multiplying out $(x + y)^{12}$ --- is the same law applied many times, and the
+chapter's second half is about the fact that ``many times'' can be organized so that the answer
+is a polynomial rather than a mess.
+
+\section{Rings and the distributive law}
+
+\begin{definition}[Commutative ring]
+  A commutative ring is a set with two operations $+$ and $\cdot$ such that $+$ is associative
+  and commutative with an identity $0$ and inverses, $\cdot$ is associative and commutative with
+  an identity $1$, and multiplication distributes over addition:
+  $a(b + c) = ab + ac$.
+\end{definition}
+
+Everything a simplifier does to a sum or product follows from these axioms. The identities
+$a + 0 = a$ and $a \cdot 1 = a$ are the rule \rn{simp.identity}; $a \cdot 0 = 0$ is a
+\emph{theorem} of rings, not an axiom, and its proof is worth remembering:
+$a \cdot 0 = a \cdot (0 + 0) = a \cdot 0 + a \cdot 0$, and cancelling $a \cdot 0$ from both sides
+gives $a \cdot 0 = 0$. Associativity of $+$ and $\cdot$ is \rn{simp.flatten}, which turns a nested
+sum into one flat list.
+
+Like terms are the distributive law read right to left:
+\[
+  a t + b t = (a + b)\, t .
+\]
+Here $t$ is any term and $a, b$ are numerals. The rule is stated for two terms; a sum of $k$ like
+terms collects by $k - 1$ applications.
+
+\section{The polynomial ring}
+
+\begin{definition}[Polynomials]
+  For a commutative ring $R$, the polynomial ring $R[x_1, \ldots, x_n]$ is the set of finite
+  formal sums $\sum_\alpha c_\alpha x^\alpha$, where $\alpha$ ranges over exponent vectors in
+  $\mathbb{N}^n$, $x^\alpha = x_1^{\alpha_1} \cdots x_n^{\alpha_n}$, and each $c_\alpha \in R$.
+  Addition is coefficient-wise; multiplication is
+  \[
+    \Big(\sum_\alpha a_\alpha x^\alpha\Big)\Big(\sum_\beta b_\beta x^\beta\Big)
+      = \sum_\gamma \Big(\sum_{\alpha + \beta = \gamma} a_\alpha b_\beta\Big) x^\gamma .
+  \]
+\end{definition}
+
+Two facts about this definition matter for the engine. First, a polynomial is a \emph{function
+from monomials to coefficients} with finite support; the monomials $x^\alpha$ are a basis, and two
+polynomials are equal iff their coefficients agree monomial by monomial. That is what makes
+``collect like terms'' well defined: the like terms are the summands with the same monomial.
+Second, multiplication is the distributive law applied to every pair of summands, followed by
+collection. So expansion is not a search; it is a computation with one answer.
+
+\begin{theorem}[Binomial theorem]
+  For $n \in \mathbb{N}$, $(x + y)^n = \sum_{k=0}^n \binom{n}{k} x^k y^{n-k}$.
+\end{theorem}
+\begin{proof}
+  Induction on $n$. For $n = 0$ both sides are $1$. Assuming the identity for $n$,
+  \[
+    (x+y)^{n+1} = (x+y)\sum_{k} \binom{n}{k} x^k y^{n-k}
+      = \sum_k \binom{n}{k} x^{k+1} y^{n-k} + \sum_k \binom{n}{k} x^k y^{n+1-k},
+  \]
+  and collecting the coefficient of $x^k y^{n+1-k}$ gives $\binom{n}{k-1} + \binom{n}{k} =
+  \binom{n+1}{k}$, Pascal's rule.
+\end{proof}
+
+The proof is itself an expansion followed by a collection, which is the engine's algorithm with
+the coefficients tracked symbolically. Pascal's rule is the collection step.
+
+\section{The rule: collecting like terms}
+
+A summand is read as a coefficient times a rest, \lc{coeffRest}: $3x$ is $(3, x)$, $x$ is
+$(1, x)$, $5$ is $(5, 1)$. The rule finds the first pair of summands with equal rests and merges
+them:
+
+\begin{minted}{lean}
+def mergeTerms : List Expr → Option (List Expr × Expr)
+  | [] => none
+  | e :: rest =>
+    let (c, t) := coeffRest e
+    if bigBase t then
+      match rest.find? (fun f => equal (coeffRest f).2 t) with
+      | some f => some ((.mul [.num (c + (coeffRest f).1), t]) :: removeFirst (fun f => equal (coeffRest f).2 t) rest, t)
+      | none => (mergeTerms rest).map fun (l, u) => (e :: l, u)
+    else (mergeTerms rest).map fun (l, u) => (e :: l, u)
+\end{minted}
+
+The guard \lc{bigBase t} excludes a rest that is a bare numeral, so that $2 + 3$ is left to the
+fold-constants rule of Chapter~\ref{ch:q} rather than to this one; the two rules divide the work
+by the shape of the term, and the termination proof needs the division to be clean.
+
+\begin{thmbox}[\lcn{collectTerms_soundR}]
+  Wherever the rule fires, \lc{evalR} of the output equals \lc{evalR} of the input.
+\end{thmbox}
+
+The proof is the distributive law of $\mathbb{R}$ once (\lc{mergeTerms_soundR}: the merged
+summand has the value of the two it replaced) and the permutation lemma for sums once (the
+rule moved the merged summand to the front). Nothing else. The status is \status{verified}.
+
+\section{Expansion as a function}
+
+Expansion could have been a rule --- ``a product with a sum among its factors rewrites to the
+sum of the products'' --- and in the first version of the engine it was. Chapter~\ref{ch:cannot}
+explains why it cannot coexist with $x \cdot x \to x^2$ under one termination ordering. Here is
+the mathematics that replaced it: the polynomial ring's multiplication, computed directly.
+
+\begin{minted}{lean}
+structure Mono where
+  coeff : Q
+  key : List Expr     -- the non-numeral factors, sorted
+
+abbrev Poly := List Mono   -- distinct keys
+
+def insertMono (m : Mono) : Poly → Poly
+  | [] => [m]
+  | n :: ns => if Expr.beqList n.key m.key then ⟨n.coeff + m.coeff, n.key⟩ :: ns else n :: insertMono m ns
+
+def polyMul (p q : Poly) : Poly := collect (p.flatMap fun a => q.map (Mono.mul a))
+
+def distMul (fs : List Expr) : Expr :=
+  if fs.any isAdd then ofPoly ((fs.map toPoly).foldl polyMul [⟨Q.one, []⟩]) else .mul fs
+\end{minted}
+
+Read against the definition: a \lc{Mono} is one term $c_\alpha x^\alpha$, with the monomial
+represented by its sorted factor list so that equal monomials have equal keys; a \lc{Poly} is
+the finite-support function, as a list with distinct keys; \lc{insertMono} is coefficient-wise
+addition; \lc{polyMul} is the double sum in the definition, with the inner collection done by
+\lc{collect}. The function \lc{dist} applies this bottom-up, and a power of a sum with a small
+natural exponent becomes that many copies multiplied out.
+
+The collection \emph{during} multiplication is what makes the binomial theorem's $n = 12$
+tractable. Without it, $(x+y)^{12}$ produces $2^{12} = 4096$ monomials and leaves them for the
+collect-like-terms rule, which merges one pair at a time; with it, the $13$ monomials of the
+answer are the only ones that ever exist.
+
+\section{The theorem for expansion}
+
+The soundness proof is a structural induction on \lc{dist}, and it is stated for any semantics
+that reads sums, products, numerals and natural powers the obvious way:
+
+\begin{minted}{lean}
+structure Sem where
+  ev : EnvR → Expr → ℝ
+  ev_add : ∀ ρ es, ev ρ (.add es) = (es.map (ev ρ)).sum
+  ev_mul : ∀ ρ es, ev ρ (.mul es) = (es.map (ev ρ)).prod
+  ev_num : ∀ ρ q, ev ρ (.num q) = (q.val : ℝ)
+  ev_pow : ∀ ρ b e, ev ρ (.pow b e) = ev ρ b ^ ev ρ e
+
+def evalM (m : Mono) : ℝ := (m.coeff.val : ℝ) * (m.key.map (S.ev ρ)).prod
+def evalP : Poly → ℝ
+  | [] => 0
+  | m :: ms => evalM S ρ m + evalP ms
+
+theorem dist_sound (ρ : EnvR) : ∀ e : Expr, evalR ρ (Expand.dist e) = evalR ρ e
+\end{minted}
+
+The chain of lemmas is the chain of definitions: a monomial evaluates to its coefficient times
+its factors (\lc{ev_Mono_eval}); inserting a monomial adds its value (\lc{evalP_insertMono},
+which is the distributive law $c_1 t + c_2 t = (c_1 + c_2) t$ once more); the product of two
+polynomials evaluates to the product of their values (\lc{evalP_polyMul}, distributivity over
+the double sum); and \lc{dist} is sound by induction. The structure \lc{Sem} is instantiated
+twice, for \lc{evalR} here and for the derivative semantics \lc{evalD} in
+Chapter~\ref{ch:parts}, where expansion is part of the integral checker. The status of
+\rn{cmd.expand} is \status{verified}, unconditionally: distribution holds in every commutative
+ring, and $\mathbb{R}$ is one.
+
+\begin{trybox}
+\begin{minted}{text}
+3*x + 5*x + x
+expand((x + y)^12)
+expand((a + b)*(a - b))
+\end{minted}
+  The coefficient of $x^6 y^6$ in the second is $\binom{12}{6} = 924$. The third is
+  $a^2 - b^2$ after the pipeline collects $ab - ba$.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Pascal's rule]
+  Prove $\binom{n}{k-1} + \binom{n}{k} = \binom{n+1}{k}$ from the definition
+  $\binom{n}{k} = \frac{n!}{k!(n-k)!}$, and then combinatorially.
+\end{exercisebox}
+
+\begin{exercisebox}[Keys]
+  Why must the key of a monomial be \emph{sorted}? Give two factor lists for the same monomial
+  that \lc{Expr.beqList} would distinguish if they were not.
+\end{exercisebox}
+
+\begin{exercisebox}[Multinomial]
+  State and prove the multinomial theorem for $(x + y + z)^n$ by induction on $n$ using the
+  binomial theorem, and count the monomials of $(x + y + z)^{4}$.
+\end{exercisebox}
+
+\begin{exercisebox}[The generic semantics]
+  \lc{Sem} does not mention functions or variables. Explain why the soundness of \lc{dist} does
+  not need to know what $\sin$ means.
+\end{exercisebox}

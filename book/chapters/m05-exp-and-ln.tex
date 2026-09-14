@@ -1,0 +1,172 @@
+\chapter{The Exponential and the Logarithm}\label{ch:explog}
+
+$e^{\ln x} = x$ is the definition of the logarithm, and the engine's proof of it fails at
+$x = -1$. The reason is that Mathlib's logarithm is a total function, defined for negative numbers
+as $\ln |x|$, so that $\ln(-1) = 0$ and $e^{\ln(-1)} = 1$. This chapter relearns the two functions
+from their definitions, states their identities with their domains, and shows which of the
+engine's function rules are proved, which is refuted, and which have no theorem yet.
+
+\section{The exponential}
+
+\begin{definition}
+  $\exp(x) = \sum_{n \ge 0} \frac{x^n}{n!}$.
+\end{definition}
+
+The series converges absolutely for every real (and complex) $x$ by the ratio test:
+$\frac{|x|^{n+1}/(n+1)!}{|x|^n/n!} = \frac{|x|}{n+1} \to 0$.
+
+\begin{theorem}
+  $\exp(x + y) = \exp(x)\exp(y)$; $\exp(0) = 1$; $\exp$ is differentiable with $\exp' = \exp$;
+  $\exp(x) > 0$ for all real $x$; $\exp$ is strictly increasing and maps $\mathbb{R}$ onto
+  $(0, \infty)$.
+\end{theorem}
+\begin{proof}[Proof sketch]
+  The functional equation is the Cauchy product of two absolutely convergent series with the
+  binomial theorem (Chapter~\ref{ch:poly}) applied termwise: the coefficient of $\frac{1}{n!}$ in
+  the product is $\sum_k \binom{n}{k} x^k y^{n-k} = (x+y)^n$. Differentiating termwise, which is
+  legitimate for a power series inside its radius of convergence, gives $\exp' = \exp$.
+  Positivity: $\exp(x)\exp(-x) = \exp(0) = 1$, so $\exp(x) \neq 0$, and $\exp(x) > 0$ for
+  $x \ge 0$ from the series; then for $x < 0$ from $\exp(x) = 1/\exp(-x)$. Strictly increasing
+  since the derivative is positive; onto $(0, \infty)$ by the intermediate value theorem with
+  $\exp(x) \ge 1 + x$ and $\exp(-x) \le 1/(1+x)$.
+\end{proof}
+
+\section{The logarithm}
+
+\begin{definition}
+  $\ln : (0, \infty) \to \mathbb{R}$ is the inverse of $\exp$: $\ln y$ is the unique $x$ with
+  $\exp x = y$.
+\end{definition}
+
+\begin{theorem}
+  For $a, b > 0$: $\ln(ab) = \ln a + \ln b$; $\ln 1 = 0$; $\ln(a^p) = p \ln a$ for real $p$;
+  $\ln$ is differentiable with $\ln'(y) = 1/y$.
+\end{theorem}
+\begin{proof}
+  $\exp(\ln a + \ln b) = \exp(\ln a)\exp(\ln b) = ab$, so $\ln a + \ln b$ is the $x$ with
+  $\exp x = ab$. $\ln 1 = 0$ since $\exp 0 = 1$. With $a^p := \exp(p \ln a)$, $\ln(a^p) = p \ln a$
+  is immediate from the definition. The derivative is the inverse function rule:
+  $\ln'(y) = 1/\exp'(\ln y) = 1/\exp(\ln y) = 1/y$.
+\end{proof}
+
+Every identity has the hypothesis $a, b > 0$, because that is the domain of $\ln$.
+
+\section{Mathlib's logarithm}
+
+Mathlib defines \lc{Real.log x} for every real $x$: it is $\ln |x|$ for $x \neq 0$, and $0$ at
+$0$. The consequences are three lemmas the engine's proofs use.
+
+\begin{itemize}[nosep]
+  \item \lc{Real.log_exp} : $\ln(\exp x) = x$ for all $x$. Unconditional, because $\exp x$ is
+    always positive.
+  \item \lc{Real.exp_log} : $\exp(\ln x) = x$ for $0 < x$. Conditional. For $x < 0$,
+    $\exp(\ln x) = \exp(\ln|x|) = |x| = -x$.
+  \item \lc{Real.log_neg_eq_log} : $\ln(-x) = \ln x$. The logarithm is an even function.
+\end{itemize}
+
+The third is the one that makes the counterexample two lines long.
+
+\section{The rules}
+
+The engine's function rules are a table of identities at special arguments and inverse pairs:
+
+\begin{minted}{lean}
+def functionApply : Expr → Option RuleResult
+  | .mul es =>
+    match findTan es with
+    | some (u, others) => some ⟨mulN (.fn "tan" [u] :: others), "$\\sin u / \\cos u = \\tan u$.", none, none⟩
+    | none => none
+  | .fn "sqrt" [a] => some ⟨.pow a (.num (Q.ofRat (mkRat 1 2))), "…", none, none⟩
+  | .fn "ln" [a] =>
+    if isOne a then some ⟨Expr.zero, "$\\ln 1 = 0$.", none, none⟩ else
+    match a with
+    | .fn "exp" [x] => some ⟨x, "$\\ln(e^x) = x$: ln and exp are inverses.", none, none⟩
+    | .pow b p => some ⟨.mul [p, .fn "ln" [b]], "$\\ln(b^p) = p \\ln b$.", none, none⟩
+    | _ => none
+  | .fn "exp" [a] =>
+    if isZero a then some ⟨Expr.one, "$e^0 = 1$.", none, none⟩ else
+    match a with
+    | .fn "ln" [x] => some ⟨x, "$e^{\\ln x} = x$: exp and ln are inverses.", none, none⟩
+    | _ => none
+  | .fn "sin" [a] => if isZero a then some ⟨Expr.zero, "$\\sin 0 = 0$.", none, none⟩ else none
+  | .fn "cos" [a] => if isZero a then some ⟨Expr.one, "$\\cos 0 = 1$.", none, none⟩ else none
+  | .fn "abs" [.num q] => some ⟨.num q.abs, "Absolute value of a constant.", none, none⟩
+  | _ => none
+\end{minted}
+
+\section{The theorems, and the gaps}
+
+Two cases are settled by theorems in \file{proofs/}.
+
+\begin{thmbox}[\lcn{not_functionRules_soundR}]
+  The rule is not unconditionally sound: at $x = -1$ it rewrites $\exp(\ln x)$, whose value is
+  $\exp(\ln 1) = 1$, to $x$, whose value is $-1$.
+\end{thmbox}
+
+\begin{minted}{lean}
+theorem not_functionRules_soundR : ¬ RuleSoundR functionRules := by
+  intro hs
+  have h := hs (.fn "exp" [.fn "ln" [.var "x"]]) _ rfl (fun _ => -1)
+  simp only [evalR_fn₁, applyFn_exp, applyFn_ln, evalR_var] at h
+  rw [show ((-1 : ℝ)) = -(1 : ℝ) by norm_num, Real.log_neg_eq_log, Real.log_one, Real.exp_zero] at h
+  norm_num at h
+\end{minted}
+
+The positive theorem for that case is \lc{exp_log_sound}, which is \lc{Real.exp_log} with the
+hypothesis $0 < x$; the notebook's label for the rule is \status{conditional} with that
+hypothesis.
+
+\begin{thmbox}[\lcn{functionRules_tan_soundR}]
+  The case $\sin u \cdot (\cos u)^{-1} \to \tan u$ is unconditionally sound.
+\end{thmbox}
+
+This is the case that was added when the integral checker refused $\int \tan x$
+(Chapter~\ref{ch:parts}). It is unconditional because Mathlib \emph{defines} $\tan x$ as
+$\sin x / \cos x$ with $x/0 = 0$, so the two sides agree even where the cosine vanishes; the
+proof is \lc{Real.tan_eq_sin_div_cos} and the permutation lemma for products, since the two
+factors may sit anywhere in the list.
+
+The remaining cases have no theorem. $\ln 1 = 0$, $e^0 = 1$, $\sin 0 = 0$, $\cos 0 = 1$,
+$\ln(e^x) = x$, $\sqrt a = a^{1/2}$ and $|c|$ for a numeral are all true unconditionally in
+Mathlib's semantics (\lc{Real.log_one}, \lc{Real.exp_zero}, \lc{Real.sin_zero},
+\lc{Real.cos_zero}, \lc{Real.log_exp}, \lc{Real.sqrt_eq_rpow}, \lc{Rat.cast_abs}) and would each
+be a one-line theorem. $\ln(b^p) \to p \ln b$ is \emph{not} unconditional: for $b = -2$ and
+$p = 1/2$, Mathlib's $(-2)^{1/2} = \sqrt 2 \cos(\pi/2) = 0$, so the left side is $\ln 0 = 0$ while
+the right side is $\frac{1}{2}\ln 2$. It needs $0 < b$ (\lc{Real.log_rpow}), and it needs a
+counterexample theorem like the one above. The rule table's note, ``the other cases are
+unconditional'', is therefore an overstatement for that one case, and the ledger should say
+\status{conditional} for it once the theorems are written. This is recorded here rather than
+hidden: the book's claim is not that everything is proved, but that the boundary is visible.
+
+\begin{trybox}
+\begin{minted}{text}
+exp(ln(x))
+ln(exp(x))
+sin(x) / cos(x)
+ln(x^2)
+\end{minted}
+  The first is labelled with its condition. The second has no condition, and no theorem yet.
+  The third is the tangent case. The fourth fires the one case that should be conditional and
+  is not yet labelled so.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[The gaps]
+  Write and prove \lc{functionRules_ln_exp_soundR} in the style of
+  \lc{functionRules_tan_soundR}. Then state the counterexample theorem for $\ln(b^p) \to
+  p \ln b$ and prove it with \lc{Real.rpow_def_of_neg}.
+\end{exercisebox}
+
+\begin{exercisebox}[The functional equation]
+  Fill in the Cauchy-product step of the proof that $\exp(x+y) = \exp(x)\exp(y)$: write the
+  product of the two series as a double sum, regroup by $n = j + k$, and identify the binomial
+  theorem.
+\end{exercisebox}
+
+\begin{exercisebox}[Evenness]
+  Explain why defining $\ln x = \ln |x|$ for $x < 0$ is the natural choice for a total function
+  in the sense that $\ln$ remains a local inverse of $\exp$ on $\exp$'s image and satisfies
+  $\ln(ab) = \ln a + \ln b$ for all nonzero $a, b$. Find the identity of the theorem above that
+  it does \emph{not} preserve.
+\end{exercisebox}

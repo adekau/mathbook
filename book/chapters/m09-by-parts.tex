@@ -1,0 +1,147 @@
+\chapter{Integration by Parts}\label{ch:parts}
+
+Integration by parts is the product rule integrated, and the chapter is in three movements:
+the derivation and the heuristic for using it; the engine's finder, whose every candidate was
+correct and every candidate refused; and what the refusal taught about normal forms, which
+became the shape of the checker's theorem.
+
+\section{The formula}
+
+\begin{theorem}
+  If $u, v$ are differentiable with continuous derivatives, then
+  $\int u\,v'\,dx = uv - \int u'\,v\,dx$.
+\end{theorem}
+\begin{proof}
+  $(uv)' = u'v + uv'$ by the product rule, so $uv$ is an antiderivative of $u'v + uv'$, and by
+  linearity $\int uv' = uv - \int u'v$.
+\end{proof}
+
+Written $\int u\,dv = uv - \int v\,du$, the formula trades one integral for another, and the art
+is choosing $u$ so that the new integral is easier. The heuristic LIATE --- logarithm, inverse
+trigonometric, algebraic, trigonometric, exponential --- ranks candidates for $u$: take as $u$
+the factor earliest in the list. The reason is that differentiation \emph{simplifies} a
+logarithm (to $1/x$) and a polynomial (lowers its degree), while it leaves an exponential or a
+sine as it was; so $u$ should be the factor that gets simpler, and $dv$ the one that is easy to
+integrate.
+
+\begin{example}
+  $\int x e^x\,dx$: $u = x$, $dv = e^x dx$, so $du = dx$, $v = e^x$, and the integral is
+  $x e^x - \int e^x\,dx = x e^x - e^x$.
+\end{example}
+
+\begin{example}
+  $\int \ln x\,dx$: $u = \ln x$, $dv = dx$, so $du = dx/x$, $v = x$, and the integral is
+  $x \ln x - \int 1\,dx = x \ln x - x$. This is the table entry of Chapter~\ref{ch:anti}.
+\end{example}
+
+\begin{example}
+  $\int x^2 e^x\,dx$ needs two rounds: $x^2 e^x - 2\int x e^x\,dx = x^2 e^x - 2(x e^x - e^x)$.
+  Each round lowers the degree by one; a polynomial of degree $n$ needs $n$ rounds.
+\end{example}
+
+\begin{example}[The solve-for trick]
+  $\int e^x \sin x\,dx$: two rounds return to the original integral with a sign,
+  $\int e^x \sin x = e^x \sin x - e^x \cos x - \int e^x \sin x$, and \emph{solving} gives
+  $\frac{1}{2} e^x(\sin x - \cos x)$. This is the one shape of by-parts the engine does not
+  attempt, because its finder never solves an equation.
+\end{example}
+
+\section{The finder}
+
+\begin{minted}{lean}
+-- integration by parts, a logarithm first, else a power of the variable
+if fuel = 0 then none else
+let isLog : Expr → Bool | .fn "ln" [_] => true | _ => false
+let isPoly : Expr → Bool | .var y => y == x | .pow (.var y) (.num n) => y == x && n.isInt && !n.isNeg | _ => false
+let (u, i) ← (es.zipIdx.find? (isLog ·.1)) <|> (es.zipIdx.find? (isPoly ·.1))
+let dv := without es i
+let (v, vsteps) ← anti simp x fuel dv
+let du ← simp (D u x)
+let vdu ← simp (.mul [v, du])
+let (inner, isteps) ← anti simp x (fuel - 1) vdu
+let F := Expr.sub (.mul [u, v]) inner
+return (F, #[step "int.by-parts" "…" F] ++ vsteps ++ isteps)
+\end{minted}
+
+This is LIATE with two letters --- a logarithm first, else a power of the variable --- and a
+depth of three rounds, enough for a cubic times an exponential. The recursion on
+\lc{fuel - 1} is the one place in the finder with a budget; it bounds the depth of a
+\emph{search}, not the length of an evaluation, and the search failing is a refusal.
+
+\section{Every candidate refused}
+
+When by-parts was first added, every candidate it produced was correct and every one was
+refused by the checker. The reason is instructive. The candidate for $\int x e^x$ is
+$x e^x - e^x$; its derivative normalizes to $x e^x + e^x - e^x$, and then --- since the simplifier
+collects like terms --- to $x e^x$. That one passes. But for $\int x \sin x$ the candidate is
+$-x \cos x - \int (-\cos x)\,dx = -x\cos x + \sin x$, and its derivative is
+$-\cos x + x \sin x + \cos x$, which the simplifier does collect. The failures came from the
+minus sign in front of a sum: $-(a + b) + b$ is a \emph{normal form} of the pipeline, because
+the pipeline never distributes a numeral over a sum. It cannot: distribution grows terms, and
+the termination ordering of Chapter~\ref{ch:wf} forbids it. Distribution is the job of
+\texttt{expand}, which is a function, not a rule (Chapter~\ref{ch:poly}).
+
+So the checker was changed, in the only direction that keeps it sound: both the derivative of
+the candidate and the integrand are expanded with \lc{Expand.dist} before they are normalized
+and compared. \lc{dist} is proved value-preserving, for the derivative semantics as well as the
+plain one:
+
+\begin{minted}{lean}
+theorem dist_soundD : ∀ (e : Expr) (ρ : EnvR), evalD ρ (Expand.dist e) = evalD ρ e
+\end{minted}
+
+This is the second instance of the generic proof of Chapter~\ref{ch:poly} --- the structure
+\lc{Sem} instantiated with \lc{evalD} --- and it is why the theorem \lc{cmdIntegrate_spec}
+compares \lc{norm (Expand.dist g)} with \lc{norm (Expand.dist f)} rather than \lc{g} with
+\lc{f}. Nothing was weakened. A candidate is still accepted only if its derivative \emph{is} the
+integrand; the identification is just allowed to use the distributive law, which is a theorem.
+
+\section{The tangent}
+
+A second refusal became a rule. $\int \tan x$ was refused because the candidate $-\ln \cos x$
+has derivative $\sin x \cdot (\cos x)^{-1}$, and the engine did not know that this is $\tan x$.
+The right fix was not to teach the checker to accept it --- that would weaken the check --- but to
+add the identity $\sin u / \cos u = \tan u$ to the simplifier, prove it terminates under both of
+the engine's orderings, and prove it sound over $\mathbb{R}$ (Chapter~\ref{ch:explog}: it is
+unconditional because Mathlib's tangent is defined as the quotient). Three proofs for one
+identity is the price of a rule, and it is why rules are added when a checker refuses something
+true and not before.
+
+\section{What is still refused}
+
+$e^x \sin x$ needs the solve-for trick. $\sin^2 x$ needs the identity $\sin^2 x = \frac{1}{2}(1 -
+\cos 2x)$, which the simplifier lacks. $\frac{1}{x^2 + 1}$ needs an arctangent, which the engine
+does not have. Each is refused with the candidate it tried and the derivative it got, and none is
+a wrong answer. The finder can be extended without touching a proof; the checker's theorem
+covers whatever it produces.
+
+\begin{trybox}
+\begin{minted}{text}
+integrate(x * exp(x), x)
+integrate(x^2 * exp(x), x)
+integrate(ln(x), x)
+integrate(tan(x), x)
+integrate(exp(x) * sin(x), x)
+\end{minted}
+  The first three succeed by parts; open the compare step to see both sides expanded. The
+  fourth is the tangent. The fifth is refused, with the reason.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Tabular integration]
+  Show that for a polynomial $p$ of degree $n$, $\int p(x) e^x\,dx = e^x \sum_{k=0}^n (-1)^k
+  p^{(k)}(x)$, by induction on $n$ using by parts.
+\end{exercisebox}
+
+\begin{exercisebox}[The solve-for trick as a rule]
+  Design a finder step for $\int e^{ax} \sin(bx)\,dx$ that guesses $e^{ax}(A \sin bx + B\cos bx)$
+  and solves for $A, B$ by differentiating. What would its status be, and why does the checker's
+  theorem need no change?
+\end{exercisebox}
+
+\begin{exercisebox}[Normal forms]
+  Give a term that the pipeline leaves as $-(a + b) + b$ and show, step by step, what
+  \lc{Expand.dist} followed by the simplifier does to it. Which rule of Chapter~\ref{ch:poly}
+  fires last?
+\end{exercisebox}

@@ -1,0 +1,229 @@
+\chapter{Exact Arithmetic}\label{ch:q}
+
+The first thing a computer-algebra system must get right is arithmetic, and the first thing to
+relearn is why that is not trivial. A calculator says $0.1 + 0.2 = 0.30000000000000004$; a
+mathematician says $\frac{1}{10} + \frac{2}{10} = \frac{3}{10}$. The difference is the difference
+between a floating-point number and a rational number, and the engine is built on the second.
+
+\section{The rational numbers}
+
+\begin{definition}[Rationals as pairs]
+  A rational number is an equivalence class of pairs $(a, b)$ of integers with $b \neq 0$, under
+  the relation $(a, b) \sim (c, d)$ iff $ad = bc$. Write the class as $a/b$.
+\end{definition}
+
+That $\sim$ is an equivalence relation is the first exercise of the subject and worth doing once
+more. Reflexivity and symmetry are immediate. For transitivity, suppose $ad = bc$ and $cf = de$;
+then $adf = bcf = bde$, and since $d \neq 0$, $af = be$. The cancellation of $d$ is the step that
+uses that the integers are an integral domain: $xy = 0$ implies $x = 0$ or $y = 0$.
+
+Addition and multiplication are defined on representatives,
+\[
+  \frac{a}{b} + \frac{c}{d} = \frac{ad + bc}{bd}, \qquad
+  \frac{a}{b} \cdot \frac{c}{d} = \frac{ac}{bd},
+\]
+and one checks that the result does not depend on the representative chosen. With these
+operations $\mathbb{Q}$ is a \emph{field}: a commutative ring in which every nonzero element has
+a multiplicative inverse, namely $(a/b)^{-1} = b/a$.
+
+\begin{theorem}[Reduced form]
+  Every rational has a unique representative $a/b$ with $b > 0$ and $\gcd(a, b) = 1$.
+\end{theorem}
+\begin{proof}
+  Existence: given any representative $a/b$, divide both by $g = \gcd(a, b)$ and, if the
+  denominator is negative, negate both. Uniqueness: if $a/b = c/d$ are both reduced with positive
+  denominators, then $ad = bc$; $b$ divides $ad$ and is coprime to $a$, so $b \mid d$; symmetrically
+  $d \mid b$; so $b = d$ and then $a = c$.
+\end{proof}
+
+The step ``$b \mid ad$ and $\gcd(a,b) = 1$ implies $b \mid d$'' is Euclid's lemma, and its proof
+is Bézout's identity: there are integers $u, v$ with $ua + vb = 1$, so $d = uad + vbd$, and $b$
+divides both terms. Bézout's identity is what the Euclidean algorithm computes. So the reduced
+form of a fraction is not a convention; it is an algorithm, and it is the algorithm Lean's
+\lc{Rat} runs on every operation.
+
+\section{Why floating point is not a field}
+
+A double-precision float is a dyadic rational $m \cdot 2^e$ with $|m| < 2^{53}$, together with a
+rounding rule for results that are not representable. The rounding is what breaks the axioms.
+Addition is not associative: with $a = 10^{16}$, $b = -10^{16}$, $c = 1$, the sum $(a + b) + c$ is
+$1$ while $a + (b + c)$ is $0$, because $b + c$ rounds back to $b$. Distributivity fails
+similarly. None of the identities a simplifier uses --- collecting $x + x$ into $2x$, cancelling
+$x/x$ --- is exactly true of floats.
+
+The engine therefore does all arithmetic in $\mathbb{Q}$, and keeps a single bit that records
+whether a number \emph{arrived} as a decimal. A literal \texttt{2.5} is stored as $5/2$ exactly,
+flagged approximate, and printed back as a decimal; the flag is contagious through arithmetic
+and means nothing to any theorem.
+
+\begin{minted}{lean}
+structure Q where
+  val : Rat
+  approx : Bool := false
+
+def add (a b : Q) : Q := ⟨a.val + b.val, a.approx || b.approx⟩
+def mul (a b : Q) : Q := ⟨a.val * b.val, a.approx || b.approx⟩
+def parse (s : String) : Option Q   -- "3", "2.5" (as 5/2, approximate), "1/3"
+\end{minted}
+
+\section{Decimal expansions}
+
+A rational printed as a decimal either terminates or repeats, and the relearning is in the
+\emph{why}. Dividing $a$ by $b$ by long division, each step produces a remainder in
+$\{0, \ldots, b-1\}$; after at most $b$ steps a remainder recurs, and from that point the digits
+repeat. Conversely a repeating decimal $0.\overline{d_1 \ldots d_k}$ is $\frac{d_1 \ldots d_k}{10^k - 1}$,
+a rational. So the rationals are exactly the numbers with eventually periodic expansions, and
+$\sqrt 2$, whose expansion is not periodic (Chapter~\ref{ch:rad}), is not one of them.
+
+When the notebook is asked for a decimal it shows fifteen significant digits, which is what a
+double carries, and rounds the exact rational to them. The rounding is a function on
+$\mathbb{Q}$, \lc{Q.roundSig}, and its result is again an exact rational: nothing in the engine
+ever holds a float, even when it prints one.
+
+\section{The engine's terms}
+
+Before the first rule, the objects it acts on. A term is a tree:
+
+\begin{minted}{lean}
+inductive Expr where
+  | num    : Q → Expr
+  | var    : String → Expr
+  | add    : List Expr → Expr
+  | mul    : List Expr → Expr
+  | pow    : Expr → Expr → Expr
+  | fn     : String → List Expr → Expr
+  | matrix : List (List Expr) → Expr
+\end{minted}
+
+There is no subtraction, division or negation: $a - b$ is $a + (-1)\cdot b$, $a/b$ is
+$a \cdot b^{-1}$. Fewer constructors means fewer cases in every proof, and the printer restores the
+human notation. Sums and products take lists, because $a + b + c$ is one node, not two, and
+because collecting like terms is a statement about a list.
+
+A rule is a partial function on terms together with an explanation and, in the simplifier, a
+proof that it makes a measure decrease (Chapter~\ref{ch:wf}):
+
+\begin{minted}{lean}
+structure Rule (W : Weights) where
+  name : String
+  apply : Expr → Option RuleResult
+  decreasing : ∀ e r, apply e = some r → measure W r.result < measure W e
+\end{minted}
+
+And a rule \emph{means} something through an evaluator. The engine has three, each a restriction of
+the next. The integer evaluator is decidable and partial: it gives a value to integer numerals,
+variables, sums, products and natural powers, and \lc{none} to everything else.
+
+\begin{minted}{lean}
+def eval? (ρ : Env) : Expr → Option Int
+  | .num q => q.asInt?
+  | .var x => some (ρ x)
+  | .add es => evalSum? ρ es
+  | .mul es => evalProd? ρ es
+  | .pow b e => do let v ← eval? ρ b; let n ← eval? ρ e; if 0 ≤ n then some (v ^ n.toNat) else none
+  | .fn _ _ => none
+  | .matrix _ => none
+
+def Refines (e e' : Expr) : Prop := ∀ ρ v, eval? ρ e = some v → eval? ρ e' = some v
+\end{minted}
+
+The real evaluator, in \file{proofs/}, is total and is where the mathematics of this book mostly
+lives:
+
+\begin{minted}{lean}
+def evalR (ρ : EnvR) : Expr → ℝ
+  | .num q => (q.val : ℝ)
+  | .var x => ρ x
+  | .add es => sumR ρ es
+  | .mul es => prodR ρ es
+  | .pow b e => (evalR ρ b) ^ (evalR ρ e)
+  | .fn f [a] => applyFn f (evalR ρ a)
+  | .fn _ _ => 0
+  | .matrix _ => 0
+
+def SemEqR (a b : Expr) : Prop := ∀ ρ, evalR ρ a = evalR ρ b
+\end{minted}
+
+A rule is \status{verified} over the reals when \lc{evalR} of its output equals \lc{evalR} of its
+input in every environment. The bridge theorem \lc{evalR_of_eval?} says the two evaluators agree
+wherever the first is defined, so a theorem over $\mathbb{R}$ is never weaker than one over
+$\mathbb{Z}$.
+
+\section{The rule: folding constants}
+
+The first rule collects the numerals of a sum or product into one:
+
+\begin{minted}{lean}
+def foldApply : Expr → Option RuleResult
+  | .add es =>
+    let nums := es.filter isNum
+    if 2 ≤ nums.length then
+      some ⟨.add (.num (sumQ nums) :: es.filter (fun e => !isNum e)), "Arithmetic on constants …", none, none⟩
+    else none
+  | .mul es =>
+    let nums := es.filter isNum
+    if 2 ≤ nums.length then
+      some ⟨.mul (.num (prodQ nums) :: es.filter (fun e => !isNum e)), "Arithmetic on constants …", none, none⟩
+    else none
+  | _ => none
+\end{minted}
+
+\lc{sumQ} folds \lc{Q.add} over the numerals. The rule fires only when there are at least two,
+which is what makes it a decrease: two nodes become one.
+
+\section{The theorem}
+
+\begin{thmbox}[\lcn{foldConstants_soundR}]
+  For every environment $\rho$ and term $e$ on which the rule fires with result $e'$,
+  $\lc{evalR}\,\rho\,e = \lc{evalR}\,\rho\,e'$.
+\end{thmbox}
+
+The proof has one mathematical content and one bookkeeping content. The mathematics is that the
+cast $\mathbb{Q} \to \mathbb{R}$ is a ring homomorphism: $\overline{p + q} = \overline p +
+\overline q$ and $\overline{pq} = \overline p \, \overline q$. In Mathlib these are
+\lc{Rat.cast_add} and \lc{Rat.cast_mul}, and they are the reason a fold in $\mathbb{Q}$ is a
+fold in $\mathbb{R}$. The bookkeeping is that filtering a list into its numerals and its
+non-numerals and adding the two parts back gives the original sum: \lc{sumR} respects
+\lc{List.filter} and permutation (\lc{sumR_perm}, an induction on \lc{List.Perm}).
+
+\begin{minted}{lean}
+theorem sumQ_evalR (ρ : EnvR) (l : List Expr) (hall : ∀ e ∈ l, Expr.isNum e = true) :
+    ((sumQ l).val : ℝ) = sumR ρ l
+theorem foldConstants_soundR : RuleSoundR foldConstants
+\end{minted}
+
+The status is \status{verified}, and the notebook's note for it reads ``exact rational arithmetic;
+$\mathbb{Q}$ embeds in $\mathbb{R}$'' --- which is this section in six words.
+
+\begin{trybox}
+\begin{minted}{text}
+1/3 + 1/6
+0.1 + 0.2
+2.5 * 4
+N(1/3)
+\end{minted}
+  The first is $1/2$. The second is $0.3$, because the decimals were exact all along and only
+  the printing is approximate. The fourth asks for the decimal explicitly.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Well-definedness]
+  Show that $\frac{a}{b} \cdot \frac{c}{d} = \frac{ac}{bd}$ does not depend on the representatives:
+  if $(a,b) \sim (a',b')$ and $(c,d) \sim (c',d')$ then $(ac, bd) \sim (a'c', b'd')$.
+\end{exercisebox}
+
+\begin{exercisebox}[Bézout by hand]
+  Run the extended Euclidean algorithm on $(240, 46)$ and write $\gcd(240, 46)$ as
+  $240u + 46v$.
+\end{exercisebox}
+
+\begin{exercisebox}[A float counterexample]
+  Find three doubles for which $(a \cdot b) \cdot c \neq a \cdot (b \cdot c)$, and explain which
+  rounding is responsible.
+\end{exercisebox}
+
+\begin{exercisebox}[The bridge]
+  \lc{evalR_of_eval?} is proved by induction on the term. Which case needs
+  \lc{Real.rpow_natCast}, and why does the integer evaluator refuse negative exponents?
+\end{exercisebox}

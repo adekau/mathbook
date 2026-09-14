@@ -1,0 +1,163 @@
+\chapter{Radicals}\label{ch:rad}
+
+$\sqrt 8 = 2\sqrt 2$ is a fact every student knows and few can say precisely. What is $\sqrt 8$?
+Why is $2\sqrt 2$ simpler? What is the general rule, and for cube roots? The chapter answers
+these from the fundamental theorem of arithmetic, then meets the one place in the book where the
+engine cannot write the textbook's answer --- and shows what it writes instead, and why that is
+the same number.
+
+\section{Roots}
+
+\begin{theorem}[Existence and uniqueness of roots]
+  For $b > 0$ real and $q \ge 1$ an integer, there is exactly one real $r > 0$ with $r^q = b$.
+\end{theorem}
+\begin{proof}
+  Existence is the intermediate value theorem applied to $t \mapsto t^q$ on $[0, \max(1, b)]$,
+  which is continuous, $0$ at $0$ and at least $b$ at the right endpoint. Uniqueness: $t \mapsto
+  t^q$ is strictly increasing on $[0, \infty)$, since $0 \le s < t$ gives $s^q < t^q$ by
+  induction on $q$.
+\end{proof}
+
+Write $b^{1/q}$ for this $r$, and $b^{p/q} = (b^{1/q})^p$. That this agrees with
+$\exp(\frac{p}{q}\ln b)$ is the statement that both are the unique positive $q$-th root of $b^p$.
+For $b < 0$ and odd $q$ there is a real root, but it is not what $\exp(x \ln |b|)\cos \pi x$
+gives (Chapter~\ref{ch:exp}), so the engine restricts its radical rules to integer bases at
+least $2$, where every convention agrees.
+
+\section{Square-free parts}
+
+\begin{theorem}[Fundamental theorem of arithmetic]
+  Every integer $n \ge 2$ is a product of primes, uniquely up to order.
+\end{theorem}
+
+Existence is strong induction: $n$ is prime or a product of two smaller numbers. Uniqueness is
+Euclid's lemma again (Chapter~\ref{ch:q}): if a prime $p$ divides $ab$ then $p \mid a$ or
+$p \mid b$; so two factorizations of the same $n$ can be matched prime by prime.
+
+\begin{definition}[$q$-th-power part]
+  For $b \ge 1$ and $q \ge 2$, write $b = m^q s$ with $m$ as large as possible. Then $s$ is
+  \emph{$q$-th-power-free}: no prime occurs in $s$ to a power $\ge q$. For $q = 2$, $s$ is the
+  square-free part of $b$.
+\end{definition}
+
+By unique factorization, if $b = \prod p_i^{e_i}$ then $m = \prod p_i^{\lfloor e_i/q \rfloor}$
+and $s = \prod p_i^{e_i \bmod q}$, and the decomposition is unique. So $8 = 2^2 \cdot 2$ and
+$\sqrt 8 = 2\sqrt 2$; $50 = 5^2 \cdot 2$ and $18 = 3^2 \cdot 2$, so $\sqrt{50} - \sqrt{18} =
+5\sqrt 2 - 3\sqrt 2 = 2\sqrt 2$ --- the radicals collect because their square-free parts agree.
+
+\begin{theorem}[Irrationality]
+  If $b \ge 2$ is not a perfect $q$-th power, then $b^{1/q}$ is irrational.
+\end{theorem}
+\begin{proof}
+  Suppose $b^{1/q} = a/c$ in lowest terms. Then $a^q = b c^q$. Every prime in $a^q$ occurs to a
+  power divisible by $q$; every prime in $c^q$ likewise; so every prime in $b$ occurs to a power
+  divisible by $q$, and $b$ is a perfect $q$-th power.
+\end{proof}
+
+For $b = 2$, $q = 2$ this is the proof that $\sqrt 2$ is irrational, in the form that
+generalizes.
+
+\section{The general identity}
+
+Every radical rule the engine has is one identity, read three ways. For $b = m^q s$ and a
+rational exponent $x = p/q$, write $p = iq + f$ with $0 \le f < q$. Then
+\[
+  b^{p/q} = (m^q s)^{p/q} = m^p \, s^{p/q} = m^p\, s^{i}\, s^{f/q}.
+\]
+Every factor but the last is an integer. So a term $k \cdot b^{p/q}$ is $(k m^p s^i) \cdot s^{f/q}$,
+a rational coefficient times a radical of a $q$-th-power-free base with an exponent in $[0, 1)$.
+Two such terms with the same $s$, $q$ and $f$ add by adding their coefficients; two radicals with
+the same $q$ multiply under one root, $a^{p/q} b^{r/q} = (a^p b^r)^{1/q}$.
+
+\section{What the engine writes}
+
+Here the chapter meets the ordering of Chapter~\ref{ch:wf}. The engine's rewriter terminates
+because every rule makes a certain weight decrease, and $8^{1/2} \to 2 \cdot 2^{1/2}$ does not
+decrease it: the result contains the input's radical \emph{and} a product node. No retuning of
+the weight can fix this, and Chapter~\ref{ch:cannot} gives the reason (a numeral's weight
+would have to depend on its value, and then constant folding stops decreasing). What the ordering
+does allow is the single-power form: $8^{1/2} \to 2^{3/2}$, one power node for one power node,
+ordered by a tier that counts the integers' magnitudes.
+
+\begin{minted}{lean}
+def radicalBase : PlainRule :=
+  { name := "simp.radical", apply := fun e =>
+      match e with
+      | .pow (.num a) (.num q) =>
+        if a.isInt && a.val.num ≥ 2 && !q.isInt then
+          match perfectPower a.val.num.toNat with
+          | some (r, k) =>
+            let res : Expr := .pow (.num (Q.ofInt r)) (.num (q * Q.ofInt k))
+            if M res ≤ M e && numCount res < numCount e then some ⟨res, "…", none, none⟩ else none
+          | none => none
+        else none
+      | _ => none }
+\end{minted}
+
+The rule reduces a perfect-power base: $a = r^k$ gives $a^{q} = r^{kq}$. It guards itself with the
+decrease its termination proof needs, so the proof is a case split on the guard. Two more rules
+do the collecting and the multiplying:
+
+\begin{minted}{lean}
+def mergeRadicals (s t : Expr) : Option Expr    -- k₁ b₁^(p₁/q) + k₂ b₂^(p₂/q), same s and f
+def mulRadicalPair (s t : Expr) : Option Expr   -- a^(p/q) · b^(r/q) = (a^p b^r)^(1/q)
+\end{minted}
+
+\lc{mergeRadicals} computes $m$ and $s$ for each base with \lc{qthPowerPart}, checks that the
+$q$-th-power-free parts and the fractional parts agree, and adds the coefficients
+$k m^p s^i$. The printer then shows $2^{3/2}$ as $2\sqrt 2$ and $12^{1/2}$ as $2\sqrt 3$: the
+display is the textbook's, the term is the ordering's, and the identity of this chapter is the
+distance between them.
+
+\section{The theorems}
+
+All three rules are \status{verified}, unconditionally, because their bases are positive integers.
+
+\begin{minted}{lean}
+theorem perfectPower_spec {a r k : ℕ} (h : perfectPower a = some (r, k)) : r ^ k = a
+theorem qthPowerPart_spec (b q : ℕ) :
+    (qthPowerPart b q).1 ^ q * (qthPowerPart b q).2 = b ∧ 1 ≤ (qthPowerPart b q).1
+theorem rpow_decompose {b : ℝ} (hb : 0 < b) {m s q : ℕ} (hq : q ≠ 0) (hm : 1 ≤ m) …
+theorem radicalBase_soundR (ρ : EnvR) {e : Expr} {res : RuleResult}
+    (h : radicalBase.apply e = some res) : evalR ρ res.result = evalR ρ e
+theorem collectRadicals_soundR (ρ : EnvR) … : evalR ρ res.result = evalR ρ e
+theorem mulRadicals_soundR (ρ : EnvR) … : evalR ρ res.result = evalR ρ e
+\end{minted}
+
+The first two are about the searches: a perfect power found is one, a decomposition found is one.
+Neither says the search is \emph{complete} --- that it finds the largest $m$ --- because
+soundness does not need it; a missed decomposition costs a less simplified answer, never a wrong
+one. \lc{rpow_decompose} is the identity of the previous section as a statement about
+\lc{Real.rpow}, proved from \lc{Real.rpow_natCast}, \lc{Real.rpow_add} and \lc{Real.rpow_mul},
+each of which needs the base positive, which \lc{Q_pos_of_ge_two} supplies. The three rule
+theorems assemble it with the permutation lemmas, since the pair the rule merged may have been
+anywhere in the list.
+
+\begin{trybox}
+\begin{minted}{text}
+sqrt(8)
+sqrt(50) - sqrt(18)
+sqrt(12) * sqrt(3)
+4^(2/3)
+\end{minted}
+  The text output of the first is $2^{3/2}$; the rendered output is $2\sqrt 2$. The last is
+  $2^{4/3}$, shown as $2\sqrt[3]{2}$.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[By hand]
+  Write $\sqrt{360}$, $\sqrt[3]{250}$ and $5\sqrt{12} - \sqrt{75}$ in the form of the general
+  identity, computing $m$, $s$, $i$ and $f$ for each.
+\end{exercisebox}
+
+\begin{exercisebox}[Completeness]
+  \lc{qthPowerPart} searches $m$ downward from $2^{\lfloor \log_2 b / q \rfloor + 1}$. Show that
+  the largest $m$ with $m^q \mid b$ is below that bound, so the search is in fact complete, and
+  say why the engine did not need to prove it.
+\end{exercisebox}
+
+\begin{exercisebox}[Odd roots of negatives]
+  $(-8)^{1/3}$ has a real cube root $-2$. Explain why the engine's rules do not fire on it, and
+  what \lc{evalR} gives for it.
+\end{exercisebox}

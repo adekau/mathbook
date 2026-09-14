@@ -90,7 +90,7 @@ shown to be a restriction of the next.
 Five of the seven rules are sound for \lc{SemEqR} and the fold applies to them. Two are not, and
 the interesting part is that this is \emph{proved}.
 
-\begin{thmbox}[\lc{not_collectPowers_soundR}]
+\begin{thmbox}[\lcn{not_collectPowers_soundR}]
   The rule $b^m \cdot b^n \to b^{m+n}$ is not unconditionally sound over $\mathbb{R}$: at $x = 0$
   it rewrites $x \cdot x^{-1}$, which is $0$, to $x^0$, which is $1$.
 \end{thmbox}
@@ -102,7 +102,7 @@ theorem not_collectPowers_soundR : ¬ RuleSoundR collectPowers := by
   norm_num [evalR_mul, prodR_cons, prodR_nil, evalR_var, evalR_pow, evalR_num, …] at h
 \end{minted}
 
-\begin{thmbox}[\lc{not_functionRules_soundR}]
+\begin{thmbox}[\lcn{not_functionRules_soundR}]
   The rule $\exp(\ln x) \to x$ is not unconditionally sound: at $x = -1$ the left side is
   $\exp(\ln(-1)) = \exp(\ln 1) = 1$, because \lc{Real.log} is even, while the right side is $-1$.
 \end{thmbox}

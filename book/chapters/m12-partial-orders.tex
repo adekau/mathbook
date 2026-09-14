@@ -1,0 +1,205 @@
+\chapter{Partial Orders, Lattices and Fixed Points}\label{ch:posets}
+
+Order theory is where a degree turns from computing to structure, and it is the mathematics
+that Part~V uses to make the engine terminate. This chapter relearns it on finite examples ---
+divisors of $12$, subsets of a three-element set --- and ends with the theorem about fixed points
+of monotone maps that underlies every ``iterate until it stops'' in computing. The engine has a
+small world for all of it, in which every command is a decision procedure and every theorem says
+the decision means the definition.
+
+\section{Partial orders}
+
+\begin{definition}
+  A partial order on a set $P$ is a relation $\le$ that is reflexive ($x \le x$), antisymmetric
+  ($x \le y$ and $y \le x$ imply $x = y$) and transitive ($x \le y$ and $y \le z$ imply $x \le z$).
+  Write $x < y$ for $x \le y$ and $x \neq y$.
+\end{definition}
+
+\begin{example}
+  Divisibility on the divisors of $12$: $\{1, 2, 3, 4, 6, 12\}$ with $a \le b$ iff $a \mid b$.
+  Inclusion on the subsets of $\{a, b, c\}$. The chain $0 < 1 < \cdots < n - 1$.
+\end{example}
+
+A relation is usually given by a few generating pairs --- $a < b$, $a < c$ --- and the order is
+the reflexive-transitive closure: the smallest reflexive, transitive relation containing them.
+On a finite set the closure is reached by repeatedly adding $(x, z)$ whenever $(x, y)$ and $(y, z)$
+are present, and $|P|$ rounds suffice because a chain of intermediate points has at most $|P|$
+elements. Antisymmetry is not automatic and must be checked; the generating pairs $a < b$,
+$b < a$ close to a relation that is not a partial order.
+
+\section{Hasse diagrams}
+
+\begin{definition}[Covers]
+  $y$ covers $x$, written $x \lessdot y$, if $x < y$ and there is no $z$ with $x < z < y$.
+\end{definition}
+
+\begin{theorem}
+  In a finite poset, $x \le y$ iff there is a chain $x = z_0 \lessdot z_1 \lessdot \cdots \lessdot
+  z_k = y$ (with $k = 0$ allowed).
+\end{theorem}
+\begin{proof}
+  A chain of covers gives $x \le y$ by transitivity. Conversely, if $x < y$, choose a maximal
+  chain $x = z_0 < z_1 < \cdots < z_k = y$ (one exists, since chains are bounded in length by
+  $|P|$); each step is a cover, since anything strictly between two consecutive elements could be
+  inserted.
+\end{proof}
+
+So the covers determine the order, and the Hasse diagram --- elements as points, covers as edges,
+larger elements drawn higher --- is a complete picture of a finite poset. That is what the
+notebook draws.
+
+\section{Bounds, joins and meets}
+
+\begin{definition}
+  An upper bound of $S \subseteq P$ is a $u$ with $s \le u$ for all $s \in S$. The \emph{join}
+  (least upper bound, supremum) $\bigvee S$ is an upper bound that is $\le$ every upper bound.
+  Dually, lower bounds and the \emph{meet} $\bigwedge S$.
+\end{definition}
+
+\begin{theorem}
+  A join, if it exists, is unique.
+\end{theorem}
+\begin{proof}
+  If $u, u'$ are both least upper bounds then $u \le u'$ and $u' \le u$, so $u = u'$ by antisymmetry.
+\end{proof}
+
+\begin{definition}
+  A lattice is a poset in which every pair has a join and a meet. A bounded lattice has a top
+  $\top$ and a bottom $\bot$.
+\end{definition}
+
+Divisors of $12$ form a lattice: the join is the lcm, the meet the gcd. Subsets form a lattice
+with union and intersection. The poset with generators $a < b$, $a < c$ is not a lattice: $b$ and
+$c$ have no upper bound at all.
+
+\section{Monotone maps and fixed points}
+
+\begin{definition}
+  $f : P \to P$ is monotone if $x \le y$ implies $f(x) \le f(y)$. A fixed point of $f$ is an $x$
+  with $f(x) = x$.
+\end{definition}
+
+\begin{theorem}[Knaster--Tarski, finite form]
+  Let $P$ be a finite lattice with bottom $\bot$ and $f$ monotone. Then $f$ has a least fixed
+  point, and it is $f^n(\bot)$ for the first $n$ with $f^{n+1}(\bot) = f^n(\bot)$.
+\end{theorem}
+\begin{proof}
+  The sequence $\bot \le f(\bot) \le f^2(\bot) \le \cdots$ is increasing: $\bot \le f(\bot)$
+  since $\bot$ is below everything, and if $f^k(\bot) \le f^{k+1}(\bot)$ then applying $f$ gives
+  $f^{k+1}(\bot) \le f^{k+2}(\bot)$ by monotonicity. An increasing sequence in a finite poset
+  stabilizes within $|P|$ steps (it cannot strictly increase more than $|P| - 1$ times), and
+  where it stabilizes, $f^{n+1}(\bot) = f^n(\bot)$ is a fixed point.
+
+  It is the least: let $y$ be any fixed point. Then $\bot \le y$, and if $f^k(\bot) \le y$ then
+  $f^{k+1}(\bot) \le f(y) = y$. So every term of the sequence is $\le y$, in particular
+  $f^n(\bot)$.
+\end{proof}
+
+The sequence is the Kleene chain, and the theorem is the reason every ``repeat until nothing
+changes'' computation --- reachability, dataflow analysis, the closure of the first section ---
+gives the least answer. The general Knaster--Tarski theorem, for complete lattices, gives the
+least fixed point as $\bigwedge \{x : f(x) \le x\}$ without iteration; the finite form is the
+one that computes.
+
+\section{The engine's world}
+
+\begin{minted}{lean}
+def closure (elems : List String) (gen : List (String × String)) : List (String × String)
+def checkPartialOrder (P : Poset) : Option String   -- a witness of failure, or none
+def covers (P : Poset) (x y : String) : Bool :=
+  P.lt x y && !P.elems.any fun z => P.lt x z && P.lt z y
+def upperBounds (P : Poset) (xs : List String) : List String :=
+  P.elems.filter fun u => xs.all fun x => P.rel x u
+def sup (P : Poset) (xs : List String) : Option String :=
+  let ubs := upperBounds P xs
+  ubs.find? fun u => ubs.all fun v => P.rel u v
+def latticeFailure (P : Poset) : Option (String × String × String)
+def monotoneFailure (P : Poset) (f : PMap) : Option (String × String) :=
+  P.le.find? fun (x, y) => !P.rel (f.apply x) (f.apply y)
+def iterate (P : Poset) (f : PMap) (start : String) : List String
+\end{minted}
+
+Each is a decision over lists, and each is the definition transcribed: \lc{covers} is the
+definition of a cover, \lc{sup} searches the upper bounds for one below all the others,
+\lc{monotoneFailure} looks for a violating pair. The theorems say that the decisions mean the
+definitions.
+
+\begin{minted}{lean}
+theorem checkPartialOrder_none {P : Poset} (h : checkPartialOrder P = none) :
+    (∀ x ∈ P.elems, P.rel x x = true) ∧
+    (∀ p ∈ P.le, p.1 ≠ p.2 → P.rel p.2 p.1 = false) ∧
+    (∀ p ∈ P.le, ∀ q ∈ P.le, p.2 = q.1 → P.rel p.1 q.2 = true)
+
+theorem covers_spec (P : Poset) (x y : String) :
+    covers P x y = true ↔ P.lt x y = true ∧ ∀ z ∈ P.elems, ¬ (P.lt x z = true ∧ P.lt z y = true)
+
+theorem sup_spec {P : Poset} {xs : List String} {j : String} (h : sup P xs = some j) :
+    j ∈ upperBounds P xs ∧ ∀ v ∈ upperBounds P xs, P.rel j v = true
+theorem sup_none {P : Poset} {xs : List String} (h : sup P xs = none) :
+    ∀ j ∈ upperBounds P xs, ∃ v ∈ upperBounds P xs, P.rel j v = false
+
+theorem monotone_of_none {P : Poset} {f : PMap} (h : monotoneFailure P f = none) :
+    ∀ p ∈ P.le, P.rel (f.apply p.1) (f.apply p.2) = true
+
+theorem iter_le_fixed {P : Poset} {f : PMap} (hm : monotoneFailure P f = none) {y : String}
+    (hy : f.apply y = y) : ∀ (n : Nat) (x : String), P.rel x y = true → P.rel (f.iter n x) y = true
+\end{minted}
+
+The last is the second paragraph of the Knaster--Tarski proof, verbatim: by induction on $n$,
+if $f^n(x) \le y$ then $f^{n+1}(x) \le f(y) = y$. With $x = \bot$ it says the chain stays below
+every fixed point, so its last element --- checked to be a fixed point --- is the least. What the
+engine does \emph{not} prove is the first paragraph, that the chain stabilizes within $|P|$
+steps; \lc{iterate} runs at most $|P|$ rounds and the notebook checks that the last element is
+fixed. That is the pigeonhole argument, and it is the chapter's second exercise.
+
+\begin{logbox}[The shape of this world]
+  Every theorem here has the form ``if the decision procedure says yes, the textbook Prop
+  holds''. It is the shape of the run-time boundaries of Part~III, but here the Prop is the
+  definition a reader meets in a first course. That is what should sit beside a Hasse diagram:
+  not ``the engine drew this'', but ``these edges are exactly the covers'', with the theorem's
+  name.
+\end{logbox}
+
+\begin{trybox}
+\begin{minted}{text}
+let D = divisors(12)
+join(D, 4, 6)
+meet(D, 4, 6)
+lattice(D)
+let N = poset({a,b,c}; a<b, a<c)
+lattice(N)
+let f = map(D; 1->2, 2->2, 3->6, 4->4, 6->6, 12->12)
+monotone(D, f)
+lfp(D, f)
+le(D, 2, 12)
+\end{minted}
+  The joins in $D$ are least common multiples. $N$ fails with the witness pair. The least
+  fixed point of $f$ is $2$, and the derivation is the Kleene chain $1 \to 2 \to 2$. The last
+  line explains $2 \le 12$ by a chain of covers.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Closure]
+  Prove that $|P|$ rounds of adding $(x, z)$ for $(x, y), (y, z)$ present compute the
+  transitive closure on a set of size $|P|$, and find an example needing $\lceil \log_2 |P|
+  \rceil$ rounds if each round composes the relation with itself instead.
+\end{exercisebox}
+
+\begin{exercisebox}[Pigeonhole, formally]
+  State and prove in Lean that if $x_0 \le x_1 \le \cdots$ is a sequence in a finite poset with
+  $x_{k+1} = f(x_k)$, then some $x_n = x_{n+1}$ with $n < |P|$. This closes the engine's one
+  boundary in this world.
+\end{exercisebox}
+
+\begin{exercisebox}[Not a lattice]
+  Draw the Hasse diagram of the subsets of $\{a, b, c\}$ with the empty set removed. Is it a
+  lattice? Which pairs fail, and does \lc{latticeFailure} report the first of them in the
+  engine's element order?
+\end{exercisebox}
+
+\begin{exercisebox}[Greatest fixed point]
+  Dualize the theorem: starting from $\top$, the chain decreases to the greatest fixed point.
+  Check that the engine's \texttt{gfp} is the dual code, and find a map with distinct least and
+  greatest fixed points on the divisors of $12$.
+\end{exercisebox}

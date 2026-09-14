@@ -1,0 +1,163 @@
+\chapter{Systems of Linear Equations}\label{ch:systems}
+
+Row reduction is the first algorithm of linear algebra and the first thing in the subject that
+is usually taught without a proof. The claim behind it --- that the three row operations do not
+change the solutions --- is one lemma per operation, and each lemma is a sentence. The chapter
+proves them, then shows that the engine proves them the same way, over $\mathbb{Q}$, with no
+library beyond Lean's core.
+
+\section{Systems and matrices}
+
+A system of $m$ linear equations in $n$ unknowns,
+\[
+  a_{i1} x_1 + \cdots + a_{in} x_n = b_i, \qquad i = 1, \ldots, m,
+\]
+is the matrix equation $Ax = b$ with $A$ the $m \times n$ matrix of coefficients. Its solution set
+is $\{x \in \mathbb{Q}^n : Ax = b\}$, and the goal of elimination is to transform $A$ and $b$ into
+a form from which that set can be read off, without changing it.
+
+Two readings of a matrix are useful, and the engine uses the one that needs less machinery.
+
+\begin{definition}[Homogeneous reading]
+  A matrix $M$ with rows $r_1, \ldots, r_m$ defines the system $r_i \cdot x = 0$ for all $i$. Its
+  solution set is $\operatorname{Sol}(M) = \{x : r_i \cdot x = 0 \text{ for all } i\}$.
+\end{definition}
+
+The inhomogeneous system $Ax = b$ is the homogeneous system of the augmented matrix
+$[A \mid b]$ evaluated at the point $(x, -1)$: the row $(a_{i1}, \ldots, a_{in}, b_i)$ dotted with
+$(x_1, \ldots, x_n, -1)$ is $a_i \cdot x - b_i$, which is $0$ iff $a_i \cdot x = b_i$. So one
+predicate covers both, and the word ``augmented'' is a remark about which point one evaluates
+at, not a second definition.
+
+\section{The three operations}
+
+\begin{definition}[Elementary row operations]
+  (1) Swap two rows. (2) Scale a row by a nonzero constant. (3) Add a multiple of one row to a
+  different row.
+\end{definition}
+
+\begin{theorem}
+  Each elementary row operation preserves the solution set.
+\end{theorem}
+\begin{proof}
+  (1) The set of equations is unchanged. (2) $r \cdot x = 0$ iff $(cr) \cdot x = c(r \cdot x) = 0$,
+  since $c \neq 0$. (3) If $r_i \cdot x = 0$ and $r_j \cdot x = 0$ then
+  $(r_i + c r_j) \cdot x = r_i \cdot x + c\,(r_j \cdot x) = 0$; conversely if $(r_i + cr_j)\cdot x = 0$
+  and $r_j \cdot x = 0$ then $r_i \cdot x = 0$. The other rows are untouched.
+\end{proof}
+
+The proof of (3) uses the equation for $r_j$ in both directions, which is why $r_j$ must remain in
+the system --- adding a multiple of a row \emph{to itself} would lose it. And (2) uses $c \neq 0$.
+The two side conditions are where the engine's design made a choice.
+
+The deeper statement is that each operation is \emph{invertible} by an operation of the same
+kind: swap by the same swap, scale by $c$ by scale by $c^{-1}$, add $c r_j$ by add $-c r_j$. An
+invertible transformation of the equations preserves the solution set in both directions, and
+that is all the theorem says.
+
+\section{The engine's lemmas}
+
+\begin{minted}{lean}
+abbrev Row := List Rat
+abbrev Mat := List Row
+
+def dot : Row → List Rat → Rat
+  | a :: as, x :: xs => a * x + dot as xs
+  | _, _ => 0
+
+def Sol (m : Mat) (x : List Rat) : Prop := ∀ r ∈ m, dot r x = 0
+
+inductive Op where
+  | swap (i j : Nat)              -- exchange rows i and j
+  | scale (i : Nat) (c : Rat)     -- Rᵢ ← c · Rᵢ; with c = 0 it is the identity
+  | addMul (i j : Nat) (c : Rat)  -- Rᵢ ← Rᵢ + c · Rⱼ; with i = j it is the identity
+\end{minted}
+
+The two side conditions are handled by \emph{definition}: scaling by $0$ and adding a row to
+itself are defined to do nothing. Then every operation is invertible with no hypothesis, and the
+lemmas need none:
+
+\begin{minted}{lean}
+theorem sol_swap (m : Mat) (i j : Nat) (x : List Rat) : Sol ((Op.swap i j).apply m) x ↔ Sol m x
+theorem sol_scale (m : Mat) (i : Nat) (c : Rat) (x : List Rat) : Sol ((Op.scale i c).apply m) x ↔ Sol m x
+theorem sol_addMul (m : Mat) (i j : Nat) (c : Rat) (x : List Rat) :
+    Sol ((Op.addMul i j c).apply m) x ↔ Sol m x
+\end{minted}
+
+The alternative --- proving that the algorithm never emits a degenerate operation --- would have
+been a proof about the algorithm's control flow. Defining the degenerate cases away is a proof
+about nothing, and it costs nothing: the algorithm does not emit them anyway.
+
+The algebra inside each lemma is the paper proof. For \lc{sol_addMul} it is
+\[
+  \lc{dot (rowAdd c ri rj) x = dot ri x + c * dot rj x},
+\]
+proved by induction on the three lists, and then ``$a + cb = 0$ and $b = 0$ iff $a = 0$ and
+$b = 0$'', which is discharged by \lc{grind}, Lean's core automation, whose field instances for
+\lc{Rat} ship without Mathlib. That is why the whole of this chapter's mathematics lives in
+\file{engine/}, next to the code, and not in \file{proofs/}.
+
+A third design choice removed a hypothesis that most textbooks silently assume. Rows of unequal
+length are allowed: \lc{rowAdd} pads the shorter with zeros rather than truncating, and \lc{dot}
+treats a missing coefficient as $0$. So no lemma needs ``the matrix is rectangular''.
+
+\section{Elimination as a list of operations}
+
+\begin{minted}{lean}
+def run (ops : List (Nat × Op)) (m : Mat) : Mat := ops.foldl (fun m o => o.2.apply m) m
+theorem sol_run (ops : List (Nat × Op)) (m : Mat) (x : List Rat) : Sol (run ops m) x ↔ Sol m x
+
+def rref (m : Mat) : Mat := run (rrefOps m) m
+theorem sol_rref (m : Mat) (x : List Rat) : Sol (rref m) x ↔ Sol m x := sol_run _ _ _
+\end{minted}
+
+Gauss--Jordan elimination is a function that \emph{produces} a list of operations, and the
+theorem for the whole algorithm is the fold of the three lemmas over that list: one line. The
+list is also what the notebook shows, one \rn{la.row-swap}, \rn{la.row-scale} or
+\rn{la.row-add} step per operation, each with its lemma's name. What the algorithm chooses to
+do is Chapter~\ref{ch:echelon}'s subject; that it preserves solutions does not depend on the
+choices.
+
+\begin{exbox}
+  For $A = \begin{pmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \\ 7 & 8 & 10 \end{pmatrix}$ the operations are:
+  add $-4 R_1$ to $R_2$; add $-7 R_1$ to $R_3$; scale $R_2$ by $-\frac{1}{3}$; add $-2R_2$ to
+  $R_1$; add $6 R_2$ to $R_3$; add $-1 R_3$ to $R_1$ and $2 R_3$ to $R_2$ after scaling. The
+  result is the identity, so the only solution of $Ax = 0$ is $x = 0$: $A$ is invertible.
+\end{exbox}
+
+\section{Symbolic entries}
+
+When a matrix has symbolic entries the pivots are only \emph{assumed} nonzero --- the simplifier
+could not show $a$ is zero, so the algorithm divides by it --- and the theorem above does not
+apply, since the entries are not rationals. The engine keeps a second, unverified elimination for
+that case and names its steps with a \texttt{.symbolic} suffix. The status is honest:
+\rn{la.row-scale.symbolic} is ``division by a pivot that is only assumed nonzero''.
+
+\begin{trybox}
+\begin{minted}{text}
+rref([1,2,3;4,5,6;7,8,10])
+rref([1,2;2,4])
+rref([1,2,3,4;5,6,7,8])
+rref([a,1;1,a])
+\end{minted}
+  The second has a free variable; the third is the augmented matrix of a system with a
+  one-parameter family of solutions. The fourth is symbolic, and its answer assumes
+  $a \neq 0$ and $a^2 - 1 \neq 0$.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Invertibility]
+  Write the inverse of each elementary operation as an elementary operation, and prove that a
+  transformation with an inverse preserves any solution set in both directions.
+\end{exercisebox}
+
+\begin{exercisebox}[The augmented reading]
+  Show that $x$ solves $Ax = b$ iff $(x, -1)$ solves the homogeneous system of $[A \mid b]$, and
+  say what \lc{dot}'s padding convention contributes when $x$ is shorter than a row.
+\end{exercisebox}
+
+\begin{exercisebox}[Degenerate cases]
+  Suppose \lc{Op.scale i 0} were defined to zero the row. Which direction of \lc{sol_scale}
+  fails, and with what matrix?
+\end{exercisebox}

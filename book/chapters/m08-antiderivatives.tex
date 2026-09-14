@@ -1,0 +1,216 @@
+\chapter{Antiderivatives}\label{ch:anti}
+
+Integration is taught as a bag of tricks, and the relearning is to see that the bag has a
+structure: every technique is a derivative rule read backwards, and every answer can be checked
+by reading it forwards again. The engine takes that literally. Its integrator is a guesser; its
+theorem is about the checker.
+
+\section{Antiderivatives and the fundamental theorem}
+
+\begin{definition}
+  $F$ is an antiderivative of $f$ on an interval $I$ if $F'(x) = f(x)$ for all $x \in I$.
+\end{definition}
+
+\begin{theorem}
+  If $F$ and $G$ are antiderivatives of $f$ on an interval $I$, then $F - G$ is constant on $I$.
+\end{theorem}
+\begin{proof}
+  $(F - G)' = 0$ on $I$. By the mean value theorem, for $a < b$ in $I$ there is $c \in (a, b)$ with
+  $(F-G)(b) - (F-G)(a) = (F-G)'(c)(b - a) = 0$.
+\end{proof}
+
+The mean value theorem is the step, and it is the reason $I$ must be an interval: on
+$(-\infty, 0) \cup (0, \infty)$, the function that is $1$ on the left and $2$ on the right has
+zero derivative and is not constant. The constant of integration is this theorem, and the
+engine omits it deliberately: it returns \emph{one} antiderivative, and its claim is about
+that one.
+
+\begin{theorem}[Fundamental theorem of calculus]
+  If $f$ is continuous on $[a, b]$ then $F(x) = \int_a^x f$ is an antiderivative of $f$, and for
+  any antiderivative $G$, $\int_a^b f = G(b) - G(a)$.
+\end{theorem}
+
+The second part is the first part with the previous theorem. The book does not need the
+integral itself, only the equation $F' = f$; that equation is what ``antiderivative'' means and
+what the engine checks.
+
+\section{The table, backwards}
+
+Every derivative rule of Chapters~\ref{ch:dderiv} and~\ref{ch:power} read right to left is an
+integration rule.
+
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  Derivative & Antiderivative \\
+  \midrule
+  $(x^{n+1}/(n+1))' = x^n$ & $\int x^n\,dx = x^{n+1}/(n+1)$, $n \neq -1$ \\
+  $(\ln x)' = 1/x$ & $\int x^{-1}\,dx = \ln x$, $x > 0$ \\
+  $(e^x)' = e^x$ & $\int e^x\,dx = e^x$ \\
+  $(-\cos x)' = \sin x$ & $\int \sin x\,dx = -\cos x$ \\
+  $(\sin x)' = \cos x$ & $\int \cos x\,dx = \sin x$ \\
+  $(x \ln x - x)' = \ln x$ & $\int \ln x\,dx = x\ln x - x$ \\
+  $(-\ln \cos x)' = \tan x$ & $\int \tan x\,dx = -\ln \cos x$ \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Linearity of the derivative gives linearity of the antiderivative: $\int (f + g) = \int f +
+\int g$ and $\int cf = c \int f$.
+
+\section{Substitution}
+
+\begin{theorem}[Substitution]
+  If $G' = g$ and $u$ is differentiable, then
+  \[ \int g(u(x))\,u'(x)\,dx = G(u(x)). \]
+\end{theorem}
+\begin{proof}
+  The chain rule: $(G \circ u)' = (G' \circ u)\, u' = (g \circ u)\, u'$.
+\end{proof}
+
+The special case $u = ax + b$ gives $\int g(ax + b)\,dx = G(ax+b)/a$, since $u' = a$ is a
+constant that can be divided out. The general case is the one to learn to \emph{see}: in
+$\int 2x \cos(x^2)\,dx$ the factor $2x$ is the derivative of the inner $x^2$, so the answer is
+$\sin(x^2)$. When the derivative is present only up to a constant, as in $\int x \cos(x^2)\,dx$,
+the constant comes out: $\frac{1}{2}\sin(x^2)$.
+
+\section{The finder}
+
+The engine's antidifferentiator is a direct transcription of the last two sections, and nothing
+about it is proved.
+
+\begin{minted}{lean}
+def table (g : String) (u : Expr) : Option (Expr × String) :=
+  match g with
+  | "sin" => some (neg (.fn "cos" [u]), "$\\int \\sin u \\, du = -\\cos u$")
+  | "cos" => some (.fn "sin" [u], "$\\int \\cos u \\, du = \\sin u$")
+  | "exp" => some (.fn "exp" [u], "$\\int e^u \\, du = e^u$")
+  | "ln" => some (sub (.mul [u, .fn "ln" [u]]) u, "$\\int \\ln u \\, du = u \\ln u - u$")
+  | "tan" => some (neg (.fn "ln" [.fn "cos" [u]]), "$\\int \\tan u \\, du = -\\ln \\cos u$")
+  | _ => none
+
+def powerRule (u n : Expr) : Expr × String :=
+  if n.isNumEq Q.minusOne then (.fn "ln" [u], "$\\int u^{-1} \\, du = \\ln u$")
+  else match n with
+    | .num q => let n1 := q.add Q.one; (.mul [.num (Q.one.div n1), .pow u (.num n1)], "…")
+    | _ => let n1 := .add [n, Expr.one]; (.mul [.pow n1 Expr.minusOne, .pow u n1], "… (assuming $n \\neq -1$)")
+
+def substitute (x : String) (f G : Expr) (a : Expr) : Expr × Array Step :=
+  if a.isOne then (G, #[]) else (Expr.div G a, #[⟨"int.linear-substitution", "…", [], integral f x, Expr.div G a, none⟩])
+\end{minted}
+
+The main function \lc{anti} dispatches on the shape of the integrand: a term free of $x$ is a
+constant; a sum integrates termwise; constant factors come out; a power $u^n$ or a table
+function of $u$ with $u$ linear in $x$ uses the table and \lc{substitute}; and a product tries
+the general substitution --- one factor is $H'(u)$ for a table or power $H$, and the remaining
+factors, divided by $u'$, must be free of $x$:
+
+\begin{minted}{lean}
+let trySubst (i : Nat) (w G : Expr) (why : String) : Option (Expr × Array Step) := do
+  if !w.dependsOn x then none else
+  let w' ← simp (D w x)
+  let ratio ← simp (Expr.div (without es i) w')
+  if ratio.dependsOn x then none else
+  let F := .mul [ratio, G]
+  return (F, #[step "int.substitution" "…" F])
+\end{minted}
+
+The derivative $w'$ is computed by the caller's normalizer --- the pipeline of
+Chapter~\ref{ch:dderiv} --- so the finder never differentiates on its own. Its steps are
+recorded with the status \status{checked}: a guess whose result a later step verifies.
+
+\section{The checker}
+
+\begin{minted}{lean}
+def cmdIntegrate (norm : Norm) : PlainRule :=
+  { name := "cmd.integrate", apply := fun e => Option.map checked <|
+      match e with
+      | .fn "integrate" [f, .var x] =>
+        match Anti.anti (fun e => (norm e).toOption.map (·.1)) x 3 f with
+        | none => some (refuse "integrate: no antiderivative … found")
+        | some (F₀, steps) =>
+          match norm F₀ with
+          | .ok (F, _) =>
+            match norm (D F x) with
+            | .ok (g, sub) =>
+              match norm (Expand.dist g), norm (Expand.dist f) with
+              | .ok (g', subg), .ok (f', _) =>
+                if equal g' f' then some ⟨F, "…", some ⟨Anti.integral f x, (steps.push check).push compare, F⟩, none⟩
+                else some (refuse "integrate: the candidate … was rejected: its derivative simplifies to …")
+      …
+\end{minted}
+
+Differentiate the candidate, normalize, expand both sides (Chapter~\ref{ch:parts} explains
+why), and accept only on exact equality of the normal forms. The theorem is about what
+acceptance means:
+
+\begin{thmbox}[\lcn{cmdIntegrate_spec}]
+  If \texttt{integrate(f, x)} returns $F$ without error, then normalizing $\frac{d}{dx} F$ gives
+  some $g$, and $g$ and $f$ have the same normal form after expansion.
+\end{thmbox}
+
+\begin{minted}{lean}
+theorem cmdIntegrate_spec (norm : Norm) {f : Expr} {x : String} {res : RuleResult}
+    (h : (cmdIntegrate norm).apply (.fn "integrate" [f, .var x]) = some res) (hok : res.error = none) :
+    ∃ g sub g' s₁ s₂, norm (D res.result x) = .ok (g, sub) ∧
+      norm (Expand.dist g) = .ok (g', s₁) ∧ norm (Expand.dist f) = .ok (g', s₂)
+\end{minted}
+
+Nothing about the finder is assumed. The proof is a case analysis on the code: every branch that
+returns without error passed the equality test. In \file{proofs/}, with the real semantics of
+Chapter~\ref{ch:dderiv}, this becomes the statement a student would want:
+
+\begin{minted}{lean}
+theorem integrate_deriv (norm : Norm) … (ρ : EnvR)
+    (hdiff  : ∀ g sub, norm (D res.result x) = .ok (g, sub) → evalD ρ (D res.result x) = evalD ρ g)
+    (hleft  : …)   -- the expansion of g was sound at ρ
+    (hright : …)   -- the expansion of f was sound at ρ
+    : deriv (fx ρ x res.result) (ρ x) = evalD ρ f
+\end{minted}
+
+The hypotheses say that the three normalizations the checker ran were value-preserving at the
+point $\rho$. Those normalizations are derivations shown in the notebook, each step with its
+status; so the theorem's hypotheses are, exactly, ``the steps shown were sound at this point''.
+That is why the command's status is \status{verified} while the finder's steps are
+\status{checked}: the claim is the checker's, and it inherits the conditions of the derivative
+rules it used.
+
+\section{An inherited condition}
+
+$\int x^a\,dx$ is accepted as $x^{a+1}/(a+1)$. Differentiating the candidate gives
+$(a+1)x^a/(a+1)$, and the step that cancels $(a+1)/(a+1)$ is \rn{simp.collect-powers} of
+Chapter~\ref{ch:exp}, conditional on a positive base --- here $a + 1 \neq 0$. So the check's
+derivation carries the condition $a \neq -1$, the notebook shows it, and nobody had to write it
+down. The finder's own note says ``assuming $n \neq -1$''; the checker's status \emph{proves} that
+the assumption is where the answer's validity ends.
+
+\begin{trybox}
+\begin{minted}{text}
+integrate(x^2 + sin(x), x)
+integrate(exp(2*x), x)
+integrate(x * cos(x^2), x)
+integrate(x^a, x)
+\end{minted}
+  Open each derivation: the finder's steps are \status{checked}, then \rn{int.check} with the
+  differentiation nested under it, then \rn{int.compare}. In the last, find the conditional
+  step and read its condition.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Mean value theorem]
+  State Rolle's theorem and derive the mean value theorem from it by subtracting the chord.
+  Where in the proof is the hypothesis ``interval'' used?
+\end{exercisebox}
+
+\begin{exercisebox}[Seeing the substitution]
+  Find $u$ for $\int \frac{\ln x}{x}\,dx$, $\int \sin x \cos x\,dx$ and
+  $\int \frac{x}{\sqrt{1 - x^2}}\,dx$, and say which of the three the finder's \lc{trySubst}
+  will find (the third needs a power with a non-integer exponent as $H'$).
+\end{exercisebox}
+
+\begin{exercisebox}[The constant]
+  The engine's $\int x^{-1}\,dx$ is $\ln x$, valid for $x > 0$. The textbook's is $\ln|x|$.
+  Explain, with the first theorem of this chapter, why the textbook's answer is two constants
+  and not one.
+\end{exercisebox}

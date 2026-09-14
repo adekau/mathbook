@@ -60,6 +60,8 @@
   fontsize=\small, breaklines=true, linenos=false, xleftmargin=8pt,
 }
 \newcommand{\lc}[1]{\mintinline{lean}{#1}}
+% Lean names in box titles (minted cannot run in a moving argument)
+\newcommand{\lcn}[1]{\texttt{\detokenize{#1}}}
 
 % ── Diagrams ────────────────────────────────────────────────
 \usepackage{tikz}
@@ -134,17 +136,17 @@
   \vspace*{2cm}
   {\Huge\bfseries Show Your Work\par}
   \vspace{0.5cm}
-  {\large\itshape Building a verified math notebook in Lean~4\par}
+  {\large\itshape Relearning a mathematics degree by building a verified engine in Lean~4\par}
   \vspace{3cm}
   \begin{tcolorbox}[width=0.75\textwidth, colback=gray!8, colframe=gray!50, arc=4pt, boxrule=0.6pt]
     \small\centering
-    \textit{Every line a computer-algebra system prints is a claim.\\
-    This book is about a notebook that shows its work and says,\\
-    for each step, exactly how much of the claim is a theorem.}
+    \textit{Every rule a computer-algebra system applies is a theorem someone once learned.\\
+    This book relearns them, one chapter each: the mathematics from its definitions,\\
+    then the rule, then the proof in Lean that says exactly how much of it holds.}
   \end{tcolorbox}
   \vfill
-  {\large One engine, in Lean~4, compiled to native and to WebAssembly,\\
-  and the book written from building it\par}
+  {\large Algebra, calculus, linear algebra, order theory, the \(\lambda\)-calculus and the theory of rewriting,\\
+  as the engine of a notebook that shows its work\par}
   \vspace{1cm}
   {\normalsize The engine imports nothing but Lean's prelude; the real-number theorems live beside it, in Mathlib.\par}
   \vspace{0.5cm}
@@ -155,7 +157,26 @@
 \tableofcontents
 
 \mainmatter
-\part{One Engine}
+\part{Algebra}
+\input{chapters/m01-exact-arithmetic}
+\input{chapters/m02-polynomials}
+\input{chapters/m03-exponents}
+\input{chapters/m04-radicals}
+\input{chapters/m05-exp-and-ln}
+\part{Calculus}
+\input{chapters/m06-the-derivative}
+\input{chapters/m07-the-power-rule}
+\input{chapters/m08-antiderivatives}
+\input{chapters/m09-by-parts}
+\part{Linear Algebra}
+\input{chapters/m10-systems}
+\input{chapters/m11-echelon-form}
+\part{Discrete Mathematics}
+\input{chapters/m12-partial-orders}
+\input{chapters/m13-lambda-calculus}
+\part{The Mathematics of Rewriting}
+\input{chapters/m14-well-founded-orders}
+\part{How the Engine Was Built}
 \input{chapters/01-what-verified-means}
 \input{chapters/02-rewriting-with-a-trace}
 \part{Meaning}

@@ -1,0 +1,216 @@
+\chapter{The Lambda Calculus}\label{ch:lambda}
+
+The $\lambda$-calculus is three rules of syntax and one rule of computation, and it can compute
+everything a computer can. Relearning it means relearning substitution --- the operation everyone
+gets wrong once --- and the Church numerals, in which arithmetic is done by functions applied to
+functions. The engine has a world for it in which every $\beta$-step is a recorded step, and a
+budget, the only one in the engine, because whether a term \emph{has} a normal form is
+undecidable.
+
+\section{Terms}
+
+\begin{definition}
+  $\lambda$-terms are given by the grammar $t ::= x \mid \lambda x.\, t \mid t\, t$: variables,
+  abstractions, applications. Application associates to the left and $\lambda x\, y.\, t$
+  abbreviates $\lambda x.\, \lambda y.\, t$.
+\end{definition}
+
+\begin{definition}[Free variables]
+  $\mathrm{FV}(x) = \{x\}$; $\mathrm{FV}(\lambda x.\, t) = \mathrm{FV}(t) \setminus \{x\}$;
+  $\mathrm{FV}(t\, s) = \mathrm{FV}(t) \cup \mathrm{FV}(s)$.
+\end{definition}
+
+An occurrence of $x$ inside $\lambda x.\, t$ is \emph{bound}; the name of a bound variable is
+immaterial, and $\lambda x.\, x$ and $\lambda y.\, y$ are the same function. Terms that differ
+only in bound names are $\alpha$-equivalent, and the calculus is really about terms up to $\alpha$.
+
+\section{Substitution}
+
+$\beta$-reduction needs $t[x := s]$, the result of replacing the free occurrences of $x$ in $t$
+by $s$. The naive definition --- replace every $x$ not under a $\lambda x$ --- is wrong:
+$(\lambda y.\, x)[x := y]$ would become $\lambda y.\, y$, the identity, when it should be the
+constant function returning $y$. The free $y$ has been \emph{captured} by the binder.
+
+\begin{definition}[Capture-avoiding substitution]
+  \begin{align*}
+    x[x := s] &= s, \qquad y[x := s] = y \text{ for } y \neq x, \\
+    (t\, u)[x := s] &= t[x := s]\; u[x := s], \\
+    (\lambda x.\, t)[x := s] &= \lambda x.\, t, \\
+    (\lambda y.\, t)[x := s] &= \lambda y.\, t[x := s] \quad\text{if } y \neq x \text{ and } y \notin \mathrm{FV}(s), \\
+    (\lambda y.\, t)[x := s] &= \lambda y'.\, t[y := y'][x := s] \quad\text{otherwise, } y' \text{ fresh.}
+  \end{align*}
+\end{definition}
+
+The last clause renames the binder before substituting. It is also the clause that is not
+structurally recursive: it recurses on $t[y := y']$, which is not a subterm of the input. Lean
+will not accept it as a total function without a separate argument that the renaming does not
+change the size, and the author's earlier book on the subject marked its \lc{subst} as
+\lc{partial}.
+
+\begin{theorem}
+  $\mathrm{FV}(t[x := s]) \subseteq \mathrm{FV}(s) \cup (\mathrm{FV}(t) \setminus \{x\})$.
+\end{theorem}
+\begin{proof}
+  Induction on $t$, clause by clause. The only case with content is the abstraction: a variable
+  free in $\lambda y.\, t[x := s]$ is free in $t[x := s]$ and is not $y$, so by induction it is in
+  $\mathrm{FV}(s)$ or in $\mathrm{FV}(t) \setminus \{x\}$, and in the second case it is in
+  $\mathrm{FV}(\lambda y.\, t) \setminus \{x\}$ since it is not $y$.
+\end{proof}
+
+\section{Reduction}
+
+\begin{definition}[$\beta$]
+  $(\lambda x.\, t)\, s \to t[x := s]$, applied anywhere inside a term. A term with no
+  $\beta$-redex is in normal form.
+\end{definition}
+
+Two facts, stated without proof, organize everything about reduction. \emph{Church--Rosser}: if
+$t \to^* u$ and $t \to^* v$ then some $w$ has $u \to^* w$ and $v \to^* w$; so a normal form, if it
+exists, is unique. \emph{Standardization}: if $t$ has a normal form, \emph{normal-order}
+reduction --- always contract the leftmost-outermost redex --- reaches it. The second is why the
+engine reduces in normal order: any other strategy might loop on a term that has a normal form.
+
+\begin{theorem}
+  $\Omega = (\lambda x.\, x\, x)(\lambda x.\, x\, x)$ has no normal form.
+\end{theorem}
+\begin{proof}
+  Its only redex is the whole term, which reduces to itself.
+\end{proof}
+
+And the general question is hopeless: since the calculus can express every computable function,
+``does $t$ have a normal form'' is undecidable, by reduction from the halting problem. An engine
+that promises an answer for every term is lying; the honest engine has a budget and says so.
+
+\section{Church numerals}
+
+\begin{definition}
+  $\overline{n} = \lambda f\, x.\, f^n\, x$, where $f^n\, x$ is $f$ applied $n$ times to $x$.
+  $\mathrm{succ} = \lambda n\, f\, x.\, f\,(n\, f\, x)$; $\mathrm{add} = \lambda m\, n\, f\, x.\,
+  m\, f\, (n\, f\, x)$; $\mathrm{mul} = \lambda m\, n\, f.\, m\, (n\, f)$.
+\end{definition}
+
+A numeral is an iterator: $\overline{n}\, f\, x$ applies $f$ to $x$ $n$ times. Addition iterates
+$f$ $n$ times and then $m$ more; multiplication iterates ``iterate $f$ $n$ times'' $m$ times.
+
+\begin{exbox}[$\mathrm{add}\, \overline 2\, \overline 3$]
+  $\mathrm{add}\, \overline 2\, \overline 3 \to^2 \lambda f\, x.\, \overline 2\, f\, (\overline 3\, f\, x)
+  \to^2 \lambda f\, x.\, \overline 2\, f\, (f (f (f x))) \to^2 \lambda f\, x.\, f (f (f (f (f x)))) =
+  \overline 5$. Seven $\beta$-steps in all, counting the unfolding of the numerals' own
+  applications.
+\end{exbox}
+
+Booleans are selectors, $\mathrm{true} = \lambda t\, f.\, t$ and $\mathrm{false} = \lambda t\, f.\,
+f$, and $\mathrm{if}\, b\, u\, v = b\, u\, v$.
+
+\section{De Bruijn indices}
+
+Names are for people. For a machine, a bound variable can be written as the number of binders
+between its occurrence and its own: $\lambda x.\, \lambda y.\, x$ is $\lambda\, \lambda\, 1$ and
+$\lambda x.\, x\, (\lambda y.\, x\, y)$ is $\lambda\, 0\, (\lambda\, 1\, 0)$. $\alpha$-equivalent
+terms become \emph{identical}, and substitution becomes arithmetic on indices. The engine
+computes this view beside every step so the notebook can toggle it.
+
+\section{The engine}
+
+\begin{minted}{lean}
+inductive Term where
+  | var : String → Term
+  | lam : String → Term → Term
+  | app : Term → Term → Term
+
+def freshen (clash : List String) (ren : List (String × String)) : Term → Term
+  | .var w => .var ((ren.lookup w).getD w)
+  | .app a b => .app (freshen clash ren a) (freshen clash ren b)
+  | .lam y e =>
+    let y' := if y ∈ clash then freshVar (clash ++ freeVars e ++ ren.map (·.2)) y else y
+    .lam y' (freshen clash ((y, y') :: ren) e)
+
+def substRaw (x : String) (s : Term) : Term → Term
+  | .var y => if y == x then s else .var y
+  | .app a b => .app (substRaw x s a) (substRaw x s b)
+  | .lam y e => if y == x then .lam y e else .lam y (substRaw x s e)
+
+def subst (x : String) (s : Term) (e : Term) : Term × Bool :=
+  let clash := (freeVars s).filter (· != x)
+  let e' := freshen clash [] e
+  (substRaw x s e', e' != e)
+\end{minted}
+
+This is the definition of the second section rearranged to be structurally recursive: first one
+pass renames every binder that could capture (\lc{freshen}, carrying the renaming down as a
+parameter), then one pass substitutes without renaming (\lc{substRaw}). Each pass is structural,
+so the whole is total, and it computes the same term as the textbook's clause. The Boolean says
+whether any renaming happened, so the notebook can label the step an $\alpha$-then-$\beta$.
+
+\begin{minted}{lean}
+def betaStep : Term → Option (Term × Bool)
+  | .app (.lam x body) arg => some (subst x arg body)
+  | .app a b =>
+    match betaStep a with
+    | some (a', r) => some (.app a' b, r)
+    | none => (betaStep b).map fun (b', r) => (.app a b', r)
+  | .lam x e => (betaStep e).map fun (e', r) => (.lam x e', r)
+  | .var _ => none
+
+def maxSteps : Nat := 1000
+\end{minted}
+
+\lc{betaStep} is normal order: the leftmost-outermost redex, found by trying the head of an
+application first. \lc{reduce} iterates it up to \lc{maxSteps} and reports the term it reached if
+no normal form came; $\Omega$ is refused after $1000$ steps, still $\Omega$.
+
+\section{What is proved}
+
+\begin{minted}{lean}
+theorem substRaw_freeVars (x : String) (s : Term) : ∀ (e : Term) (z : String),
+    z ∈ freeVars (substRaw x s e) → z ∈ freeVars s ∨ (z ∈ freeVars e ∧ z ≠ x)
+
+theorem readChurch_church (n : Nat) : readChurch (church n) = some n
+\end{minted}
+
+The first is the theorem of the second section, for the capture-free pass. The second says the
+reader that labels a normal form ``the Church numeral $n$'' is right on the numerals the engine
+builds --- a small theorem, but the one that makes the label beside \texttt{add 2 3} a claim
+rather than a guess.
+
+Not proved: that \lc{freshen} produces an $\alpha$-equivalent term, hence that a $\beta$-step
+under a renaming is a $\beta$-step of the original; and that the de Bruijn view commutes with
+$\beta$. The $\beta$-steps are reported \status{unverified} for that reason, and the unfolding of
+a definition (\rn{lambda.delta}) \status{verified}, because it is a lookup with nothing to prove.
+The missing metatheory is standard --- it is the content of the first chapters of any book on
+the subject --- and is the natural next thing to add.
+
+\begin{trybox}
+\begin{minted}{text}
+add 2 3
+mul 2 3
+if true 1 0
+(λx y. x) a b
+(λx. x x) (λx. x x)
+\end{minted}
+  Type \texttt{\textbackslash lam} and Tab for the $\lambda$. Toggle de Bruijn indices in the
+  View menu and watch the names disappear. The last is $\Omega$, refused.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Capture]
+  Compute $(\lambda y.\, x\, y)[x := y]$ by the naive definition and by the capture-avoiding
+  one, and apply both results to a variable $z$ to see the difference.
+\end{exercisebox}
+
+\begin{exercisebox}[Multiplication]
+  Reduce $\mathrm{mul}\, \overline 2\, \overline 3$ by hand in normal order and count the
+  steps. Then find the reduction that is shortest, and explain why it is not normal order.
+\end{exercisebox}
+
+\begin{exercisebox}[Two passes equal one]
+  Prove, on paper, that \lc{substRaw x s (freshen clash [] e)} equals the textbook's
+  $e[x := s]$ up to $\alpha$, when \lc{clash} is $\mathrm{FV}(s) \setminus \{x\}$. Where does the
+  proof use that the fresh names avoid $\mathrm{FV}(e)$?
+\end{exercisebox}
+
+\begin{exercisebox}[Indices]
+  Write $\mathrm{add}$ and $\overline 3$ with de Bruijn indices, and write the rule for
+  substituting under a binder as a shift of indices.
+\end{exercisebox}

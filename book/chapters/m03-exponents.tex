@@ -1,0 +1,172 @@
+\chapter{The Laws of Exponents}\label{ch:exp}
+
+The laws of exponents are taught as three formulas and relearned as three theorems with three
+different domains of validity. $b^m b^n = b^{m+n}$ is true for natural exponents by definition,
+for integer exponents when $b \neq 0$, for rational exponents when $b > 0$, and for real
+exponents when $b > 0$ --- and a computer-algebra system that applies it to $x \cdot x^{-1}$ at
+$x = 0$ turns $0$ into $1$. This chapter is the proof that it does, and the theorem that says
+exactly where the rule is right.
+
+\section{Natural exponents}
+
+\begin{definition}
+  For $b$ in a commutative ring and $n \in \mathbb{N}$, $b^0 = 1$ and $b^{n+1} = b^n \cdot b$.
+\end{definition}
+
+\begin{theorem}
+  For all $b, c$ and $m, n \in \mathbb{N}$:
+  (i) $b^m b^n = b^{m+n}$; (ii) $(b^m)^n = b^{mn}$; (iii) $(bc)^n = b^n c^n$.
+\end{theorem}
+\begin{proof}
+  Each by induction on $n$. (i): $b^m b^0 = b^m = b^{m+0}$, and $b^m b^{n+1} = b^m b^n b =
+  b^{m+n} b = b^{m+n+1}$. (ii): $(b^m)^0 = 1 = b^0$, and $(b^m)^{n+1} = (b^m)^n b^m = b^{mn} b^m =
+  b^{mn + m}$ by (i). (iii): $(bc)^{n+1} = (bc)^n bc = b^n c^n b c = b^{n+1} c^{n+1}$, using
+  commutativity.
+\end{proof}
+
+No hypothesis on $b$ anywhere. This is the case the integer evaluator of Chapter~\ref{ch:q}
+covers, and the rule \rn{simp.power} evaluates $2^{10}$ and rewrites $(b^2)^3$ to $b^6$ under it.
+
+\section{Integer exponents}
+
+To extend to $n < 0$ one wants $b^{-n} = (b^n)^{-1}$, which requires $b \neq 0$ in a field.
+Law (i) then holds for all integers $m, n$ provided $b \neq 0$: for $m \ge 0 > n$, say, $b^m
+b^{n} = b^m / b^{-n}$, and cancelling $\min(m, -n)$ factors gives $b^{m+n}$ whether $m + n$ is
+positive or negative. At $b = 0$ the law fails: $0^1 \cdot 0^{-1}$ is undefined in mathematics,
+while $0^0 = 1$.
+
+Mathlib's convention is that $0^{-1} = 0$, because \lc{Inv} on a field is total with
+$0^{-1} = 0$; that makes every formula total and moves the failure from ``undefined'' to
+``false'': $0^1 \cdot 0^{-1} = 0 \cdot 0 = 0 \neq 1 = 0^0$. The junk value is not a convenience
+for the engine; it is what forces the side condition to be stated, because the theorem is now an
+equation between two real numbers that are simply not equal.
+
+\section{Real exponents}
+
+For $b > 0$ and $x \in \mathbb{R}$, $b^x := \exp(x \ln b)$ (Chapter~\ref{ch:explog}). Then (i) is
+$\exp(m \ln b)\exp(n \ln b) = \exp((m+n)\ln b)$, the functional equation of $\exp$; (ii) uses
+$\ln(b^m) = m \ln b$; (iii) uses $\ln(bc) = \ln b + \ln c$. All three need $b, c > 0$.
+
+Mathlib's \lc{Real.rpow} extends this to all real bases: $0^x = 0$ for $x \neq 0$ and $0^0 = 1$;
+for $b < 0$, $b^x = \exp(x \ln|b|) \cos(\pi x)$, the real part of the complex principal value. So
+$(-8)^{1/3}$ is $2 \cos(\pi/3) = 1$ in Mathlib, not $-2$. The engine's semantics uses
+\lc{Real.rpow}, and the lemma \lc{Real.rpow_natCast} says it agrees with the ring power for a
+natural exponent, which is why the engine's $x^2$ means what a student means by it, for every
+real $x$, and its $x^{1/3}$ does not.
+
+\section{The rules}
+
+The structural rules are unconditional and live in \rn{simp.power}:
+
+\begin{minted}{lean}
+def powerAt (b x : Expr) : Option RuleResult :=
+  if isZero x then some ⟨Expr.one, "$b^0 = 1$ …", none, none⟩
+  else if isOne x then some ⟨b, "$b^1 = b$.", none, none⟩
+  else if isOne b then some ⟨Expr.one, "$1^n = 1$.", none, none⟩
+  else if isZero b && isPosNum x then some ⟨Expr.zero, "$0^n = 0$ for $n > 0$.", none, none⟩
+  else powerNum b x
+\end{minted}
+
+$b^0 = 1$ for \emph{every} $b$ is Mathlib's \lc{Real.rpow_zero}, including $b = 0$ --- another
+place where the junk convention happens to agree with the ring convention $0^0 = 1$. The
+numeric case \lc{powerNum} evaluates $p^n$ exactly in $\mathbb{Q}$ for an integer $n$, and
+$p^{1/n}$ when $p$ is a perfect $n$-th power (Chapter~\ref{ch:rad}).
+
+The law that needs a hypothesis is (i), the rule \rn{simp.collect-powers}:
+
+\begin{minted}{lean}
+def mergePowers : List Expr → Option (List Expr × Expr)
+  | [] => none
+  | e :: rest =>
+    let (b, x) := baseExp e
+    if bigBase b then
+      match rest.find? (fun f => equal (baseExp f).1 b) with
+      | some f => some ((.pow b (addExp x (baseExp f).2)) :: removeFirst (fun f => equal (baseExp f).1 b) rest, b)
+      | none => (mergePowers rest).map fun (l, t) => (e :: l, t)
+    else (mergePowers rest).map fun (l, t) => (e :: l, t)
+\end{minted}
+
+A factor without an explicit exponent is read as $b^1$ (\lc{baseExp}), so $x \cdot x$ merges to
+$x^2$ and $x \cdot x^{-1}$ merges to $x^0$.
+
+\section{The theorem, and the counterexample}
+
+\begin{thmbox}[\lcn{collectPowers_soundR_on}]
+  If the rule fires on $e$ with result $e'$, and the base it merged has a positive value in
+  $\rho$, then $\lc{evalR}\,\rho\,e = \lc{evalR}\,\rho\,e'$.
+\end{thmbox}
+
+\begin{minted}{lean}
+theorem collectPowers_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
+    (h : collectPowers.apply e = some res)
+    (ht : ∀ es l t, e = .mul es → mergePowers es = some (l, t) → 0 < evalR ρ t) :
+    evalR ρ e = evalR ρ res.result
+\end{minted}
+
+The mathematical content is \lc{Real.rpow_add}: for $0 < b$, $b^{x+y} = b^x b^y$. The rest is the
+permutation lemma for products. And the hypothesis is not an artefact of the proof:
+
+\begin{thmbox}[\lcn{not_collectPowers_soundR}]
+  The rule is not unconditionally sound. At $x = 0$ it rewrites $x \cdot x^{-1}$, whose value is
+  $0 \cdot 0^{-1} = 0$, to $x^0$, whose value is $1$.
+\end{thmbox}
+
+\begin{minted}{lean}
+theorem not_collectPowers_soundR : ¬ RuleSoundR collectPowers := by
+  intro hs
+  have h := hs (.mul [.var "x", .pow (.var "x") (.num (Q.ofInt (-1)))]) _ rfl (fun _ => 0)
+  norm_num [… , Real.rpow_zero] at h
+\end{minted}
+
+The proof applies the supposed soundness to the one term and the one environment, evaluates both
+sides, and finds $0 = 1$. This is the pattern every refutation in the book follows, and it is
+the pattern a student should follow when a formula feels too general: one point, both sides,
+compare.
+
+The engine keeps the rule, because every computer-algebra system simplifies $x/x$ to $1$, and
+labels it \status{conditional} with the hypothesis ``positive base''. The reader who clicks the
+step sees the condition. That is the whole of what changed by proving it: not the rule, the
+label.
+
+\section{What is not proved}
+
+Two more rules share the name \rn{simp.power} and do not share its theorem. They are the
+\emph{parity} rules $(ab)^n \to a^n b^n$ and $(b^m)^n \to b^{mn}$ for an integer $n$ and
+symbolic $m$, kept because every computer-algebra system distributes integer powers over
+products. Both are true for all real $a, b$ when $n$ is an integer --- law (iii) with
+\lc{Real.mul_rpow} needs nonnegativity for real exponents, but for an integer exponent
+\lc{Real.rpow_intCast} reduces to the field power, where $(ab)^n = a^n b^n$ holds outright ---
+and neither has a theorem in \file{proofs/}. The rule table reports the status of the name;
+the honest status of these two rules is \status{unverified}, and proving them is the first
+exercise below.
+
+\begin{trybox}
+\begin{minted}{text}
+x * x^(-1)
+x^3 * x^(-3)
+(a*b)^3
+2^100
+\end{minted}
+  The first two are the rule of this chapter, labelled with its condition. The third is a
+  parity rule. The fourth is exact.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[The parity rules]
+  State \lc{parityPowMul_soundR} in the form of the theorems of this chapter and prove it,
+  using \lc{Real.rpow_intCast} and \lc{mul_zpow}. Which hypothesis, if any, does the
+  $(b^m)^n$ rule need when $m$ is symbolic?
+\end{exercisebox}
+
+\begin{exercisebox}[Where exactly]
+  \lc{collectPowers_soundR_on} asks for a positive base. Show that for \emph{integer}
+  exponents the rule is also sound at negative bases, and find the term on which it fails at a
+  negative base with a fractional exponent.
+\end{exercisebox}
+
+\begin{exercisebox}[Principal values]
+  Compute Mathlib's $(-1)^{1/2}$ and $(-1)^{1/3}$ from the formula
+  $b^x = \exp(x \ln|b|)\cos(\pi x)$, and explain in what sense they are ``the real part'' of the
+  complex answers.
+\end{exercisebox}

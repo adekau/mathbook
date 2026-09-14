@@ -1,0 +1,231 @@
+\chapter{The Derivative}\label{ch:dderiv}
+
+The derivative rules are the part of a degree everyone remembers and the part whose hypotheses
+everyone forgets. The sum rule, the product rule and the chain rule all begin ``if $f$ and $g$
+are differentiable at $a$'', and the engine, asked to prove them, could not proceed without
+that clause. This chapter re-derives the rules from the definition, gives the counterexample
+that shows the clause is not decorative, and reads the engine's theorems as the same statements.
+
+\section{The definition}
+
+\begin{definition}
+  $f : \mathbb{R} \to \mathbb{R}$ is differentiable at $a$ with derivative $L$ if
+  \[
+    \lim_{h \to 0} \frac{f(a + h) - f(a)}{h} = L .
+  \]
+  Write $f'(a) = L$.
+\end{definition}
+
+A formulation due to Carathéodory makes the rules almost mechanical.
+
+\begin{theorem}[Carathéodory]
+  $f$ is differentiable at $a$ with derivative $L$ iff there is a function $\varphi$, continuous
+  at $a$ with $\varphi(a) = L$, such that $f(x) - f(a) = \varphi(x)(x - a)$ for all $x$.
+\end{theorem}
+\begin{proof}
+  Given the limit, set $\varphi(x) = \frac{f(x) - f(a)}{x - a}$ for $x \neq a$ and $\varphi(a) = L$;
+  continuity at $a$ is exactly the limit. Conversely, if such $\varphi$ exists, the difference
+  quotient equals $\varphi(x)$ for $x \neq a$, whose limit at $a$ is $\varphi(a) = L$.
+\end{proof}
+
+\begin{theorem}
+  If $f$ is differentiable at $a$, it is continuous at $a$.
+\end{theorem}
+\begin{proof}
+  $f(x) - f(a) = \varphi(x)(x - a) \to L \cdot 0 = 0$.
+\end{proof}
+
+\section{The rules, with proofs}
+
+\begin{theorem}[Linearity]
+  If $f, g$ are differentiable at $a$ and $c$ is a constant, then $f + g$ and $cf$ are, with
+  $(f+g)' = f' + g'$ and $(cf)' = cf'$.
+\end{theorem}
+\begin{proof}
+  $(f + g)(x) - (f+g)(a) = (\varphi(x) + \psi(x))(x - a)$, and $\varphi + \psi$ is continuous at
+  $a$ with value $f'(a) + g'(a)$. For $cf$, use $c\varphi$.
+\end{proof}
+
+\begin{theorem}[Product rule]
+  If $f, g$ are differentiable at $a$, then $fg$ is, with $(fg)' = f'g + fg'$.
+\end{theorem}
+\begin{proof}
+  \begin{align*}
+    f(x)g(x) - f(a)g(a) &= \big(f(x) - f(a)\big) g(x) + f(a)\big(g(x) - g(a)\big) \\
+      &= \big(\varphi(x) g(x) + f(a)\psi(x)\big)(x - a).
+  \end{align*}
+  The bracket is continuous at $a$ (here continuity of $g$ at $a$ is used, which the previous
+  theorem provides), with value $f'(a)g(a) + f(a)g'(a)$.
+\end{proof}
+
+The add-and-subtract of $f(a)g(x)$ is the whole idea, and the use of $g$'s continuity is the
+step that needs $g$ differentiable, not merely $f$.
+
+\begin{theorem}[Chain rule]
+  If $u$ is differentiable at $a$ and $f$ is differentiable at $u(a)$, then $f \circ u$ is
+  differentiable at $a$ with $(f \circ u)'(a) = f'(u(a))\, u'(a)$.
+\end{theorem}
+\begin{proof}
+  $f(u(x)) - f(u(a)) = \varphi(u(x))(u(x) - u(a)) = \varphi(u(x))\, \psi(x)\, (x - a)$, where
+  $\varphi$ is Carathéodory's function for $f$ at $u(a)$ and $\psi$ is $u$'s at $a$. The product
+  $\varphi \circ u \cdot \psi$ is continuous at $a$, since $u$ is, with value $f'(u(a))u'(a)$.
+\end{proof}
+
+The classical proof of the chain rule has to handle the case $u(x) = u(a)$ for $x$ near $a$
+separately; Carathéodory's does not, which is why it is the one to relearn.
+
+\section{The counterexample}
+
+\begin{theorem}
+  $|x|$ is not differentiable at $0$.
+\end{theorem}
+\begin{proof}
+  The difference quotient $|h|/h$ is $1$ for $h > 0$ and $-1$ for $h < 0$; the two one-sided
+  limits differ.
+\end{proof}
+
+So $|x| + x$ is not differentiable at $0$ either (if it were, subtracting $x$ would make $|x|$
+differentiable). And here is the point of the hypothesis: a sum rule applied blindly to
+$|x| + x$ at $0$ would produce $(|x|)'(0) + 1$, and whatever value one assigns to the first term,
+the result claims a derivative for a function that has none.
+
+\section{Mathlib's derivative}
+
+Mathlib's \lc{deriv f a} is a total function: it is the derivative where $f$ is differentiable
+at $a$, and $0$ elsewhere (\lc{deriv_zero_of_not_differentiableAt}). \lc{HasDerivAt f L a} is
+the relation ``differentiable at $a$ with derivative $L$'', and \lc{DifferentiableAt ℝ f a} is
+its existential. The rules are stated as \lc{HasDerivAt.add}, \lc{HasDerivAt.mul},
+\lc{HasDerivAt.comp}, each with the differentiability hypotheses of the theorems above. The junk
+value $0$ is again what turns ``undefined'' into ``false'': with it, the sum rule for $|x| + x$
+at $0$ becomes the equation $0 = 0 + 1$.
+
+\section{The engine's rules}
+
+The engine writes $\frac{d}{dx} f$ as a term, \lc{fn "diff" [f, var x]}, and the rules push it
+inward one node at a time. The trace is therefore the derivation a student writes.
+
+\begin{minted}{lean}
+def diffSum : PlainRule :=
+  rule "diff.sum" fun (body, x) =>
+    match body with
+    | .add (a :: b :: es) => some ⟨.add ((a :: b :: es).map (D · x)), "Sum rule …", none, none⟩
+    | _ => none
+
+def prodTerms (x : String) : List Expr → List Expr → List Expr
+  | _, [] => []
+  | acc, f :: rest => .mul (D f x :: (acc ++ rest)) :: prodTerms x (acc ++ [f]) rest
+
+def diffProduct : PlainRule :=
+  rule "diff.product" fun (body, x) =>
+    match body with
+    | .mul (f :: g :: fs) => some ⟨.add (prodTerms x [] (f :: g :: fs)), "Product rule …", none, none⟩
+    | _ => none
+
+def outerOf (f : String) (u : Expr) : Option (Expr × String) :=
+  match f with
+  | "sin" => some (.fn "cos" [u], "\\sin' = \\cos")
+  | "cos" => some (Expr.neg (.fn "sin" [u]), "\\cos' = -\\sin")
+  | "tan" => some (.pow (.fn "cos" [u]) (Expr.ofInt (-2)), "\\tan' = \\sec^2")
+  | "exp" => some (.fn "exp" [u], "\\exp' = \\exp")
+  | "ln" => some (.pow u Expr.minusOne, "\\ln' u = 1/u")
+  | _ => none
+\end{minted}
+
+\lc{prodTerms} is the product rule for $n$ factors --- differentiate each in turn, holding the
+others fixed --- which follows from the two-factor rule by induction. The constant-multiple rule
+pulls factors free of $x$ outside, and the chain rule multiplies the outer derivative by
+$\frac{d}{dx} u$.
+
+\section{The meaning of a derivative term}
+
+Chapter~\ref{ch:deriv} of the engineering part explains why the real evaluator of
+Chapter~\ref{ch:q} could not simply be extended with a case for \texttt{diff}: the second
+argument is a \emph{binder}, and the term type has no binder positions. The semantics that
+reads it is \lc{evalD}, and its \texttt{diff} case is:
+
+\begin{minted}{lean}
+def D (ρ : EnvR) (x : String) (f : Expr) : ℝ := deriv (fun t => evalD (upd ρ x t) f) (ρ x)
+
+abbrev fx (ρ : EnvR) (x : String) (f : Expr) : ℝ → ℝ := fun t => evalD (upd ρ x t) f
+abbrev DiffAt (ρ : EnvR) (x : String) (f : Expr) : Prop := DifferentiableAt ℝ (fx ρ x f) (ρ x)
+\end{minted}
+
+Read $\texttt{diff}(f, x)$ at the point $\rho$ as: make $f$ a function of one real variable by
+rebinding $x$ to $t$ and leaving every other variable at its value in $\rho$, and take Mathlib's
+derivative of that function at $\rho(x)$. \lc{DiffAt} is the hypothesis ``$f$ is differentiable
+in $x$ at $\rho$''.
+
+\section{The theorems}
+
+\begin{minted}{lean}
+theorem diff_constant_sound (ρ : EnvR) (x : String) {e : Expr} (h : ¬ e.dependsOn x) :
+    D ρ x e = 0
+theorem diff_variable_sound (ρ : EnvR) (x : String) : D ρ x (.var x) = 1
+theorem diff_const_mul_sound (ρ : EnvR) (x : String) (consts rest : List Expr)
+    (hc : ∀ e ∈ consts, ¬ e.dependsOn x) :
+    D ρ x (.mul (consts ++ rest)) = evalD ρ (.mul (consts ++ [.fn "diff" [.mul rest, .var x]]))
+theorem diff_sum_sound (ρ : EnvR) (x : String) {es : List Expr} (h : ∀ e ∈ es, DiffAt ρ x e) :
+    D ρ x (.add es) = evalD ρ (.add (es.map (fun e => .fn "diff" [e, .var x])))
+theorem diff_product_sound (ρ : EnvR) (x : String) {f g : Expr}
+    (hf : DiffAt ρ x f) (hg : DiffAt ρ x g) :
+    D ρ x (.mul [f, g])
+      = evalD ρ (.add [.mul [.fn "diff" [f, .var x], g], .mul [.fn "diff" [g, .var x], f]])
+theorem diff_chain_sin_sound (ρ : EnvR) (x : String) {u : Expr} (hu : DiffAt ρ x u) :
+    D ρ x (.fn "sin" [u]) = evalD ρ (.mul [.fn "cos" [u], .fn "diff" [u, .var x]])
+\end{minted}
+
+The first three are \status{verified}: no differentiability is needed. For the constant multiple
+that is a small surprise, and \lc{deriv_const_mul_field} is the Mathlib lemma behind it: if the
+remaining factor is not differentiable and $c \neq 0$, then neither is the product, and both
+sides are the junk value $0$; if $c = 0$ both sides are $0$ outright. The sum, product and chain
+rules are \status{conditional}, with exactly the hypotheses of the paper proofs. The product
+rule's proof is the paper proof: \lc{hf.hasDerivAt.mul hg.hasDerivAt} is the theorem, and
+\lc{ring} rearranges $f'g + g'f$ into the engine's order.
+
+\begin{thmbox}[\lcn{not_diff_sum_sound}]
+  The sum rule without its hypothesis is false: at $x = 0$, for $|x| + x$, the left side is
+  the junk value $0$ of \lc{deriv} and the right side is $0 + 1$.
+\end{thmbox}
+
+The proof is the paper proof of the previous section. Two Mathlib lemmas do the work:
+\begin{itemize}[nosep]
+  \item \lc{not_differentiableAt_abs_zero}, the fact about $|x|$;
+  \item \lc{deriv_zero_of_not_differentiableAt}, the junk value.
+\end{itemize}
+The engine reports the sum rule as \status{conditional}: ``needs every summand differentiable;
+for $|x| + x$ at $0$ the rule gives $1$ where the derivative does not exist.''
+
+\begin{trybox}
+\begin{minted}{text}
+diff(x^2 * sin(x), x)
+diff(abs(x) + x, x)
+diff(3 * f(x), x)
+\end{minted}
+  The first is the product rule inside which the power rule and the chain rule fire; each step
+  carries its condition. The second is the counterexample. The third pulls the constant out
+  with no condition at all, and leaves $\frac{d}{dx} f(x)$ standing.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Quotient rule]
+  Derive $(f/g)' = (f'g - fg')/g^2$ from the product rule and the chain rule applied to
+  $g^{-1}$, and state the hypotheses. The engine has no quotient rule; explain how it
+  differentiates $f/g$.
+\end{exercisebox}
+
+\begin{exercisebox}[Three factors]
+  Prove $(fgh)' = f'gh + fg'h + fgh'$ from the two-factor rule, and check that \lc{prodTerms}
+  produces the three terms in that order.
+\end{exercisebox}
+
+\begin{exercisebox}[Junk values]
+  Find a function $g$ and a constant $c \neq 0$ such that $cg$ is not differentiable at $0$,
+  and verify that \lc{diff_const_mul_sound} nonetheless holds there because both sides are
+  $0$.
+\end{exercisebox}
+
+\begin{exercisebox}[Where continuity was used]
+  Mark the step in the product-rule proof that uses continuity of $g$ at $a$, and show that
+  without it the bracket need not be continuous.
+\end{exercisebox}

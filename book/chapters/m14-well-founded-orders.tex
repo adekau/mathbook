@@ -1,0 +1,245 @@
+\chapter{Well-Founded Orders and Termination}\label{ch:wf}
+
+Every previous chapter's rule was proved \emph{sound}: it does not change the value. This chapter
+is about the other property a rewriting engine needs, that it \emph{stops}, and about the branch
+of mathematics that proves it. The engine has no step budget; every evaluation terminates because
+every rule makes a certain quantity smaller in a well-founded order, and the quantity was designed
+rule by rule. The chapter relearns the theory --- well-founded relations, lexicographic products,
+the connection to rewriting --- and then reads the engine's ordering as an application of it.
+
+\section{Well-founded relations}
+
+\begin{definition}
+  A relation $\prec$ on a set $A$ is well-founded if every nonempty subset of $A$ has a
+  $\prec$-minimal element: an $m \in S$ with no $s \in S$ satisfying $s \prec m$.
+\end{definition}
+
+\begin{theorem}
+  $\prec$ is well-founded iff there is no infinite descending chain
+  $a_0 \succ a_1 \succ a_2 \succ \cdots$.
+\end{theorem}
+\begin{proof}
+  If there were such a chain, the set $\{a_i\}$ would have no minimal element. Conversely, if
+  some nonempty $S$ has no minimal element, then every $s \in S$ has some $s' \in S$ with
+  $s' \prec s$; choosing one for each $s$ (dependent choice) and starting anywhere gives an
+  infinite descending chain.
+\end{proof}
+
+\begin{theorem}[Well-founded induction]
+  If $\prec$ is well-founded on $A$ and $P$ is a property such that, for every $a$,
+  ($P(b)$ for all $b \prec a$) implies $P(a)$, then $P(a)$ holds for every $a \in A$.
+\end{theorem}
+\begin{proof}
+  If not, the set of counterexamples is nonempty and has a minimal element $a$; every $b \prec a$
+  satisfies $P$, so $a$ does, a contradiction.
+\end{proof}
+
+$\mathbb{N}$ under $<$ is well-founded, and well-founded induction on it is strong induction.
+That is also how Lean accepts a recursive definition: the recursive calls must be on arguments
+smaller in some well-founded relation, and then the function is defined by well-founded
+recursion. Every non-structural function in the engine --- the rewriter above all --- is
+accepted this way.
+
+\section{Lexicographic products}
+
+\begin{theorem}
+  If $\prec_1$ on $A$ and $\prec_2$ on $B$ are well-founded, then the lexicographic order on
+  $A \times B$, in which $(a, b) \prec (a', b')$ iff $a \prec_1 a'$, or $a = a'$ and
+  $b \prec_2 b'$, is well-founded.
+\end{theorem}
+\begin{proof}
+  An infinite descending chain $(a_i, b_i)$ has non-increasing first components; since
+  $\prec_1$ is well-founded, they are eventually constant; from that point the second components
+  strictly descend, contradicting well-foundedness of $\prec_2$.
+\end{proof}
+
+By induction, any finite lexicographic product of well-founded orders is well-founded. This is the
+theorem that lets a termination argument be built in \emph{tiers}: a first quantity that most
+rules decrease, a second for the rules that leave the first unchanged, and so on. It is
+\lc{Prod.lex} in Lean, and the engine's proof of well-foundedness is one application of it per
+tier.
+
+\section{Rewriting and reduction orders}
+
+\begin{definition}
+  A rewrite system terminates if there is no infinite sequence $t_0 \to t_1 \to \cdots$ of
+  rewrite steps.
+\end{definition}
+
+\begin{theorem}
+  A rewrite system terminates iff there is a well-founded order $\succ$ on terms with $t \succ t'$
+  for every rewrite step $t \to t'$.
+\end{theorem}
+\begin{proof}
+  If such an order exists, an infinite rewrite sequence would be an infinite descending chain.
+  Conversely, if the system terminates, the transitive closure of $\to$ is itself such an order.
+\end{proof}
+
+The converse is useless in practice --- it takes termination as given --- so the work is always
+to \emph{find} an order. Two families of orders handle most systems. A \emph{polynomial
+interpretation} assigns each symbol a polynomial with natural coefficients and orders terms by
+the value of the resulting expression; it is additive and easy to check, and it cannot handle a
+rule that duplicates a subterm, since no polynomial in the size of $f$ pays for two copies of
+$f$. A \emph{recursive path ordering} fixes a precedence on symbols and lets a symbol be replaced
+by any term built from smaller symbols; it handles duplication and is the standard order for the
+derivative rules, but it needs a single precedence, and Chapter~\ref{ch:order} shows that the
+engine's simplifier needs $\mathtt{pow} > \mathtt{mul}$ for one rule and $\mathtt{mul} >
+\mathtt{pow}$ for another.
+
+\section{The simplifier's order}
+
+The seven simplification rules of Part~I terminate under a weighted node count:
+
+\begin{minted}{lean}
+structure Weights where
+  w : Expr → Nat
+  pos : ∀ e, 1 ≤ w e
+  head : ∀ e cs, w (withChildren e cs) = w e
+
+def measure (W : Weights) : Expr → Nat
+  | .num q => W.w (.num q)
+  | .var x => W.w (.var x)
+  | .add es => W.w (.add es) + measureList W es
+  …
+
+structure Rule (W : Weights) where
+  name : String
+  apply : Expr → Option RuleResult
+  decreasing : ∀ e r, apply e = some r → measure W r.result < measure W e
+\end{minted}
+
+This is a polynomial interpretation with every symbol interpreted as a constant plus the sum of
+its arguments. It is additive, which is what the rewriter's recursion needs (rewriting a child
+by a smaller child makes the parent smaller), and each rule carries its decrease proof as a
+field: the rule cannot be constructed without it. The weights --- numerals $2$, sums and products
+$4$, powers $5$, variables and functions $8$ --- were chosen so that every rule decreases:
+folding two numerals into one loses at least $2$; collecting $at + bt$ into $(a+b)t$ loses a
+whole copy of $t$, which is where the guard that $t$ not be a bare numeral comes from.
+
+\section{The pipeline's order}
+
+The derivative rules duplicate. The product rule sends $\frac{d}{dx}(fg)$ to $f'g + fg'$: two
+copies of $f$ and two of $g$ for one of each, and no additive measure survives. The engine's
+answer is a lexicographic product of six natural-number tiers:
+
+\begin{minted}{lean}
+abbrev Mu := Nat × Nat × Nat × Nat × Nat × Nat
+def μ (e : Expr) : Mu := (cmdCount e, d3Count e, litCount e, M e, size e, numCount e)
+
+def MuLt (a b : Mu) : Prop :=
+  Prod.Lex (· < ·) (Prod.Lex (· < ·) (Prod.Lex (· < ·) (Prod.Lex (· < ·) (Prod.Lex (· < ·) (· < ·))))) a b
+
+theorem MuLt_wf : WellFounded MuLt :=
+  (Prod.lex Nat.lt_wfRel (Prod.lex Nat.lt_wfRel (Prod.lex Nat.lt_wfRel (Prod.lex Nat.lt_wfRel
+    (Prod.lex Nat.lt_wfRel Nat.lt_wfRel))))).wf
+\end{minted}
+
+The well-foundedness proof is the theorem of the second section, five times. The tiers are
+counts of commands, of malformed derivatives, of nodes above matrix literals, then the weight
+$M$, then size, then the magnitudes of integer numerals; each exists because a family of rules
+could not be ordered by the tiers before it, and Chapter~\ref{ch:order} tells the story of each.
+The tier that does the mathematical work is $M$:
+
+\begin{minted}{lean}
+def M : Expr → Nat
+  | .num q => if q.isOne then 1 else if q.isInt then 2 else 4
+  | .var _ => 10
+  | .add es => ML es + (if es.isEmpty then 3 else 0)
+  | .mul es => 2 + ML es + 2 * es.length
+  | .pow b e => (M b + 1) * M e - 1
+  | .fn "diff" [g, t] => 3 ^ (M g + 3) + M t
+  | .fn _ es => 5 * ML es + 10
+  | .matrix rows => 10 + MR rows
+\end{minted}
+
+This is a polynomial interpretation that is \emph{not} additive in two places, and each is a
+theorem about a rule. A numeric exponent multiplies its base, so that $(b^m)^n \to b^{mn}$
+decreases with symbolic $m$ while $x \cdot x \to x^2$ also decreases; and a derivative is
+exponential in its body, so that the product rule --- which replaces one derivative of $fg$ by two
+derivatives of the parts plus copies of the parts --- decreases, because $3^{M f + M g + \cdots}$
+dominates $3^{M f + 3} + 3^{M g + 3} + 2(M f + M g)$ with room to spare. An exponential
+interpretation of this kind is how a polynomial-style order can handle duplication after all: the
+symbol being eliminated is made so heavy that any number of copies of its arguments are cheaper.
+
+\begin{exbox}[$x \cdot x \to x^2$]
+  $M(x \cdot x) = 2 + (10 + 10) + 2 \cdot 2 = 26$; $M(x^2) = (10 + 1) \cdot 2 - 1 = 21$. The
+  per-factor charge of $2$ in the product is what pays. With $M(1) = 2$ instead of $1$, the rule
+  $x \cdot x^a \to x^{a+1}$ stops decreasing; that is why $1$ weighs $1$.
+\end{exbox}
+
+\section{The innermost strategy}
+
+The termination obligation for a pipeline rule is not that its output is smaller than its input.
+It is conditional:
+
+\begin{minted}{lean}
+structure Ordered (rules : List PlainRule) : Prop where
+  decreasing : ∀ r ∈ rules, ∀ e res, ChildrenNormal rules e →
+    r.apply e = some res → res.error = none → MuLt (μ res.result) (μ e)
+\end{minted}
+
+The hypothesis \lc{ChildrenNormal} says no rule fires anywhere inside the children. It is needed
+because the product rule duplicates its body, and if the body could still contain a command that
+grows when it fires, no order of this shape survives --- the duplicated command grows twice. The
+rewriter's \emph{innermost} strategy makes the hypothesis true at every firing: children are
+normalized before the parent is tried. The proof of termination therefore carries a second
+invariant through the recursion, ``the result is normal'', in the type of the rewriter's result.
+This is the point where the theory of this chapter meets a strategy: the order is not on terms
+but on terms whose children are already in normal form, and that is a legitimate well-founded
+order because the strategy guarantees it is the only kind of term a rule ever sees.
+
+\begin{minted}{lean}
+theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm)
+\end{minted}
+
+is the theorem, for every checker \lc{norm} the pipeline may be instantiated with, and its proof
+is one decrease lemma per rule --- thirty-odd of them --- each an \lc{omega} goal after the
+weights are unfolded. The termination line the notebook shows names it.
+
+\section{What an order cannot afford}
+
+An order is a budget of a different kind: it says which rewrites are affordable. Distribution
+$a(b + c) \to ab + ac$ is not affordable together with $x \cdot x \to x^2$, and
+Chapter~\ref{ch:cannot} shows that no interpretation of the engine's shape can make both
+decrease; so expansion is a function (Chapter~\ref{ch:poly}), not a rule. $8^{1/2} \to 2 \cdot
+2^{1/2}$ is not affordable at all, and the radicals of Chapter~\ref{ch:rad} are written as single
+powers with a sixth tier to order them. And $\beta$-reduction is not affordable by any order,
+because it does not terminate (Chapter~\ref{ch:lambda}); it is the one place with a budget. A
+reader who has followed the book from the rationals to here has met every one of those decisions
+as a piece of mathematics first and a design second, which is the order in which they were
+relearned.
+
+\begin{trybox}
+\begin{minted}{text}
+diff(x^3 * exp(x) * sin(x), x)
+(a*b)^2 * (a*b)^3 * a
+\end{minted}
+  Open the capabilities panel and read the termination line. The first cell fires the product
+  rule twice with nested chain and power rules, and there is no counter behind it.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[Multiset order]
+  Define the multiset extension of a well-founded order (a multiset decreases if one element is
+  replaced by finitely many smaller ones) and prove it well-founded for multisets over $\mathbb{N}$.
+  Which of the engine's rules would it order that the additive measure does not?
+\end{exercisebox}
+
+\begin{exercisebox}[Base 3]
+  Compute $M$ on both sides of the chain rule $\frac{d}{dx}\sin u \to \cos u \cdot \frac{d}{dx} u$
+  with the derivative's weight changed to $2^{M f + 3}$, find a $u$ for which it fails to
+  decrease, and show that base $3$ works for every $u$.
+\end{exercisebox}
+
+\begin{exercisebox}[The obligation must be conditional]
+  Give a term whose product-rule step \emph{increases} $\mu$ when the body contains an
+  \texttt{expand} command, and explain why the innermost strategy never presents that term to
+  the rule.
+\end{exercisebox}
+
+\begin{exercisebox}[Well-founded recursion in Lean]
+  Write a Lean function on \lc{Nat × Nat} that recurses lexicographically and give its
+  \lc{termination_by} clause. Then find, in \file{engine/MathEngine/Terminate.lean}, the
+  \lc{termination_by} of the rewriter.
+\end{exercisebox}

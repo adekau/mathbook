@@ -1,48 +1,59 @@
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
 
-This book was written from building a thing: a notebook, in the spirit of Mathematica, that
-differentiates, integrates, row-reduces and simplifies, and that \emph{shows its work} --- every
-answer arrives with the chain of rewrites that produced it, every subterm of every line can be
-clicked to ask where it came from, and every rule that fired carries a label saying how much of
-it is a theorem. The engine behind the notebook is a single Lean~4 program. It runs natively as a
-server and a command-line tool, and it runs in the browser as WebAssembly; the notebook never
-computes anything itself. The proofs about the engine are Lean~4 too, and they are checked every
-time the project builds.
+This book began as an attempt to relearn a mathematics degree, and it found a method. The
+method was to build a computer-algebra engine --- the kind of program that simplifies, differentiates,
+integrates and row-reduces --- and to refuse to add any rule to it that could not be stated as a
+theorem and, where the theorem was true, proved in Lean~4. A rule that could not be proved was
+allowed in only with a label that said so, and with the counterexample that showed why.
 
-The order of the chapters is roughly the order in which the thing was built, because the order
-turned out to matter. A rewriter came first, and with it a trace. Then meaning: what each rule
-claims, over the integers, then over the reals, then under a derivative. Then termination,
-which was the hard part and is the centre of the book: the engine has no step budget, and the
-proof that it needs none took several wrong orderings and one wall that would not move. Then the
-tracing of origins, then three more ``worlds'' --- linear algebra, integration, the
-$\lambda$-calculus and finite order theory --- each of which had to find its own honest place
-between \emph{proved} and \emph{checked}.
+That discipline turned out to be a better teacher than any textbook. A textbook says the product
+rule holds; the engine, told to prove it, asks under what hypothesis, and the answer --- that both
+factors must be differentiable at the point, and that without it the rule turns a non-existent
+derivative into $1$ --- is the mathematics that was forgotten. A textbook says $x/x = 1$; the
+engine's proof fails at $x = 0$, and the reader relearns what a side condition is. A textbook
+says $\sqrt 8 = 2\sqrt 2$; the engine cannot say it in that form, and the reason is a theorem about
+well-founded orders that most degrees never reach.
 
-\medskip
-\textbf{Who this book is for.} Someone who can read undergraduate mathematics and some functional
-code, who has perhaps met Lean~4 in one of its companion volumes, and who wants to see what
-``verified'' can mean for a system that is also meant to be \emph{used}. No Mathlib is needed to
-read the engine; where the reals enter, the book says so.
+\paragraph{What is in the book.} The first five parts are the mathematics, in roughly the order a
+degree teaches it: exact arithmetic and polynomials; the laws of exponents, radicals, and the
+exponential and logarithm; the derivative and its rules; antiderivatives, substitution and
+integration by parts; systems of linear equations and echelon form; partial orders, lattices and
+fixed points; the $\lambda$-calculus; and finally the theory of well-founded orders, which is what
+makes a rewriting engine terminate without a step budget. Every chapter follows one shape. The
+mathematics is re-derived from its definitions, with proofs written out. Then the engine's rule for
+it is shown, as code. Then the theorem about that rule is stated in Lean, with its hypotheses, and
+what the proof needed is explained. Then the notebook is asked to run it.
 
-\medskip
-\textbf{What is claimed.} Precisely what the notebook's status labels claim, and no more. A rule is
-\status{verified} when an unconditional theorem says its output means what its input meant;
-\status{conditional} when the theorem needs a hypothesis and the \emph{necessity} of the hypothesis
-is itself proved; \status{checked} when the step is a guess that a later step verifies; and
-\status{unverified} when there is no theorem yet. Chapter~\ref{ch:ledger} is the full ledger.
-Several places where a proof was avoided are pointed at by name: they are the run-time checks the
-book calls \emph{honest boundaries}, and the reader will see exactly what is checked and why a
-check was the right thing there.
+The sixth part onward is the engineering: how the engine is organized, why soundness is a fold
+over the rewriter, how the termination ordering was found and what it cannot afford, how a
+selection is traced back through a derivation, and the ledger of what is proved. A reader who
+wants the mathematics can stop before it; a reader who wants to build something like it should
+not.
 
-\medskip
-\textbf{How to read this book.} Part~I is the engine's shape and the rewriter that keeps a trace.
-Part~II gives the rules their meaning. Part~III is termination. Part~IV is the notebook side of
-``show your work''. Part~V adds the other worlds. Boxes labelled \emph{From the log} retell what
-actually happened --- the wrong turns are kept, since they are the argument for the right ones ---
-and boxes labelled \emph{Try it} give cells to type into the notebook.
+\paragraph{The four labels.} Every rule the engine fires is reported with one of four statuses,
+and the book uses the same four words throughout.
 
-\medskip
-\textbf{The code.} Everything quoted is from the repository at the commit stamped on the title
-page. File names are given the way the repository has them: \file{engine/MathEngine/Order.lean}
-is the ordering, \file{proofs/Proofs/SimpReal.lean} the real-number theorems, and so on.
+\begin{defbox}[The four statuses]
+  \begin{description}[nosep]
+    \item[\status{verified}] An unconditional theorem states that the output of the rule means
+      what its input meant, in the semantics of the chapter (the integers, the reals, the
+      rationals under a linear system, the textbook definition of a partial order).
+    \item[\status{conditional}] The theorem needs a hypothesis, and the necessity of the
+      hypothesis is itself proved by a counterexample. The notebook shows the condition.
+    \item[\status{checked}] The step is a guess, and a later step verifies it by an independent
+      computation whose own steps carry their own statuses.
+    \item[\status{unverified}] No theorem yet. The note beside the label says what would be
+      needed.
+  \end{description}
+\end{defbox}
+
+\paragraph{Who this is for.} Someone who once did the mathematics, has perhaps met Lean, and wants
+to know what they still know. Proofs on paper are written in full; Lean proofs are quoted where
+the statement is the point and summarized where the tactics are. No Mathlib is needed to read the
+engine's own theorems; where the real numbers enter, the book says which Mathlib fact was used
+and why.
+
+\paragraph{The code.} Everything quoted is from the repository at the commit stamped on the title
+page. Engine files are under \file{engine/MathEngine/}; real-number proofs are under
+\file{proofs/Proofs/}. Boxes labelled \emph{Try it} give cells to type into the notebook.

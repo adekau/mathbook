@@ -1,0 +1,130 @@
+\chapter{The Power Rule}\label{ch:power}
+
+$\frac{d}{dx} x^n = n x^{n-1}$ is one formula with four proofs, one for each kind of exponent,
+and the engine has a theorem for exactly one of them. The chapter is the four proofs, then the
+rule --- which handles a fifth case, $f^g$ with both depending on $x$ --- and then the honest
+state of the ledger.
+
+\section{Natural exponents}
+
+\begin{theorem}
+  For $n \in \mathbb{N}$ with $n \ge 1$, $\frac{d}{dx} x^n = n x^{n-1}$ for all real $x$.
+\end{theorem}
+\begin{proof}
+  Induction on $n$ with the product rule. $n = 1$: the identity has derivative $1 = 1 \cdot x^0$.
+  Step: $x^{n+1} = x^n \cdot x$, so $(x^{n+1})' = n x^{n-1} \cdot x + x^n \cdot 1 = (n+1)x^n$.
+\end{proof}
+
+Or directly from the binomial theorem: $(x+h)^n - x^n = n x^{n-1} h + \binom{n}{2} x^{n-2} h^2 +
+\cdots$, and dividing by $h$ and letting $h \to 0$ leaves the first term. Combined with the chain
+rule, $(u^n)' = n u^{n-1} u'$ wherever $u$ is differentiable.
+
+\section{Integer exponents}
+
+For $n = -m < 0$ and $x \neq 0$, $x^n = 1/x^m$, and the chain rule applied to $t \mapsto 1/t$
+(derivative $-1/t^2$) gives $(x^{-m})' = -m x^{m-1}/x^{2m} = -m x^{-m-1}$, the same formula.
+The hypothesis $x \neq 0$ appears because $x^{-m}$ is not defined there; with Mathlib's
+$0^{-1} = 0$ the function $x^{-1}$ is total, has value $0$ at $0$, and is not differentiable
+there (it is not even continuous).
+
+\section{Rational and real exponents}
+
+For $x > 0$ and $p/q \in \mathbb{Q}$, $y = x^{p/q}$ satisfies $y^q = x^p$; differentiating both
+sides implicitly, $q y^{q-1} y' = p x^{p-1}$, so $y' = \frac{p}{q} x^{p-1} y^{1-q} =
+\frac{p}{q} x^{p-1} x^{(p/q)(1-q)} = \frac{p}{q} x^{p/q - 1}$. The implicit differentiation is
+legitimate because $y$ is differentiable, by the inverse function theorem applied to
+$t \mapsto t^q$.
+
+For real $a$ and $x > 0$, $x^a = \exp(a \ln x)$ and the chain rule gives $x^a \cdot a/x =
+a x^{a-1}$. The positivity of $x$ is now essential: it is the domain of $\ln$.
+
+\section{Both base and exponent}
+
+For $f(x) > 0$, $f^g = \exp(g \ln f)$, and the chain and product rules give
+\[
+  (f^g)' = f^g \Big( g' \ln f + g \frac{f'}{f} \Big).
+\]
+At $g$ constant this is the power rule; at $f$ constant it is $(b^u)' = b^u \ln b \cdot u'$.
+For $x^x$ it gives $x^x(\ln x + 1)$.
+
+\section{The rule}
+
+\begin{minted}{lean}
+def diffPower : PlainRule :=
+  rule "diff.power" fun (body, x) =>
+    match body with
+    | .pow base exp =>
+      let baseDep := base.dependsOn x
+      let expDep := exp.dependsOn x
+      if baseDep && !expDep then
+        let nMinus1 := Expr.add [exp, Expr.minusOne]
+        match base with
+        | .var y => if y == x
+            then some ⟨.mul [exp, .pow base nMinus1], "Power rule …", none, none⟩
+            else some ⟨.mul [exp, .pow base nMinus1, D base x], "Power rule with the chain rule …", none, none⟩
+        | _ => some ⟨.mul [exp, .pow base nMinus1, D base x], "Power rule with the chain rule …", none, none⟩
+      else if !baseDep && expDep then
+        some ⟨.mul [body, .fn "ln" [base], D exp x], "Exponential rule …", none, none⟩
+      else if baseDep && expDep then
+        some ⟨.mul [body, .add [.mul [D exp x, .fn "ln" [base]], .mul [exp, Expr.div (D base x) base]]],
+          "Both base and exponent depend on x …", none, none⟩
+      else none
+    | _ => none
+\end{minted}
+
+The three branches are the three sections above, with the fourth section's formula in the last.
+The exponent $n - 1$ is left as the term $n + (-1)$ for the simplifier to fold, which is why the
+trace shows $2 x^{2 + -1}$ before it shows $2x$.
+
+\section{The theorem}
+
+\begin{minted}{lean}
+theorem diff_power_nat_sound (ρ : EnvR) (x : String) {u : Expr} {n : ℕ} (hn : 1 ≤ n)
+    (hu : DiffAt ρ x u) :
+    D ρ x (.pow u (.num (Q.ofInt (n : ℤ))))
+      = evalD ρ (.mul [.num (Q.ofInt (n : ℤ)), .pow u (.num (Q.ofInt ((n : ℤ) - 1))),
+                       .fn "diff" [u, .var x]])
+\end{minted}
+
+This is the first section with the chain rule: a natural exponent $n \ge 1$, a differentiable
+base, no positivity. The proof's one real step is \lc{Real.rpow_natCast}, which identifies the
+engine's real power $u^{(n : \mathbb{R})}$ with the monoid power $u^n$ for every real $u$ ---
+after which \lc{HasDerivAt.pow} is the theorem of the first section. The casts $n - 1$ between
+$\mathbb{N}$, $\mathbb{Z}$ and $\mathbb{R}$ take more lines than the mathematics.
+
+The status of \rn{diff.power} is \status{conditional}: proved for a natural exponent with a
+differentiable base; real exponents open. The open cases are not hard, but they need
+$0 < u$ at the point and the lemma \lc{Real.hasDerivAt_rpow_const}, and the $f^g$ branch needs
+both $0 < f$ and the two differentiabilities. What the notebook says for $\frac{d}{dx} x^x$ is
+therefore ``no theorem yet for this case'', with the answer $x^x(\ln x + 1)$, which is right for
+$x > 0$.
+
+\begin{trybox}
+\begin{minted}{text}
+diff(x^5, x)
+diff((x^2 + 1)^3, x)
+diff(2^x, x)
+diff(x^x, x)
+\end{minted}
+  The first two are the proved case. The third is the exponential branch. The fourth is the
+  branch with no theorem, and its answer is right where $\ln x$ is.
+\end{trybox}
+
+\section{Exercises}
+
+\begin{exercisebox}[The negative case in Lean]
+  State \lc{diff_power_int_sound} for a negative integer exponent, with the hypothesis
+  $\lc{evalD}\,\rho\,u \neq 0$, and find the Mathlib lemma for the derivative of \lc{zpow}.
+\end{exercisebox}
+
+\begin{exercisebox}[Implicit differentiation, justified]
+  In the rational-exponent proof, the step ``$y$ is differentiable'' was taken from the inverse
+  function theorem. State the version of that theorem you need and check its hypotheses for
+  $t \mapsto t^q$ at a point $t > 0$.
+\end{exercisebox}
+
+\begin{exercisebox}[The fifth case]
+  Prove the $f^g$ formula from $\exp(g \ln f)$, and find the point at which the engine's answer
+  for $\frac{d}{dx} x^x$ is \emph{false} in Mathlib's semantics (consider $x < 0$, where
+  $\ln x = \ln|x|$ and $x^x = \exp(x \ln|x|)\cos(\pi x)$).
+\end{exercisebox}
