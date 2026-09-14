@@ -28,6 +28,8 @@ interface Doc { name: string; sig: string; blurb: string; ref?: string; examples
 const DOCS: Doc[] = [
   { name: "diff", sig: "diff(f, x[, n])", blurb: "Derivative of f with respect to x; the optional n takes it n times. Implemented as rewrite rules that push d/dx inward, so the derivation reads like a textbook.", ref: "https://mathworld.wolfram.com/Derivative.html", examples: ["diff(x^2 * sin(x), x)", "diff(x^3, x, 2)"] },
   { name: "integrate", sig: "integrate(f, x)", blurb: "Antiderivative of f in x, without the constant. A small rule set guesses; the guess is accepted only if differentiating it gives f back, so the check is the proof.", ref: "https://mathworld.wolfram.com/IndefiniteIntegral.html", examples: ["integrate(x^2 + sin(x), x)", "integrate(exp(2*x), x)"] },
+  { name: "poset", sig: "poset({a,b,c}; a<b, a<c) · divisors(n) · subsets({…}) · chain(n)", blurb: "A finite partial order: the reflexive-transitive closure of the relation given, checked for antisymmetry. Bind it with let and ask about it: hasse, join, meet, sup, inf, upper, lower, top, bottom, maximal, minimal, lattice, le.", examples: ["let D = divisors(12)", "join(D, 4, 6)", "lattice(D)", "le(D, 2, 12)", "let P = poset({a,b,c,d}; a<b, a<c, b<d, c<d)"] },
+  { name: "map", sig: "map(P; a->b, c->d, …) · monotone(P, f) · lfp(P, f) · gfp(P, f) · fixpoints(P, f)", blurb: "A map on a poset given as a table (other elements are fixed). monotone checks every pair; lfp and gfp iterate from ⊥ and ⊤ and show the Kleene chain, which is proved to end at the least (greatest) fixed point.", examples: ["let f = map(D; 1->2, 3->6)", "monotone(D, f)", "lfp(D, f)"] },
   { name: "lambda", sig: "λx. e  ·  type \\lam", blurb: "A λ-cell: any cell with a λ (type \\lam, then Tab or space) or a backslash. Application is juxtaposition, λx y. e binds two, digits are Church numerals, and name := term defines. The engine reduces in normal order one β-step at a time; toggle de Bruijn indices in the View menu.", examples: ["(λx. x) y", "(λx. λy. x y) y", "add 2 3", "TWO := succ (succ zero)"] },
   { name: "church", sig: "true false and or not if · zero succ add mul pow iszero · pair fst snd · id const K S I omega Y", blurb: "The Church library, available in every λ-cell; a normal form that is a Church numeral or boolean is read out beside the result.", examples: ["if (iszero 0) a b", "fst (pair 1 2)", "mul 2 3"] },
   { name: "plot", sig: "plot(f, x, from, to[, n])", blurb: "Graph of f over [from, to]. The engine simplifies f under the session (a derivative plots as the derivative), records the derivation, and samples it exactly where it has a finite value; the notebook draws the samples.", examples: ["plot(sin(x)/x, x, -10, 10)", "plot(diff(x^3 - 3x, x), x, -3, 3)"] },
@@ -69,6 +71,7 @@ function cellKind(src: string): string | null {
     case "plot": return "plot";
   }
   if (/[λ\\]|:=/.test(s)) return "λ-term";
+  if (/^(let\s+\w+\s*=\s*)?(poset|divisors|subsets|chain|map|hasse|join|meet|sup|inf|upper|lower|lattice|top|bottom|le|maximal|minimal|monotone|lfp|gfp|fixpoints)\s*\(/.test(s)) return "order";
   switch (head) {
     case "rref": return "row reduce";
     case "det": return "determinant";
@@ -106,6 +109,9 @@ interface Cell {
   reading?: string;
   /** What the engine said the cell was, once it has answered; the badge guesses from the source until then. */
   kind?: string;
+  /** Order-world cells: the Hasse diagram to draw, and the one-line summary. */
+  hasse?: { nodes: { name: string; height: number }[]; covers: [string, string][] };
+  summary?: string;
   label: number | null;
   ms?: number;
   outLatex?: string;
@@ -238,7 +244,8 @@ async function runCell(cell: Cell) {
       cell.echoLatex = r.inputRendered?.latex;
       cell.steps = r.derivation?.steps ?? [];
       delete cell.error;
-      delete cell.plot; delete cell.outDeBruijn; delete cell.reading; delete cell.kind;
+      delete cell.plot; delete cell.outDeBruijn; delete cell.reading; delete cell.kind; delete cell.hasse; delete cell.summary;
+      if ("kind" in r && r.kind === "poset") { cell.kind = "order"; cell.hasse = r.hasse; cell.summary = r.summary; }
       if ("kind" in r && r.kind === "plot") cell.plot = { var: r.var, from: r.from, to: r.to, points: r.points, text: r.rendered.text };
       if ("kind" in r && r.kind === "lambda") { cell.outDeBruijn = r.renderedDeBruijn?.latex; cell.reading = r.reading; cell.kind = "λ-term"; }
       log("ok", `Out[${cell.label}] ${r.rendered.text}  (${cell.ms.toFixed(1)} ms, ${cell.steps.length} steps)`);
@@ -672,6 +679,33 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1): SVGSVGElement {
   return svg;
 }
 
+/** A Hasse diagram: elements in layers by height, covers as edges, nothing else. */
+function hasseSvg(d: { nodes: { name: string; height: number }[]; covers: [string, string][] }): SVGSVGElement {
+  const NS = "http://www.w3.org/2000/svg";
+  const layers = new Map<number, string[]>();
+  for (const n of d.nodes) layers.set(n.height, [...(layers.get(n.height) ?? []), n.name]);
+  const H = Math.max(0, ...d.nodes.map((n) => n.height));
+  const widest = Math.max(1, ...[...layers.values()].map((l) => l.length));
+  const cw = Math.max(70, Math.min(120, 520 / widest)), w = Math.max(240, widest * cw + 40), rowH = 64, h = (H + 1) * rowH + 24;
+  const pos = new Map<string, [number, number]>();
+  for (const [ht, names] of layers) names.forEach((name, i) => pos.set(name, [20 + (i + 0.5) * ((w - 40) / names.length), h - 12 - (ht + 0.5) * rowH]));
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.setAttribute("width", String(w)); svg.setAttribute("height", String(h));
+  for (const [a, b] of d.covers) {
+    const p = pos.get(a), q = pos.get(b); if (!p || !q) continue;
+    const l = document.createElementNS(NS, "line");
+    l.setAttribute("x1", String(p[0])); l.setAttribute("y1", String(p[1])); l.setAttribute("x2", String(q[0])); l.setAttribute("y2", String(q[1]));
+    l.setAttribute("class", "hedge"); svg.append(l);
+  }
+  for (const [name, [x, y]] of pos) {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", String(x)); c.setAttribute("cy", String(y)); c.setAttribute("r", "5"); c.setAttribute("class", "hnode"); svg.append(c);
+    const t = document.createElementNS(NS, "text");
+    t.setAttribute("x", String(x + 9)); t.setAttribute("y", String(y - 7)); t.setAttribute("class", "hlabel"); t.textContent = name; svg.append(t);
+  }
+  return svg;
+}
+
 /** The sampled function as a Python expression for Manim: `3*x^2 + sin(x)` → `3*x**2 + np.sin(x)`. */
 function pyExpr(text: string): string {
   return text.replace(/\^/g, "**")
@@ -807,7 +841,13 @@ function renderCellBody(cell: Cell) {
     const out = h("div", "outrow");
     out.append(h("div", "prompt", `Out[${cell.label}]=`));
     const val = h("div", "outval");
-    if (cell.plot) {
+    if (cell.hasse) {
+      const box = h("div", "plotbox");
+      box.append(hasseSvg(cell.hasse));
+      const cap = h("div", "plotcap", cell.summary ?? "");
+      val.classList.add("isplot");
+      val.append(box, cap);
+    } else if (cell.plot) {
       const box = h("div", "plotbox");
       box.append(plotSvg(cell.plot, 520, 240));
       const cap = h("div", "plotcap");
@@ -822,6 +862,7 @@ function renderCellBody(cell: Cell) {
       wireTerm(val, cell, { kind: "output" });
     }
     if (cell.reading) { const rd = h("span", "reading", `≡ ${cell.reading}`); rd.title = "What the normal form encodes"; val.append(rd); }
+    if (cell.summary && !cell.hasse) { const rd = h("span", "reading", cell.summary); val.append(rd); }
     out.append(val, h("div", "brk"));
     el.append(out);
   }

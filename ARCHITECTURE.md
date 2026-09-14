@@ -65,6 +65,10 @@ differential test with zero mismatches.
   and normal-order β-reducer; terms are encoded into `Expr` for the wire, so selection, explanation
   and origin tracking work unchanged. The de Bruijn view is computed with every step. Reduction is
   on fuel, the one budget in the engine, because normalization is undecidable; `Ω` is refused.
+- **Finite order theory is a third world.** `Poset.lean` decides everything over lists — closure,
+  the partial-order check, covers, bounds, join and meet, lattices, monotone maps, fixed points by
+  the Kleene chain — and `PosetProofs.lean` proves the decisions mean the textbook Props. Values
+  are encoded into `Expr`; the notebook draws Hasse diagrams from the covers.
 - **Plots are sampled by the engine and drawn by the notebook.** `engine.plot` simplifies the
   function under the session, records the cell, and returns a uniform sample with `null` where the
   value is not finite; the notebook's SVG and the studio's graph shot are presentation only.

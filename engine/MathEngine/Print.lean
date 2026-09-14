@@ -147,6 +147,13 @@ mutual
         if T.times != "*" then (s!"\\frac\{d}\{d{x}}\\left({a}\\right)", P_MUL) else (T.fn name as, P_ATOM)
       | "integrate", [_, .var _], [a, x] =>
         if T.times != "*" then (s!"\\int {a} \\, d{x}", P_MUL) else (T.fn name as, P_ATOM)
+      -- the order-theory world
+      | "set", _, _ =>
+        let inner := ", ".intercalate as
+        (if T.times != "*" then "\\{" ++ inner ++ "\\}" else "{" ++ inner ++ "}", P_ATOM)
+      | "poset", [_, _], [ss, _] =>
+        (if T.times != "*" then "\\text{poset }" ++ ss else "poset " ++ ss, P_ATOM)
+      | "covers", [_, _], [a, b] => (if T.times != "*" then s!"{a} \\lessdot {b}" else s!"{a} ⋖ {b}", P_MUL)
       -- the λ-calculus world: λx. body binds as far right as possible; application is juxtaposition
       | "λ", [_, body], [x, _] =>
         let b := print body (path ++ [1]) T P_LAM

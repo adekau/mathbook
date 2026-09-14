@@ -166,11 +166,20 @@ export interface PlotResult {
 
 /** M-λ: a λ-cell's reply carries the de Bruijn view of the result and of every step
  *  (`Step.afterDeBruijn`), and a reading when the normal form is a Church numeral or boolean. */
-export interface LambdaExtras { kind?: "lambda"; renderedDeBruijn?: Rendered; reading?: string }
+export interface HasseData { nodes: { name: string; height: number }[]; covers: [string, string][] }
+/** The other worlds' extras on an evaluate reply. λ-cells (`kind: "lambda"`): the de Bruijn view of
+ *  the result and of every step (`Step.afterDeBruijn`), and a reading when the normal form is a
+ *  Church numeral or boolean. Order cells (`kind: "poset"`): what to draw (elements with their
+ *  height, the covers = Hasse edges) and a one-line summary. */
+export interface WorldExtras {
+  kind?: "lambda" | "poset";
+  renderedDeBruijn?: Rendered; reading?: string;
+  hasse?: HasseData; summary?: string;
+}
 
 export interface Methods {
   "engine.capabilities": { params: Record<string, never>; result: EngineCapabilities };
-  "engine.evaluate":     { params: EvaluateParams; result: (EvaluateResult & LambdaExtras) | EvaluateError };
+  "engine.evaluate":     { params: EvaluateParams; result: (EvaluateResult & WorldExtras) | EvaluateError };
   "engine.explain":      { params: ExplainParams; result: ExplainResult };
   "engine.resetSession": { params: { sessionId: string }; result: { ok: true } };
   "engine.plot":         { params: PlotParams; result: PlotResult | EvaluateError };

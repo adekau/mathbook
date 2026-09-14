@@ -2,6 +2,7 @@ import MathEngine.Integrate
 import MathEngine.Origin
 import MathEngine.Parser
 import MathEngine.Lambda
+import MathEngine.Poset
 /-!
 # Sessions, commands and the evaluation pipeline
 
@@ -23,6 +24,9 @@ structure Session where
   fns : List (String × FnDef) := []
   /-- λ-cell definitions (`name := term`), by name; the Church library sits behind them. -/
   lambdas : List (String × Lam.Term) := []
+  /-- Order-world values: posets and maps on them, by name. -/
+  posets : List (String × Ord.Poset) := []
+  pmaps : List (String × Ord.PMap) := []
   cells : List (String × Cell) := []
 
 /-- All sessions the engine knows about, keyed by `sessionId`. Threaded through `handle` by the host. -/
@@ -108,6 +112,201 @@ def lambdaCell (s : Session) (cellId source : String) :
 where
   /-- The steps store the encoded term; decode it for the de Bruijn view. -/
   dbOf (e : Expr) : Lam.Term := (Lam.ofExpr e).getD (.var "?")
+
+/-- What an order-world cell produced: a value (encoded), the derivation, and the poset to draw. -/
+structure OrdResult where
+  name : Option String
+  value : Expr
+  derivation : Derivation
+  poset : Option Ord.Poset
+  summary : String
+
+/-- Evaluate an order-world cell. -/
+def orderCell (s : Session) (cellId source : String) :
+    Session × Except (String × String × Option (Nat × Nat)) OrdResult :=
+  match Ord.parseStmt source with
+  | .error msg => (s, .error ("syntax", msg, none))
+  | .ok (name, head, args) =>
+    let least := head != "gfp"
+    let head := if head == "sup" then "join" else if head == "inf" then "meet" else if head == "gfp" then "lfp" else head
+    let braces (xs : List String) : String := "{" ++ ", ".intercalate xs ++ "}"
+    let err (msg : String) : Session × Except (String × String × Option (Nat × Nat)) OrdResult := (s, .error ("eval", msg, none))
+    let getP (a : Ord.Arg) : Except String Ord.Poset := match a with
+      | .elem n => match s.posets.lookup n with | some P => .ok P | none => .error s!"'{n}' is not a poset"
+      | _ => .error "expected the name of a poset"
+    let getF (a : Ord.Arg) : Except String Ord.PMap := match a with
+      | .elem n => match s.pmaps.lookup n with | some f => .ok f | none => .error s!"'{n}' is not a map"
+      | _ => .error "expected the name of a map"
+    -- an element of `P`, written as a name or, for a subsets poset, as a set literal
+    let getE (P : Ord.Poset) (a : Ord.Arg) : Except String String := match a with
+      | .elem x => if P.elems.contains x then .ok x else .error s!"'{x}' is not an element of the poset"
+      | .set xs =>
+        -- a subsets-poset element is written `{a,b}`; match the literal as a set, whatever the order
+        let key := xs.eraseDups
+        let members (e : String) : List String := (((e.replace "{" "").replace "}" "").splitOn ",").filter (· != "")
+        match P.elems.find? fun e => e.startsWith "{" && (members e).length == key.length && key.all ((members e).contains ·) with
+        | some e => .ok e
+        | none => .error ("{" ++ ",".intercalate xs ++ "} is not an element of the poset")
+      | _ => .error "expected an element"
+    let getS (P : Ord.Poset) (a : Ord.Arg) : Except String (List String) := match a with
+      | .set xs => xs.mapM fun x => getE P (.elem x)
+      | .elem x => (getE P (.elem x)).map ([·])
+      | _ => .error "expected a set of elements"
+    let step (rule text : String) (before after : Expr) : Step := ⟨rule, text, [], before, after, none⟩
+    let done (value : Expr) (steps : Array Step) (P : Option Ord.Poset) (summary : String) (bindP : Option Ord.Poset := none) (bindF : Option Ord.PMap := none) :
+        Session × Except (String × String × Option (Nat × Nat)) OrdResult :=
+      -- the derivation starts where the first step does, so the echo shows the question, not the answer
+      let input := match steps[0]? with | some st => st.before | none => value
+      let d : Derivation := ⟨input, steps, value⟩
+      let s := { s with cells := (cellId, ⟨value, d⟩) :: s.cells.filter (·.1 != cellId) }
+      let s := match name, bindP with
+        | some n, some P => { s with posets := (n, P) :: s.posets.filter (·.1 != n) }
+        | _, _ => s
+      let s := match name, bindF with
+        | some n, some f => { s with pmaps := (n, f) :: s.pmaps.filter (·.1 != n) }
+        | _, _ => s
+      (s, .ok ⟨name, value, d, P, summary⟩)
+    let withPoset (P : Ord.Poset) (steps : Array Step) (what : String) :=
+      done (Ord.posetExpr P) steps (some P) what (bindP := some P)
+    let bool (b : Bool) : Expr := .var (if b then "true" else "false")
+    match head, args with
+    | "poset", [.set xs, .rels ps] | "poset", [.set xs, .rels ps, _] =>
+      match Ord.mk xs ps with
+      | .error msg => err msg
+      | .ok P => withPoset P #[step "order.closure" "The order is the reflexive-transitive closure of the relation given; reflexivity, antisymmetry and transitivity were checked." (Ord.setExpr xs) (Ord.posetExpr P)] s!"a poset with {P.elems.length} elements"
+    | "poset", [.set xs] =>
+      match Ord.mk xs [] with
+      | .error msg => err msg
+      | .ok P => withPoset P #[] "an antichain"
+    | "divisors", [.elem n] =>
+      match n.toNat? with
+      | none => err "divisors takes a number"
+      | some n => match Ord.divisors n with
+        | .error msg => err msg
+        | .ok P => withPoset P #[step "order.divisors" s!"The divisors of {n} ordered by divisibility: $a \\le b$ iff $a \\mid b$." (.num (Q.ofInt n)) (Ord.posetExpr P)] s!"the divisors of {n} under divisibility"
+    | "subsets", [.set xs] =>
+      let P := Ord.subsets xs
+      withPoset P #[step "order.subsets" "All subsets ordered by inclusion." (Ord.setExpr xs) (Ord.posetExpr P)] s!"the {P.elems.length} subsets of a {xs.eraseDups.length}-element set under inclusion"
+    | "chain", [.elem n] =>
+      match n.toNat? with
+      | none => err "chain takes a number"
+      | some n => withPoset (Ord.chain n) #[] s!"the chain of {n} elements"
+    | "map", [.elem pn, .maps ps] =>
+      match getP (.elem pn) with
+      | .error msg => err msg
+      | .ok P =>
+        match ps.find? fun (a, b) => !P.elems.contains a || !P.elems.contains b with
+        | some (a, b) => err s!"{a} -> {b} mentions an element outside the poset"
+        | none =>
+          let f : Ord.PMap := ⟨ps⟩
+          let value := Ord.setExpr (ps.map fun (a, b) => s!"{a}↦{b}")
+          done value #[] none s!"a map on {pn} ({ps.length} explicit values; other elements are fixed)" (bindF := some f)
+    | "hasse", [p] =>
+      match getP p with
+      | .error msg => err msg
+      | .ok P =>
+        let cov := Ord.hasse P
+        withPoset P #[step "order.covers" "The Hasse diagram draws exactly the covers: $x \\lessdot y$ iff $x < y$ with nothing strictly between (order.covers_spec)." (Ord.setExpr P.elems) (.fn "hasse" (cov.map fun (a, b) => .fn "covers" [Ord.elemExpr a, Ord.elemExpr b]))] s!"{cov.length} covers"
+    | "join", [p, a, b] =>
+      match getP p with
+      | .error msg => err msg
+      | .ok P => match getE P a, getE P b with
+        | .ok x, .ok y =>
+          let ubs := Ord.upperBounds P [x, y]
+          let s1 := step "order.upper-bounds" s!"The upper bounds of ${x}$ and ${y}$: every element above both." (Ord.setExpr [x, y]) (Ord.setExpr ubs)
+          match Ord.sup P [x, y] with
+          | some j => done (Ord.elemExpr j) #[s1, step "order.least" "The least of them is below every other upper bound (order.sup_spec): the join." (Ord.setExpr ubs) (Ord.elemExpr j)] none s!"{x} ∨ {y} = {j}"
+          | none => err (s!"{x} and {y} have no join: the upper bounds " ++ braces ubs ++ " have no least element")
+        | .error m, _ | _, .error m => err m
+    | "meet", [p, a, b] =>
+      match getP p with
+      | .error msg => err msg
+      | .ok P => match getE P a, getE P b with
+        | .ok x, .ok y =>
+          let lbs := Ord.lowerBounds P [x, y]
+          let s1 := step "order.lower-bounds" s!"The lower bounds of ${x}$ and ${y}$: every element below both." (Ord.setExpr [x, y]) (Ord.setExpr lbs)
+          match Ord.inf P [x, y] with
+          | some m => done (Ord.elemExpr m) #[s1, step "order.greatest" "The greatest of them is above every other lower bound: the meet." (Ord.setExpr lbs) (Ord.elemExpr m)] none s!"{x} ∧ {y} = {m}"
+          | none => err (s!"{x} and {y} have no meet: the lower bounds " ++ braces lbs ++ " have no greatest element")
+        | .error m, _ | _, .error m => err m
+    | "upper", [p, xs] =>
+      match getP p with
+      | .error msg => err msg
+      | .ok P => match getS P xs with
+        | .ok ys => done (Ord.setExpr (Ord.upperBounds P ys)) #[] none "upper bounds"
+        | .error m => err m
+    | "lower", [p, xs] =>
+      match getP p with
+      | .error msg => err msg
+      | .ok P => match getS P xs with
+        | .ok ys => done (Ord.setExpr (Ord.lowerBounds P ys)) #[] none "lower bounds"
+        | .error m => err m
+    | "lattice", [p] =>
+      match getP p with
+      | .error msg => err msg
+      | .ok P => match Ord.latticeFailure P with
+        | none => done (bool true) #[step "order.lattice" "Every pair has a join and a meet: a lattice." (Ord.setExpr P.elems) (bool true)] none "a lattice"
+        | some (x, y, what) => done (bool false) #[step "order.lattice" s!"${x}$ and ${y}$ have no {what}: not a lattice." (Ord.setExpr [x, y]) (bool false)] none s!"not a lattice: {x}, {y} have no {what}"
+    | "top", [p] =>
+      match getP p with
+      | .error msg => err msg
+      | .ok P => match Ord.top P with
+        | some t => done (Ord.elemExpr t) #[] none s!"⊤ = {t}"
+        | none => err ("no top: the maximal elements are " ++ braces (Ord.maximal P))
+    | "bottom", [p] =>
+      match getP p with
+      | .error msg => err msg
+      | .ok P => match Ord.bottom P with
+        | some b => done (Ord.elemExpr b) #[] none s!"⊥ = {b}"
+        | none => err ("no bottom: the minimal elements are " ++ braces (Ord.minimal P))
+    | "maximal", [p] => match getP p with | .error m => err m | .ok P => done (Ord.setExpr (Ord.maximal P)) #[] none "maximal elements"
+    | "minimal", [p] => match getP p with | .error m => err m | .ok P => done (Ord.setExpr (Ord.minimal P)) #[] none "minimal elements"
+    | "le", [p, a, b] =>
+      match getP p with
+      | .error msg => err msg
+      | .ok P => match getE P a, getE P b with
+        | .ok x, .ok y =>
+          if P.rel x y then
+            -- a chain of covers from x to y, found greedily (any path in the Hasse diagram is one)
+            let rec path (fuel : Nat) (cur : String) (acc : List String) : List String :=
+              match fuel with
+              | 0 => acc.reverse
+              | f + 1 => if cur == y then acc.reverse else
+                match P.elems.find? fun z => Ord.covers P cur z && P.rel z y with
+                | some z => path f z (z :: acc)
+                | none => acc.reverse
+            let chain := path P.elems.length x [x]
+            let steps := (chain.zip chain.tail).toArray.map fun (u, v) =>
+              step "order.cover" s!"${u} \\lessdot {v}$: a cover in the Hasse diagram; by transitivity ${x} \\le {v}$." (Ord.elemExpr u) (Ord.elemExpr v)
+            done (bool true) steps none s!"{x} ≤ {y}"
+          else done (bool false) #[step "order.incomparable" s!"${x} \\le {y}$ is not in the order (and there is no chain of covers from ${x}$ to ${y}$)." (Ord.elemExpr x) (bool false)] none s!"{x} ≰ {y}"
+        | .error m, _ | _, .error m => err m
+    | "monotone", [p, f] =>
+      match getP p, getF f with
+      | .ok P, .ok F => match Ord.monotoneFailure P F with
+        | none => done (bool true) #[step "order.monotone" "For every $x \\le y$, $f(x) \\le f(y)$: monotone." (Ord.setExpr P.elems) (bool true)] none "monotone"
+        | some (x, y) => done (bool false) #[step "order.monotone" s!"${x} \\le {y}$ but $f({x}) = {F.apply x} \\not\\le f({y}) = {F.apply y}$: not monotone." (Ord.setExpr [x, y]) (bool false)] none s!"not monotone at {x} ≤ {y}"
+      | .error m, _ | _, .error m => err m
+    | "lfp", [p, f] =>
+      match getP p, getF f with
+      | .ok P, .ok F =>
+        match (if least then Ord.bottom P else Ord.top P), Ord.monotoneFailure P F with
+        | none, _ => err s!"the poset has no {if least then "bottom" else "top"} to start from"
+        | _, some (x, y) => err s!"f is not monotone ({x} ≤ {y} but f({x}) ≰ f({y})), so the iteration need not reach a fixed point"
+        | some start, none =>
+          let chain := Ord.iterate P F start
+          let last := chain.getLastD start
+          if F.apply last != last then err "the iteration did not stabilize (it should on a finite poset with a monotone map)" else
+          let steps := (chain.zip chain.tail).toArray.map fun (u, v) =>
+            step "order.iterate" s!"$f({u}) = {v}$; the chain from ${start}$ climbs, since $f$ is monotone." (Ord.elemExpr u) (Ord.elemExpr v)
+          let steps := steps.push (step "order.fixed" (if least then s!"$f({last}) = {last}$: a fixed point, and below every fixed point (order.iter_le_fixed): the least." else s!"$f({last}) = {last}$: a fixed point, and above every fixed point: the greatest.") (Ord.elemExpr last) (Ord.elemExpr last))
+          done (Ord.elemExpr last) steps none s!"{if least then "lfp" else "gfp"} = {last}"
+      | .error m, _ | _, .error m => err m
+    | "fixpoints", [p, f] =>
+      match getP p, getF f with
+      | .ok P, .ok F => done (Ord.setExpr (Ord.fixedPoints P F)) #[] none "fixed points"
+      | .error m, _ | _, .error m => err m
+    | h, _ => err s!"{h}: wrong arguments (see the reference)"
 
 /-- A sampled plot: the variable, the range, and `(t, y)` pairs (`none` where `f` has no finite value). -/
 structure Plot where

@@ -225,4 +225,19 @@ Open items after M8 (2026-09-14, Alex: "go through the open items before the boo
    that the α-renaming preserves α-equivalence, that the de Bruijn view commutes with β — the β-steps are reported
    unverified for that reason. Finding: the book's `subst` recurses on a renamed body and Lean cannot see it
    terminate; carrying the renaming down one structural pass makes it total without changing what it computes.
+Order world (2026-09-14, Alex: partial orders, join/meet, plus monotone maps and fixed points): DONE.
+   `engine/MathEngine/Poset.lean` — finite posets as element lists with a relation: `poset({a,b,c}; a<b, a<c)` takes the
+   reflexive-transitive closure and decides reflexivity, antisymmetry and transitivity (a failure names its witness),
+   `divisors(n)`, `subsets({…})`, `chain(n)`; covers (the Hasse diagram), upper and lower bounds, join and meet,
+   lattice with a witness pair when it fails, top and bottom, maximal and minimal, `le` explained by a chain of covers;
+   maps as tables, `monotone` with a witness, `lfp`/`gfp` by iterating from ⊥/⊤ — the Kleene chain is the derivation.
+   Its own little parser; values encoded into `Expr` (`fn "set"`, `fn "poset"`), so the notebook's machinery applies;
+   the notebook draws the Hasse diagram in layers by height. Proved (`PosetProofs.lean`, Init-only): the partial-order
+   check means what it says; Hasse edges are exactly the covers; what `join` finds is an upper bound below every upper
+   bound, and when it finds nothing no least one exists; every point of the Kleene chain lies below every fixed point
+   above its start (`iter_le_fixed`), so the chain's last element — a fixed point, checked — is the least. Honest
+   boundary: that the chain stabilizes within |P| steps (pigeonhole on a finite chain) is checked at run time rather
+   than proved. Finding: the whole world is decisions over lists, and the theorems are all "the decision means the
+   Prop" — the same shape as `checked` in M5, but here the Prop is the textbook definition, which is what a reader
+   should see next to a Hasse diagram.
 Six-month cut line: M5 — reached 2026-09-13.

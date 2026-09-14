@@ -236,6 +236,22 @@ def tests : TestM Unit := do
   (st, r) := sessionEval st "rref([a,1;1,a])" ",\"showWork\":true"
   check "rref symbolic path" r "[1, 0; 0, 1]"
   checkTrue "rref symbolic path: .symbolic rule names" ((subRules "rref([a,1;1,a])").all (·.endsWith ".symbolic")) (subRules "rref([a,1;1,a])").toString
+  -- the order-theory world
+  (st, r) := ev st "let D = divisors(12)"; checkTrue "order: divisors is a poset" (r.startsWith "poset {1, 2, 3, 4, 6, 12}") r
+  (st, r) := ev st "join(D, 4, 6)"; check "order: join in divisors(12)" r "12"
+  (st, r) := ev st "meet(D, 4, 6)"; check "order: meet in divisors(12)" r "2"
+  (st, r) := ev st "lattice(D)"; check "order: divisors(12) is a lattice" r "true"
+  (st, r) := ev st "le(D, 2, 12)"; check "order: le by a chain of covers" r "true"
+  (st, r) := ev st "let P = poset({a,b,c,d}; a<b, a<c, b<d, c<d)"; checkTrue "order: a diamond" (r.startsWith "poset") r
+  (st, r) := ev st "let N = poset({a,b,c}; a<b, a<c)"; checkTrue "order: a vee" (r.startsWith "poset") r
+  (st, r) := ev st "lattice(N)"; check "order: the vee is not a lattice" r "false"
+  (st, r) := ev st "poset({a,b}; a<b, b<a)"; checkTrue "order: antisymmetry is checked" (r.startsWith "<error: not a partial order") r
+  (st, r) := ev st "let f = map(D; 1->2, 2->2, 3->6, 4->4, 6->6, 12->12)"; checkTrue "order: a map" (r.startsWith "{") r
+  (st, r) := ev st "monotone(D, f)"; check "order: monotone" r "true"
+  (st, r) := ev st "lfp(D, f)"; check "order: least fixed point by the Kleene chain" r "2"
+  (st, r) := ev st "gfp(D, f)"; check "order: greatest fixed point" r "12"
+  (st, r) := ev st "let S = subsets({x,y})"; checkTrue "order: subsets" (r.startsWith "poset") r
+  (st, r) := ev st "join(S, {x}, {y})"; check "order: join of subsets" r "{x,y}"
   -- the λ-calculus world
   (st, r) := ev st "(λx. x) y"; check "λ: identity" r "y"
   (st, r) := ev st "\\x y. x"; check "λ: backslash and multi-binder" r "λx. λy. x"

@@ -66,13 +66,24 @@ def ruleStatus : Json :=
     entry "int.linear-substitution" "checked" "A guess from the finder, verified by int.check.",
     entry "int.substitution" "checked" "A guess from the finder (u-substitution), verified by int.check.",
     entry "int.by-parts" "checked" "A guess from the finder (integration by parts), verified by int.check.",
+    entry "order.closure" "verified" "The order is the reflexive-transitive closure, and reflexivity, antisymmetry and transitivity are decided (checkPartialOrder_none).",
+    entry "order.covers" "verified" "Hasse edges are exactly the covers: x < y with nothing strictly between (covers_spec).",
+    entry "order.upper-bounds" "verified" "Every element above both, by the decision on the finite order.",
+    entry "order.least" "verified" "The element found is an upper bound below every upper bound (sup_spec); none exists when the search fails (sup_none).",
+    entry "order.lower-bounds" "verified" "Every element below both, by the decision on the finite order.",
+    entry "order.greatest" "verified" "Dual of the join: the greatest lower bound.",
+    entry "order.lattice" "verified" "Every pair searched for a join and a meet; the witness is reported when one is missing.",
+    entry "order.cover" "verified" "A cover in the Hasse diagram; the chain composes by transitivity.",
+    entry "order.monotone" "verified" "Every pair x ≤ y of the order checked; the witness is reported when it fails.",
+    entry "order.iterate" "verified" "One step of the Kleene chain; each element of the chain is below every fixed point (iter_le_fixed).",
+    entry "order.fixed" "verified" "The chain stopped at a fixed point (checked), which iter_le_fixed makes the least (dually, the greatest).",
     entry "lambda.delta" "verified" "Unfolding a definition replaces a free name by its term; nothing to prove beyond that.",
     entry "lambda.beta" "unverified" "β-reduction with capture-avoiding substitution; the substitution lemma is not yet proved.",
     entry "lambda.alpha-beta" "unverified" "A binder renamed to avoid capture, then β; the renaming is not yet proved to preserve α-equivalence."]
 
 def capabilities : Json :=
   .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m8"), ("verified", .bool true),
-         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate", .str "plot", .str "lambda"]),
+         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate", .str "plot", .str "lambda", .str "order"]),
          ("ruleStatus", ruleStatus),
          ("termination", .obj #[("status", .str "proven"), ("theorem", .str "MathEngine.pipelineOrdered"),
            ("summary", .str "Cell evaluation has no step budget: every pipeline rule decreases a five-tier ordering (commands, higher-order diff, matrix literals, the weight M, size) on nodes whose children are normal.")])]
@@ -115,12 +126,34 @@ def evaluateLambda (st : Store) (params : Json) (sessionId cellId src : String) 
     let r := match res.name with | some n => r.push ("bound", .arr #[.str n]) | none => r
     (st, .obj r)
 
+/-- An order-world cell's reply: the value, the derivation, and the poset to draw. -/
+def evaluateOrder (st : Store) (params : Json) (sessionId cellId src : String) : Store × Json :=
+  let (s, r) := orderCell (st.get sessionId) cellId src
+  let st := st.set sessionId s
+  match r with
+  | .error (code, msg, span) => (st, errorJson code msg span)
+  | .ok res =>
+    let paths := params.getBool "paths"
+    let r := #[("ok", .bool true), ("kind", .str "poset"), ("value", res.value.toJson), ("rendered", Rendered.toJson res.value paths),
+      ("summary", .str res.summary)]
+    let r := match res.poset with
+      | some P => r.push ("hasse", .obj #[
+          ("nodes", .arr (P.elems.map fun x => Json.obj #[("name", .str x), ("height", .num (toString (Ord.height P x)))]).toArray),
+          ("covers", .arr ((Ord.hasse P).map fun (a, b) => Json.arr #[.str a, .str b]).toArray)])
+      | none => r
+    let r := if params.getBool "showWork" then
+        (r.push ("derivation", res.derivation.toJson paths)).push ("inputRendered", Rendered.toJson res.derivation.input paths)
+      else r
+    let r := match res.name with | some n => r.push ("bound", .arr #[.str n]) | none => r
+    (st, .obj r)
+
 def evaluate (st : Store) (params : Json) : Store × Json :=
   match params.getStr? "source" with
   | none => (st, errorJson "params" "missing source")
   | some src =>
     let sessionId := (params.getStr? "sessionId").getD ""
     let cellId := (params.getStr? "cellId").getD ""
+    if Ord.isOrderSource src then evaluateOrder st params sessionId cellId src else
     if isLambdaCell (st.get sessionId) src then evaluateLambda st params sessionId cellId src else
     let (s, r) := evaluateCell (st.get sessionId) cellId src
     let st := st.set sessionId s

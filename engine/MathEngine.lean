@@ -12,6 +12,7 @@ import MathEngine.DiffRules
 import MathEngine.Numeric
 import MathEngine.Session
 import MathEngine.LambdaProofs
+import MathEngine.PosetProofs
 import MathEngine.Json
 import MathEngine.Wire
 import MathEngine.Parser
