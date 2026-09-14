@@ -213,7 +213,7 @@ theorem not_noFire_of_cmd {f : String} {es : List Expr} (h : cmdNames.contains f
     | [], h | [_], h | [_, _], h | _ :: _ :: _ :: _ :: _, h => simp [cmdSubst] at h
   · have := hnf (cmdIntegrate norm) ((mem_pipeline_iff _).2 (by simp))
     match es, this with
-    | [_, .var _], h => simp only [cmdIntegrate, Option.map_eq_none_iff] at h; split at h <;> (try split at h) <;> (try split at h) <;> simp at h
+    | [_, .var _], h => simp only [cmdIntegrate, Option.map_eq_none_iff] at h; split at h <;> (try split at h) <;> (try split at h) <;> (try split at h) <;> (try split at h) <;> simp at h
     | [_, .num _], h | [_, .add _], h | [_, .mul _], h | [_, .pow _ _], h | [_, .fn _ _], h | [_, .matrix _], h => simp [cmdIntegrate] at h
     | [], h | [_], h | _ :: _ :: _ :: _, h => simp [cmdIntegrate] at h
 
@@ -365,7 +365,7 @@ theorem dec_cmdIntegrate : Dec norm (cmdIntegrate norm) := dec_cmd
   (fun e res h => by
     unfold cmdIntegrate at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
     split at h
-    · split at h <;> (try split at h) <;> (try split at h) <;> exact ⟨_, _, rfl, by decide⟩
+    · split at h <;> (try split at h) <;> (try split at h) <;> (try split at h) <;> (try split at h) <;> exact ⟨_, _, rfl, by decide⟩
     · exact ⟨_, _, rfl, by decide⟩
     · exact ⟨_, _, rfl, by decide⟩
     · simp at h)
@@ -1774,9 +1774,37 @@ theorem dec_identity : Dec norm (scalarOnly identity.toPlain) := dec_scalar fun 
 theorem Q_half_isOne : (Q.ofRat (mkRat 1 2)).isOne = false := by decide
 theorem Q_half_isInt : (Q.ofRat (mkRat 1 2)).isInt = false := by decide
 
+theorem M_minusOne : M Expr.minusOne = 2 := by simp only [Expr.minusOne]; rw [M.num]; decide
+
 theorem dec_functionRules : Dec norm (scalarOnly functionRules.toPlain) := dec_scalar fun e res hcn hm happ herr => by
   simp only [Rule.toPlain, functionRules, functionApply] at happ
   split at happ
+  -- sin u / cos u = tan u
+  · rename_i es
+    obtain ⟨he, hcs⟩ := clean_of_scalar hcn hm (by simp [cmdOwn, cmdNames]) (by simp [d3Own]) rfl
+    split at happ
+    · rename_i u others hft
+      simp only [Option.some.injEq] at happ; subst happ; (try dsimp only)
+      obtain ⟨c, hc, hperm⟩ := findTan_perm es hft
+      rw [isCosInv_eq hc] at hperm
+      have hsin : Clean (.fn "sin" [u]) := hcs _ (hperm.mem_iff.2 (by simp))
+      have hu : Clean u := hsin.child (by simp [children])
+      have hothers : ∀ o ∈ others, Clean o := fun o ho => hcs o (hperm.mem_iff.2 (by simp [ho]))
+      have hres : Clean (mulN (.fn "tan" [u] :: others)) := Clean.mulN fun c hc => by
+        simp only [List.mem_cons] at hc; rcases hc with rfl | hc
+        · exact Clean.fn₁ (by decide) (by decide) hu
+        · exact hothers c hc
+      apply muLt_of_clean hres he
+      left
+      have hlen := hperm.length_eq
+      rw [M.mul, ML.perm hperm, ML.cons, ML.cons, M.fn₁ (by decide), M.pow, M.fn₁ (by decide), M_minusOne]
+      have hMu := M.pos u
+      cases others with
+      | nil => simp only [mulN, ML.nil]; rw [M.fn₁ (by decide)]; simp only [List.length_cons, List.length_nil] at hlen ⊢; omega
+      | cons o os =>
+        simp only [mulN]; rw [M.mul, ML.cons, M.fn₁ (by decide)]
+        simp only [List.length_cons] at hlen ⊢; omega
+    · simp at happ
   -- sqrt a
   · rename_i a
     simp only [Option.some.injEq] at happ; subst happ; (try dsimp only)

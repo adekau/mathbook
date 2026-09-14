@@ -31,7 +31,7 @@ def ruleStatus : Json :=
     entry "simp.collect-like-terms" "verified" "Distributivity: a·t + b·t = (a+b)·t.",
     entry "simp.power" "verified" "Includes exact roots; the root search returns only checked roots.",
     entry "simp.collect-powers" "conditional" "b^m·b^n = b^(m+n) needs a positive base: at b = 0 it turns 0 into 1.",
-    entry "simp.function" "conditional" "exp(ln x) = x needs 0 < x: at x = -1 it turns -1 into 1.",
+    entry "simp.function" "conditional" "exp(ln x) = x needs 0 < x: at x = -1 it turns -1 into 1. The other cases, sin/cos = tan among them, are unconditional.",
     entry "diff.constant" "verified" "A term the variable does not occur in has derivative 0.",
     entry "diff.variable" "verified" "The identity function has slope 1 everywhere.",
     entry "diff.constant-multiple" "verified" "Constant factors pull out; no differentiability needed.",
@@ -53,6 +53,7 @@ def ruleStatus : Json :=
     entry "expand.power" "verified" "A power of a sum is the sum multiplied by itself: dist_sound.",
     entry "cmd.integrate" "verified" "Accepted only when the candidate's derivative normalizes to the integrand, exactly (cmdIntegrate_spec); integrate_deriv reads that as deriv F = f wherever the differentiation steps shown are sound. The finder's own steps are guesses.",
     entry "int.check" "verified" "The differentiation of the candidate: this step carries the claim, with the statuses of its own steps.",
+    entry "int.compare" "verified" "Derivative and integrand are expanded (dist, proved sound) and simplified before comparison, because the pipeline never distributes a numeral over a sum; the statuses of the simplification steps apply.",
     entry "int.constant" "checked" "A guess from the finder; nothing is proved about it. Accepted only because int.check verifies the result by differentiation.",
     entry "int.variable" "checked" "A guess from the finder, verified by int.check.",
     entry "int.sum" "checked" "A guess from the finder, verified by int.check.",
@@ -60,7 +61,9 @@ def ruleStatus : Json :=
     entry "int.power" "checked" "A guess from the finder, verified by int.check (the symbolic-exponent case relies on simp.collect-powers there).",
     entry "int.exponential" "checked" "A guess from the finder, verified by int.check.",
     entry "int.table" "checked" "A guess from the finder, verified by int.check.",
-    entry "int.linear-substitution" "checked" "A guess from the finder, verified by int.check."]
+    entry "int.linear-substitution" "checked" "A guess from the finder, verified by int.check.",
+    entry "int.substitution" "checked" "A guess from the finder (u-substitution), verified by int.check.",
+    entry "int.by-parts" "checked" "A guess from the finder (integration by parts), verified by int.check."]
 
 def capabilities : Json :=
   .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m8"), ("verified", .bool true),

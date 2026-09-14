@@ -93,24 +93,34 @@ def cmdSubst : PlainRule :=
 /-- A normalizer with its derivation, as the `integrate` command needs one. -/
 abbrev Norm := Expr → Except String (Expr × Option Derivation)
 
-/-- `integrate(f, x)`: a candidate from the unverified finder (`Antiderivative.lean`), accepted only
-if `norm` takes its derivative back to `f` — exactly, since both are normal forms of the same
-normalizer. The claim is `cmdIntegrate_spec` (Integrate.lean); the finder's steps are the
-sub-derivation, ending with the `int.check` step that carries the differentiation. -/
+/-- `integrate(f, x)`: a candidate from the unverified finder (`Antiderivative.lean`), normalized,
+then accepted only if its derivative and the integrand have the same normal form *after
+distribution*: `norm (dist (norm (diff F x))) = norm (dist f)`. Distribution is there because the
+pipeline never distributes a numeral over a sum (the ordering forbids it), so `-(a + b) + b` is a
+normal form; `Expand.dist` is proved sound, so expanding both sides first weakens nothing. The
+claim is `cmdIntegrate_spec` (Integrate.lean); the finder's steps are the sub-derivation, ending
+with the `int.check` step that carries the differentiation and the `int.compare` step. -/
 def cmdIntegrate (norm : Norm) : PlainRule :=
   { name := "cmd.integrate", apply := fun e => Option.map checked <|
       match e with
       | .fn "integrate" [f, .var x] =>
-        match Anti.anti x f with
-        | none => some (refuse s!"integrate: no antiderivative of {f.toText} found by the available rules (sums, constant factors, powers, the elementary table, linear substitution)")
-        | some (F, steps) =>
-          match norm (D F x) with
-          | .error msg => some (refuse s!"integrate: the candidate {F.toText} could not be differentiated: {msg}")
-          | .ok (g, sub) =>
-            if equal g f then
-              let check : Step := ⟨"int.check", s!"Check: $\\frac\{d}\{d{x}}$ of the candidate simplifies to the integrand, so the candidate is accepted. This step carries the claim; the finder's steps above are unverified guesses.", [], D F x, g, sub⟩
-              some ⟨F, "Antiderivative found by the integration rules and accepted because its derivative simplifies back to the integrand (no constant of integration).", some ⟨Anti.integral f x, steps.push check, F⟩, none⟩
-            else some (refuse s!"integrate: the candidate {F.toText} was rejected: its derivative simplifies to {g.toText}, not to {f.toText}")
+        match Anti.anti (fun e => (norm e).toOption.map (·.1)) x 3 f with
+        | none => some (refuse s!"integrate: no antiderivative of {f.toText} found by the available rules (sums, constant factors, powers, the elementary table, linear substitution, u-substitution, integration by parts)")
+        | some (F₀, steps) =>
+          match norm F₀ with
+          | .error msg => some (refuse s!"integrate: the candidate {F₀.toText} could not be simplified: {msg}")
+          | .ok (F, _) =>
+            match norm (D F x) with
+            | .error msg => some (refuse s!"integrate: the candidate {F.toText} could not be differentiated: {msg}")
+            | .ok (g, sub) =>
+              match norm (Expand.dist g), norm (Expand.dist f) with
+              | .ok (g', subg), .ok (f', _) =>
+                if equal g' f' then
+                  let check : Step := ⟨"int.check", s!"Check: $\\frac\{d}\{d{x}}$ of the candidate, simplified. This step carries the claim; the finder's steps above are unverified guesses.", [], D F x, g, sub⟩
+                  let compare : Step := ⟨"int.compare", s!"Both the derivative and the integrand are expanded (`Expand.dist`, proved sound) and simplified; they agree: ${f'.toText}$. The candidate is accepted.", [], g, g', subg⟩
+                  some ⟨F, "Antiderivative found by the integration rules and accepted because its derivative simplifies back to the integrand (no constant of integration).", some ⟨Anti.integral f x, (steps.push check).push compare, F⟩, none⟩
+                else some (refuse s!"integrate: the candidate {F.toText} was rejected: its derivative simplifies to {g.toText}, not to {f.toText}")
+              | _, _ => some (refuse s!"integrate: the candidate {F.toText} could not be compared with the integrand")
       | .fn "integrate" [_, _] => some (refuse "integrate: the second argument must be a variable")
       | .fn "integrate" _ => some (refuse "integrate takes an integrand and a variable")
       | _ => none }

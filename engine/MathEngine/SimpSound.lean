@@ -280,10 +280,31 @@ theorem foldConstants_sound : RuleSound foldConstants := by
 -- simp.function (vacuous on the fragment)
 -- ---------------------------------------------------------------------------
 
+theorem evalProd?_none_of_mem (ρ : Env) {e : Expr} : ∀ {es : List Expr}, e ∈ es → eval? ρ e = none →
+    evalProd? ρ es = none
+  | [], h, _ => by simp at h
+  | f :: fs, h, he => by
+    simp only [List.mem_cons] at h
+    rcases h with rfl | h
+    · simp [evalProd?, he]
+    · have := evalProd?_none_of_mem ρ h he
+      simp only [evalProd?, this]
+      cases eval? ρ f <;> simp
+
 theorem functionRules_sound : RuleSound functionRules := by
   intro e r h ρ v hv
-  cases e <;> simp [functionRules, functionApply] at h
-  simp [eval?] at hv
+  cases e <;> simp only [functionRules] at h
+  case mul es =>
+    unfold functionApply at h
+    cases hft : findTan es with
+    | none => simp [hft] at h
+    | some p =>
+      obtain ⟨c, _, hperm⟩ := findTan_perm es hft
+      have hmem : Expr.fn "sin" [p.1] ∈ es := hperm.mem_iff.2 (by simp)
+      rw [eval?_mul, evalProd?_none_of_mem ρ hmem (eval?_fn ρ _ _)] at hv
+      exact absurd hv (by simp)
+  case fn f args => simp [eval?] at hv
+  all_goals simp [functionApply] at h
 
 -- ---------------------------------------------------------------------------
 -- simp.power

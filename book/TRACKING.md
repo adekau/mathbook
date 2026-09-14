@@ -135,9 +135,9 @@ M8 integration as a verified *checker* (`deriv (integrate f) = f`), not a verifi
    set — so the pipeline became `pipelineRulesWith norm`, generic in the checker's normalizer, the termination theorem
    became `pipelineOrderedWith norm` for every `norm`, and the knot closes after the proof: the checker is the pipeline
    with nested `integrate` refused, the notebook's pipeline is the pipeline with that checker, and neither has a step
-   budget; (2) the check is exact, so a correct guess can be refused — `∫ tan x` is, because `d/dx (−ln cos x)`
-   normalizes to `sin x / cos x`, which the engine does not identify with `tan x`; that is the right failure mode
-   (never a wrong answer) and a pointer at what `simp.function` lacks; (3) `x^a` is accepted through
+   budget; (2) the check is exact, so a correct guess can be refused — `∫ tan x` was, because `d/dx (−ln cos x)`
+   normalized to `sin x / cos x`, which the engine did not identify with `tan x` (fixed the same day, see the open
+   items); that is the right failure mode (never a wrong answer); (3) `x^a` is accepted through
    `simp.collect-powers` cancelling `(a+1)/(a+1)`, so its check inherits that rule's side condition (`a ≠ −1`) — the
    statuses say so without anyone writing it down. Open: products (integration by parts), `sin² x`, rational functions.
 Open items after M8 (2026-09-14, Alex: "go through the open items before the book"):
@@ -154,7 +154,16 @@ Open items after M8 (2026-09-14, Alex: "go through the open items before the boo
   be forced. Alex's decision (2026-09-14).
 - radical simplification (sqrt 8 → 2√2): Alex chose to retune M (2026-09-14) — pending.
 - echelon form of `LinQ.rref` proved rather than checked — pending.
-- integration: by parts, `sin² x`, rational functions; `tan` normal form — pending.
+- integration: DONE 2026-09-14. `sin u · cos u⁻¹ → tan u` is a new `simp.function` case (proved in all three layers:
+  additive measure, M5 ordering, ℝ soundness — unconditional, since Mathlib's `tan` is `sin/cos` everywhere), so
+  `∫ tan x` now verifies. The finder gained u-substitution (`c·g'·H'(g)`, a factor also tried as `g¹`, which gives
+  `∫ ln x/x` and `∫ sin x cos x`) and integration by parts (LIATE, three levels), with derivatives supplied by the
+  caller's normalizer. Finding: the by-parts candidates were all correct and all refused, because the pipeline never
+  distributes a numeral over a sum (the ordering forbids it: distribution is `expand`'s job), so `-(a+b)+b` is a normal
+  form. The fix keeps the check sound rather than weakening it: both sides are expanded with `Expand.dist` — proved
+  sound for the derivative semantics too (`dist_soundD`) — and simplified before comparison (`int.compare`); the
+  spec `cmdIntegrate_spec` and `integrate_deriv` state exactly that. Still refused: `eˣ sin x` (needs the
+  "solve for the integral" trick), `sin² x` (a trig identity the simp set lacks), `1/(x²+1)` (no arctan in the engine).
 - user functions with parameters — pending.
 - plotting (engine samples, notebook draws; studio Graph shot) — pending.
 - notebook file open/save — pending.

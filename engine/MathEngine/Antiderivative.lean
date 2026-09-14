@@ -9,7 +9,10 @@ not the finder, carries the claim (`cmdIntegrate_spec`, Integrate.lean). That is
 milestone: a verified *checker* of integrals, not a verified integrator.
 
 Covered: constants, the variable, sums, constant factors, powers `u^n` (`ln u` at `n = −1`),
-exponentials `a^u`, the elementary table (sin, cos, exp, ln, tan), each with `u = a·x + b`.
+exponentials `a^u`, the elementary table (sin, cos, exp, ln, tan), each with `u = a·x + b`; then
+for products, u-substitution (`∫ c·g'·H'(g) = c·H(g)`) and integration by parts (LIATE: a
+logarithm first, else a power of the variable, a few levels deep). The derivatives those two
+need come from the caller's normalizer, so the finder never differentiates on its own.
 Every step records `∫ g dx` as its `before` and the antiderivative found as its `after`.
 -/
 namespace MathEngine
@@ -58,8 +61,13 @@ def substitute (x : String) (f G : Expr) (a : Expr) : Expr × Array Step :=
   if a.isOne then (G, #[])
   else (Expr.div G a, #[⟨"int.linear-substitution", s!"Linear substitution: with $u = {(f.children.headD f).toText}$, $du = ({a.toText})\\,d{x}$, so the integral in $x$ is $1/({a.toText})$ times the integral in $u$.", [], integral f x, Expr.div G a, none⟩])
 
-/-- A candidate antiderivative of `f` in `x`, with the steps that found it, or `none`. -/
-partial def anti (x : String) (f : Expr) : Option (Expr × Array Step) := do
+/-- Factors of a product other than the one at index `i`, as one term. -/
+def without (es : List Expr) (i : Nat) : Expr := mulN ((es.zipIdx.filter (·.2 != i)).map (·.1))
+
+/-- A candidate antiderivative of `f` in `x`, with the steps that found it, or `none`. `simp`
+normalizes (and, applied to `diff`, differentiates); `fuel` bounds the depth of integration by
+parts. -/
+partial def anti (simp : Expr → Option Expr) (x : String) (fuel : Nat) (f : Expr) : Option (Expr × Array Step) := do
   let step (rule text : String) (F : Expr) : Step := ⟨rule, text, [], integral f x, F, none⟩
   if !f.dependsOn x then
     let F := .mul [f, .var x]
@@ -69,18 +77,51 @@ partial def anti (x : String) (f : Expr) : Option (Expr × Array Step) := do
     let F := .mul [.num (Q.ofRat (mkRat 1 2)), .pow (.var x) (ofInt 2)]
     return (F, #[step "int.variable" s!"$\\int {x} \\, d{x} = {x}^2/2$." F])
   | .add es =>
-    let parts ← es.mapM (anti x)
+    let parts ← es.mapM (anti simp x fuel)
     let F := .add (parts.map (·.1))
     let sub := parts.foldl (fun acc p => acc ++ p.2) #[]
     return (F, #[step "int.sum" "The integral of a sum is the sum of the integrals." (.add (es.map (integral · x)))] ++ sub)
   | .mul es =>
     match es.partition (·.dependsOn x) with
     | (rest, cs) =>
-      if cs.isEmpty then none else
-      let g := mulN rest
-      let (G, sub) ← anti x g
-      let F := .mul (cs ++ [G])
-      return (F, #[step "int.constant-multiple" "Constant factors move outside the integral." (.mul (cs ++ [integral g x]))] ++ sub)
+      if !cs.isEmpty then
+        let g := mulN rest
+        let (G, sub) ← anti simp x fuel g
+        let F := .mul (cs ++ [G])
+        return (F, #[step "int.constant-multiple" "Constant factors move outside the integral." (.mul (cs ++ [integral g x]))] ++ sub)
+      else
+        -- u-substitution: one factor is H'(g) for a table or power H, the rest is c·g'
+        let trySubst (i : Nat) (w G : Expr) (why : String) : Option (Expr × Array Step) := do
+          if !w.dependsOn x then none else
+          let w' ← simp (D w x)
+          let ratio ← simp (Expr.div (without es i) w')
+          if ratio.dependsOn x then none else
+          let F := .mul [ratio, G]
+          return (F, #[step "int.substitution" s!"Substitution $u = {w.toText}$, $du = ({w'.toText})\\,d{x}$: the other factors are $({ratio.toText})\\,du$, so this is $({ratio.toText}) \\int H'(u)\\,du$ with {why}." F])
+        -- a factor H'(g) with H from the table or a power, the rest c·g'; else a factor g itself as g¹
+        let bySubst : Option (Expr × Array Step) :=
+          (es.zipIdx.findSome? fun (g, i) => match g with
+            | .fn h [w] => (table h w).bind fun (G, why) => trySubst i w G why
+            | .pow w n => if !n.dependsOn x then let (G, why) := powerRule w n; trySubst i w G why else none
+            | _ => none)
+          <|> (es.zipIdx.findSome? fun (g, i) => match g with
+            | .var _ => none
+            | w => let (G, why) := powerRule w Expr.one; trySubst i w G why)
+        match bySubst with
+        | some r => return r
+        | none =>
+          -- integration by parts, a logarithm first, else a power of the variable
+          if fuel = 0 then none else
+          let isLog : Expr → Bool | .fn "ln" [_] => true | _ => false
+          let isPoly : Expr → Bool | .var y => y == x | .pow (.var y) (.num n) => y == x && n.isInt && !n.isNeg | _ => false
+          let (u, i) ← (es.zipIdx.find? (isLog ·.1)) <|> (es.zipIdx.find? (isPoly ·.1))
+          let dv := without es i
+          let (v, vsteps) ← anti simp x fuel dv
+          let du ← simp (D u x)
+          let vdu ← simp (.mul [v, du])
+          let (inner, isteps) ← anti simp x (fuel - 1) vdu
+          let F := Expr.sub (.mul [u, v]) inner
+          return (F, #[step "int.by-parts" s!"Integration by parts, $\\int u\\,dv = uv - \\int v\\,du$, with $u = {u.toText}$ and $dv = {dv.toText}\\,d{x}$, so $v = {v.toText}$ and $du = ({du.toText})\\,d{x}$." F] ++ vsteps ++ isteps)
   | .pow b e =>
     if !e.dependsOn x then
       let a ← linearCoeff x b

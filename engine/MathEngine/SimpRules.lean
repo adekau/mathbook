@@ -333,7 +333,85 @@ def foldConstants : Rule simpW where
 -- simp.function
 -- ---------------------------------------------------------------------------
 
+/-- The first element satisfying `p`, and the list without it. -/
+def splitFirst (p : Expr → Bool) : List Expr → Option (Expr × List Expr)
+  | [] => none
+  | x :: xs => if p x then some (x, xs) else (splitFirst p xs).map fun r => (r.1, x :: r.2)
+
+theorem splitFirst_perm (p : Expr → Bool) : ∀ (l : List Expr) {c l'}, splitFirst p l = some (c, l') →
+    p c = true ∧ l.Perm (c :: l')
+  | [], _, _, h => by simp [splitFirst] at h
+  | x :: xs, c, l', h => by
+    simp only [splitFirst] at h
+    split at h
+    · simp only [Option.some.injEq, Prod.mk.injEq] at h; obtain ⟨rfl, rfl⟩ := h; exact ⟨‹_›, List.Perm.refl _⟩
+    · cases hs : splitFirst p xs with
+      | none => simp [hs] at h
+      | some r =>
+        obtain ⟨c', l''⟩ := r
+        simp only [hs, Option.map_some, Option.some.injEq, Prod.mk.injEq] at h; obtain ⟨rfl, rfl⟩ := h
+        obtain ⟨hp, hperm⟩ := splitFirst_perm p xs hs
+        exact ⟨hp, (hperm.cons x).trans (List.Perm.swap c' x l'')⟩
+
+/-- `cos u ^ (-1)`, structurally. -/
+def isCosInv (u : Expr) : Expr → Bool
+  | .pow (.fn "cos" [v]) x => equal u v && equal x Expr.minusOne
+  | _ => false
+
+theorem isCosInv_eq {u c : Expr} (h : isCosInv u c = true) : c = .pow (.fn "cos" [u]) Expr.minusOne := by
+  unfold isCosInv at h
+  split at h
+  · rename_i v x
+    simp only [Bool.and_eq_true] at h
+    rw [Expr.beq_eq u v h.1, Expr.beq_eq x Expr.minusOne h.2]
+  · simp at h
+
+def sinArg : Expr → Option Expr | .fn "sin" [u] => some u | _ => none
+
+theorem sinArg_eq {f u : Expr} (h : sinArg f = some u) : f = .fn "sin" [u] := by
+  unfold sinArg at h; split at h <;> simp_all
+
+/-- `sin u` and `cos u ^ (-1)` among the factors of a product, and the other factors. `acc` holds
+the factors already passed over, so the cosine may sit on either side of the sine. -/
+def findTanGo (acc : List Expr) : List Expr → Option (Expr × List Expr)
+  | [] => none
+  | f :: rest =>
+    match sinArg f with
+    | some u =>
+      match splitFirst (isCosInv u) (acc ++ rest) with
+      | some (_, others) => some (u, others)
+      | none => findTanGo (acc ++ [f]) rest
+    | none => findTanGo (acc ++ [f]) rest
+
+def findTan (es : List Expr) : Option (Expr × List Expr) := findTanGo [] es
+
+theorem findTanGo_perm : ∀ (l acc : List Expr) {u others}, findTanGo acc l = some (u, others) →
+    ∃ c, isCosInv u c = true ∧ (acc ++ l).Perm (.fn "sin" [u] :: c :: others)
+  | [], _, _, _, h => by simp [findTanGo] at h
+  | f :: rest, acc, u, others, h => by
+    simp only [findTanGo] at h
+    split at h
+    · rename_i u' hu'
+      split at h
+      · rename_i c os hs
+        simp only [Option.some.injEq, Prod.mk.injEq] at h; obtain ⟨rfl, rfl⟩ := h
+        obtain ⟨hc, hperm⟩ := splitFirst_perm _ _ hs
+        rw [sinArg_eq hu']
+        exact ⟨c, hc, List.perm_middle.trans (hperm.cons _)⟩
+      · obtain ⟨c, hc, hperm⟩ := findTanGo_perm rest (acc ++ [f]) h
+        exact ⟨c, hc, by simpa [List.append_assoc] using hperm⟩
+    · obtain ⟨c, hc, hperm⟩ := findTanGo_perm rest (acc ++ [f]) h
+      exact ⟨c, hc, by simpa [List.append_assoc] using hperm⟩
+
+theorem findTan_perm (es : List Expr) {u others} (h : findTan es = some (u, others)) :
+    ∃ c, isCosInv u c = true ∧ es.Perm (.fn "sin" [u] :: c :: others) := by
+  simpa using findTanGo_perm es [] h
+
 def functionApply : Expr → Option RuleResult
+  | .mul es =>
+    match findTan es with
+    | some (u, others) => some ⟨mulN (.fn "tan" [u] :: others), "$\\sin u / \\cos u = \\tan u$.", none, none⟩
+    | none => none
   | .fn "sqrt" [a] => some ⟨.pow a (.num (Q.ofRat (mkRat 1 2))), "$\\sqrt{a} = a^{1/2}$; we work with a single power form internally.", none, none⟩
   | .fn "ln" [a] =>
     if isOne a then some ⟨Expr.zero, "$\\ln 1 = 0$.", none, none⟩ else
@@ -366,11 +444,25 @@ def functionRules : Rule simpW where
   apply := functionApply
   decreasing e r h := by
     cases e <;> simp only [functionApply, reduceCtorEq] at h
-    rename_i f args
-    repeat' split at h
-    all_goals (try injections)
-    all_goals (try subst_vars)
-    all_goals (simp only [M_num, M_var, M_add, M_mul, M_pow, M_fn, M_matrix, ML_cons, ML_nil, M_zero, M_one]; omega)
+    · -- sin u / cos u = tan u
+      rename_i es
+      split at h
+      · rename_i u others hft
+        simp only [Option.some.injEq] at h; subst h
+        obtain ⟨c, hc, hperm⟩ := findTan_perm es hft
+        rw [isCosInv_eq hc] at hperm
+        have hml := measureList_perm simpW hperm
+        cases others with
+        | nil =>
+          simp only [mulN, M_mul, hml, ML_cons, ML_nil, M_fn, M_pow, M_num, Expr.minusOne]; omega
+        | cons o os =>
+          simp only [mulN, M_mul, hml, ML_cons, ML_nil, M_fn, M_pow, M_num, Expr.minusOne]; omega
+      · simp at h
+    · rename_i f args
+      repeat' split at h
+      all_goals (try injections)
+      all_goals (try subst_vars)
+      all_goals (simp only [M_num, M_var, M_add, M_mul, M_pow, M_fn, M_matrix, ML_cons, ML_nil, M_zero, M_one]; omega)
 
 -- ---------------------------------------------------------------------------
 -- simp.power

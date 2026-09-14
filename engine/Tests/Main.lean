@@ -242,11 +242,20 @@ def tests : TestM Unit := do
   (st, r) := ev st "integrate(2^x, x)"; check "integrate exponential" r "2^x/ln(2)"
   (st, r) := ev st "diff(integrate(x^3, x), x)"; check "diff of integrate" r "x^3"
   (st, r) := ev st "integrate(integrate(x, x), x)"; check "nested integrate" r "1/6*x^3"
-  (st, r) := ev st "integrate(x*sin(x), x)"; checkTrue "integrate refuses what it cannot find" (r.startsWith "<error: integrate: no antiderivative") r
-  (st, r) := ev st "integrate(tan(x), x)"; checkTrue "integrate rejects an unverifiable candidate" (r.startsWith "<error: integrate: the candidate -ln(cos(x)) was rejected") r
+  (st, r) := ev st "integrate(exp(x)*sin(x), x)"; checkTrue "integrate refuses what it cannot find" (r.startsWith "<error: integrate: no antiderivative") r
+  (st, r) := ev st "integrate(tan(x), x)"; check "integrate tan (needs the tan normal form)" r "-ln(cos(x))"
+  (st, r) := ev st "sin(x)/cos(x)"; check "simp.function: sin/cos = tan" r "tan(x)"
+  (st, r) := ev st "cos(x)^(-1)*y*sin(x)"; check "simp.function: tan with the cosine first" r "y*tan(x)"
+  (st, r) := ev st "integrate(x*sin(x), x)"; check "integrate by parts" r "-x*cos(x) + sin(x)"
+  (st, r) := ev st "integrate(x*ln(x), x)"; check "integrate by parts, log first" r "1/2*x^2*ln(x) - 1/4*x^2"
+  (st, r) := ev st "integrate(x^2*exp(x), x)"; check "integrate by parts twice" r "x^2*exp(x) - 2*(x*exp(x) - exp(x))"
+  (st, r) := ev st "integrate(ln(x)/x, x)"; check "integrate u as u^1" r "1/2*ln(x)^2"
+  (st, r) := ev st "integrate(sin(x)*cos(x), x)"; check "integrate sin cos" r "-1/2*cos(x)^2"
+  (st, r) := ev st "integrate(x*exp(x^2), x)"; check "integrate by substitution" r "1/2*exp(x^2)"
+  (st, r) := ev st "integrate(x/(x^2+1), x)"; check "integrate by substitution, log" r "1/2*ln(x^2 + 1)"
   (st, r) := sessionEval st "integrate(5*x^3 - 2*x + 7, x)" ",\"showWork\":true"
   let intSub := (st.get "t").cells.lookup "integrate(5*x^3 - 2*x + 7, x)" >>= fun c => c.derivation.steps.toList.find? (·.rule == "cmd.integrate") >>= (·.sub)
-  check "integrate: finder steps end with the check" (intSub.map (fun d => d.steps.toList.map (·.rule)) |>.getD []).toString "[int.sum, int.constant-multiple, int.power, int.constant-multiple, int.variable, int.constant, int.check]"
+  check "integrate: finder steps end with the check" (intSub.map (fun d => d.steps.toList.map (·.rule)) |>.getD []).toString "[int.sum, int.constant-multiple, int.power, int.constant-multiple, int.variable, int.constant, int.check, int.compare]"
   let checkStep := intSub.bind fun d => d.steps.toList.find? (·.rule == "int.check")
   checkTrue "integrate: the check step carries the differentiation" ((checkStep >>= (·.sub)).map (fun d => d.steps.toList.any (·.rule == "diff.power")) |>.getD false)
   let (st2, raw) := handleS st "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"engine.evaluate\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"dx3\",\"source\":\"diff(x^3, x)\",\"showWork\":true,\"paths\":true}}"

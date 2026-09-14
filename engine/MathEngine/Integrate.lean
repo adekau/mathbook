@@ -10,7 +10,8 @@ checker. Both are `Ordered` by the one theorem `pipelineOrderedWith`, so the che
 budget either.
 
 `cmdIntegrate_spec` is the checker's claim, in the engine: an accepted result `F` has
-`norm (diff F x) = ok f`, exactly. Its meaning — `deriv F = f` — is `integrate_deriv` in
+`norm (dist (norm (diff F x))) = norm (dist f)`, exactly (`dist` is `expand`'s distribution,
+proved sound; it is there because the pipeline never distributes a numeral over a sum). Its meaning — `deriv F = f` — is `integrate_deriv` in
 `proofs/Proofs/Integrate.lean`, under the one hypothesis that the differentiation shown is sound
 at the point, which the rule statuses of its steps (M3, M4) say rule by rule.
 -/
@@ -33,25 +34,32 @@ def pipelineRules : List PlainRule := pipelineRulesWith checkNorm
 theorem pipelineOrdered : Ordered pipelineRules := pipelineOrderedWith checkNorm
 
 /-- **The checker's claim.** Whatever `integrate(f, x)` returns without error, differentiating it
-and normalizing gives back `f` — not something equal to `f`, `f` itself. Nothing about the finder
-is assumed. -/
+gives a normal form `g` which, expanded and normalized, is the same term as `f` expanded and
+normalized. Nothing about the finder is assumed. -/
 theorem cmdIntegrate_spec (norm : Norm) {f : Expr} {x : String} {res : RuleResult}
     (h : (cmdIntegrate norm).apply (.fn "integrate" [f, .var x]) = some res) (hok : res.error = none) :
-    ∃ sub, norm (D res.result x) = .ok (f, sub) := by
+    ∃ g sub g' s₁ s₂, norm (D res.result x) = .ok (g, sub) ∧
+      norm (Expand.dist g) = .ok (g', s₁) ∧ norm (Expand.dist f) = .ok (g', s₂) := by
   unfold cmdIntegrate at h; simp only [Option.map_eq_some_iff] at h
   obtain ⟨r, hr, rfl⟩ := h
   obtain ⟨hrr, -⟩ := checked_spec rfl hok
   rw [hrr] at hok ⊢
   split at hr
   · cases hr; simp [refuse] at hok
-  · rename_i F steps _
+  · rename_i F₀ steps _
     split at hr
     · cases hr; simp [refuse] at hok
-    · rename_i g sub hn
+    · rename_i F _ _
       split at hr
-      · rename_i heq
-        cases hr
-        exact ⟨sub, by rw [hn, Expr.beq_eq g f heq]⟩
       · cases hr; simp [refuse] at hok
+      · rename_i g sub hn
+        split at hr
+        · rename_i g' subg f' s₂ hg hf
+          split at hr
+          · rename_i heq
+            cases hr
+            exact ⟨g, sub, g', subg, s₂, hn, hg, by rw [hf, Expr.beq_eq g' f' heq]⟩
+          · cases hr; simp [refuse] at hok
+        · cases hr; simp [refuse] at hok
 
 end MathEngine

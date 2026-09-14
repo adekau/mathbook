@@ -529,6 +529,18 @@ theorem not_collectPowers_soundR : ¬ RuleSoundR collectPowers := by
 /-- The justification the rule actually needs for its `exp ∘ ln` case. -/
 theorem exp_log_sound {x : ℝ} (hx : 0 < x) : Real.exp (Real.log x) = x := Real.exp_log hx
 
+/-- The `sin u / cos u ⟶ tan u` case is unconditional: Mathlib's `Real.tan` is `sin / cos`
+everywhere, junk values included. -/
+theorem functionRules_tan_soundR (ρ : EnvR) {es : List Expr} {u : Expr} {others : List Expr}
+    (h : findTan es = some (u, others)) :
+    evalR ρ (Expr.mulN (.fn "tan" [u] :: others)) = evalR ρ (.mul es) := by
+  obtain ⟨c, hc, hperm⟩ := findTan_perm es h
+  rw [isCosInv_eq hc] at hperm
+  rw [evalR_mul, prodR_perm ρ hperm, evalR_mulN]
+  simp only [prodR_cons, evalR_fn₁, evalR_pow, evalR_num, Expr.minusOne, Q.minusOne, Q_val_ofInt]
+  push_cast
+  rw [Real.rpow_neg_one, applyFn, applyFn, applyFn, Real.tan_eq_sin_div_cos, div_eq_mul_inv, mul_assoc]
+
 /-- **`simp.function` is not unconditionally sound over ℝ**: at `x = -1`, `exp (ln x)` is `1`,
 not `-1`, because `Real.log` is even. Every other case of the rule is unconditional. -/
 theorem not_functionRules_soundR : ¬ RuleSoundR functionRules := by
