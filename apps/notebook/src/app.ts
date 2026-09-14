@@ -47,6 +47,7 @@ const DOCS: Doc[] = [
   { name: "exp", sig: "exp(x)", blurb: "Its own derivative and its own antiderivative.", ref: "https://mathworld.wolfram.com/ExponentialFunction.html", examples: ["diff(exp(2x), x)", "ln(exp(x))"] },
   { name: "ln", sig: "ln(x)", blurb: "Natural logarithm. Derivative 1/x.", ref: "https://mathworld.wolfram.com/NaturalLogarithm.html", examples: ["diff(ln(x), x)"] },
   { name: "abs", sig: "abs(x)", blurb: "Absolute value; folds on numeric arguments.", examples: ["abs(-3)"] },
+  { name: "%", sig: "% · %% · %n", blurb: "The previous output, the one before it, or Out[n]: Mathematica's output references. The engine numbers every evaluation and substitutes the value before anything else happens, so the input interpretation shows what % stood for.", examples: ["diff(%, x)", "rref(%)", "%1 + %2"] },
   { name: "let", sig: "let name = e · let f(x, y) = e", blurb: "Binds a name in this session, or defines a function of its parameters. Later cells substitute the value or expand the call.", examples: ["let f = x^3 - 3x", "let sq(x) = x^2 + 1", "diff(sq(x), x)"] },
 ];
 const DOC_BY_NAME = new Map(DOCS.map((d) => [d.name, d]));
@@ -115,6 +116,10 @@ interface Cell {
   label: number | null;
   ms?: number;
   outLatex?: string;
+  /** The output in the engine's input syntax (the "input form"). */
+  outText?: string;
+  /** How the output is displayed: matrix | pmatrix | grid | table | input, or standard. */
+  form?: string;
   echoLatex?: string;
   steps?: Step[];
   error?: { message: string; span?: { start: number; end: number } };
@@ -127,7 +132,7 @@ type TermRef = { kind: "output" } | { kind: "input" } | { kind: "step"; index: n
 interface Selection {
   cellId: string; term: TermRef; path: Path; latex: string; text: string; related: Step[]; trace: Map<number, string>;
   /** A nested step (a row operation, a finder step): shown with its siblings, no engine trace. */
-  sub?: { steps: Step[]; index: number; label: string; top: number };
+  sub?: { steps: Step[]; index: number; label: string; top: number; key: string };
 }
 /** A step with a nested derivation (rref's row operations, integrate's finder and check) inherits
  *  the weakest status among them: a command is only as verified as the work it delegated. */
@@ -166,6 +171,8 @@ const S = {
   theme: "dark" as "dark" | "light",
   docName: "lesson-04.lemma",
   deBruijn: false,
+  /** Show the engine's rendering of the parsed input under each cell (View menu). */
+  showEcho: (() => { try { return localStorage.getItem("lemma.echo") !== "off"; } catch { return true; } })(),
   menu: null as string | null,
   studio: { scenes: [] as Scene[], active: 0, playing: false, t: 0, speed: 1, codeOpen: true, copied: false },
 };
@@ -239,8 +246,9 @@ async function runCell(cell: Cell) {
     cell.ms = performance.now() - t0;
     queueMicrotask(autosave);
     if (r.ok) {
-      cell.label = cell.label ?? nextLabel++;
+      cell.label = r.label ?? cell.label ?? nextLabel++;
       cell.outLatex = r.rendered.latex;
+      cell.outText = r.rendered.text;
       cell.echoLatex = r.inputRendered?.latex;
       cell.steps = r.derivation?.steps ?? [];
       delete cell.error;
@@ -251,8 +259,8 @@ async function runCell(cell: Cell) {
       log("ok", `Out[${cell.label}] ${r.rendered.text}  (${cell.ms.toFixed(1)} ms, ${cell.steps.length} steps)`);
       if ("bound" in r && r.bound?.length) log("ok", `bound ${r.bound.join(", ")}`);
     } else {
-      cell.label = cell.label ?? nextLabel++;
-      delete cell.outLatex; delete cell.echoLatex; delete cell.plot; cell.steps = [];
+      cell.label = r.label ?? cell.label ?? nextLabel++;
+      delete cell.outLatex; delete cell.outText; delete cell.echoLatex; delete cell.plot; cell.steps = [];
       cell.error = r.error;
       log("err", `${r.error.code}: ${r.error.message}`);
     }
@@ -293,10 +301,42 @@ function markSelection() {
   document.querySelectorAll(".step.on").forEach((x) => x.classList.remove("on"));
   const sel = S.sel; if (!sel) return;
   const cell = S.cells.find((c) => c.id === sel.cellId);
-  const host = cell?.el?.querySelector(`[data-term="${termKey(sel.term)}"]`);
+  const host = cell?.el?.querySelector(`[data-term="${sel.sub ? sel.sub.key : termKey(sel.term)}"]`);
   if (!host) return;
   host.querySelector(`[data-path="${sel.path.join(".") || "root"}"]`)?.classList.add("sel");
-  if (sel.term.kind === "step") host.closest(".step")?.classList.add("on");
+  if (sel.sub || sel.term.kind === "step") host.closest(".step")?.classList.add("on");
+}
+
+/** The LaTeX of the subterm at `path`, cut out of a path-annotated rendering (no engine call). */
+function pathLatex(latex: string, path: Path): string | null {
+  const key = `\\htmlData{path=${path.join(".") || "root"}}{`;
+  const i = latex.indexOf(key); if (i < 0) return null;
+  let depth = 1, j = i + key.length;
+  for (; j < latex.length && depth > 0; j++) {
+    if (latex[j] === "\\") { j++; continue; }
+    if (latex[j] === "{") depth++; else if (latex[j] === "}") depth--;
+  }
+  return latex.slice(i + key.length, j - 1);
+}
+
+/** The output forms a cell may choose from (the engine prints once; these are typesetting choices). */
+function formsFor(cell: Cell): [string, string][] {
+  return cell.outLatex?.includes("\\begin{bmatrix}")
+    ? [["matrix", "matrix [ ]"], ["pmatrix", "matrix ( )"], ["grid", "grid"], ["table", "table"], ["input", "input form"]]
+    : [["standard", "standard"], ["input", "input form"]];
+}
+function formLatex(latex: string, form: string | undefined): string {
+  if (!form || form === "matrix" || form === "standard") return latex;
+  return latex.replace(/\\begin\{bmatrix\}([\s\S]*?)\\end\{bmatrix\}/g, (_m, body: string) => {
+    if (form === "pmatrix") return `\\begin{pmatrix}${body}\\end{pmatrix}`;
+    if (form === "grid") return `\\begin{matrix}${body}\\end{matrix}`;
+    if (form === "table") {
+      const rows = body.split(" \\\\ ");
+      const cols = (rows[0]?.match(/&/g)?.length ?? 0) + 1;
+      return `\\begin{array}{|${"c|".repeat(cols)}}\\hline ${rows.join(" \\\\ \\hline ")} \\\\ \\hline\\end{array}`;
+    }
+    return `\\begin{bmatrix}${body}\\end{bmatrix}`;
+  });
 }
 
 /** Make every path-annotated subterm of a rendered term clickable. */
@@ -317,14 +357,14 @@ function wireTerm(host: HTMLElement, cell: Cell, term: TermRef) {
 
 interface LemmaFile {
   lemma: 1; name: string;
-  cells: { src: string; showWork: boolean; label: number | null; outLatex?: string | undefined; echoLatex?: string | undefined; steps?: Step[] | undefined; error?: Cell["error"] | undefined; plot?: PlotData | undefined }[];
+  cells: { src: string; showWork: boolean; label: number | null; outLatex?: string | undefined; outText?: string | undefined; form?: string | undefined; echoLatex?: string | undefined; steps?: Step[] | undefined; error?: Cell["error"] | undefined; plot?: PlotData | undefined }[];
   scenes: Scene[];
 }
 
 function serializeNotebook(): string {
   const doc: LemmaFile = {
     lemma: 1, name: S.docName,
-    cells: S.cells.map((c) => ({ src: c.input?.value ?? c.src, showWork: c.showWork, label: c.label, outLatex: c.outLatex, echoLatex: c.echoLatex, steps: c.steps, error: c.error, plot: c.plot })),
+    cells: S.cells.map((c) => ({ src: c.input?.value ?? c.src, showWork: c.showWork, label: c.label, outLatex: c.outLatex, outText: c.outText, form: c.form, echoLatex: c.echoLatex, steps: c.steps, error: c.error, plot: c.plot })),
     scenes: ST.scenes,
   };
   return JSON.stringify(doc, null, 2);
@@ -341,8 +381,10 @@ async function loadNotebook(text: string, name?: string) {
   S.cells = [];
   for (const c of doc.cells) {
     const cell = addCell(c.src);
-    cell.showWork = c.showWork ?? true; cell.label = c.label ?? null;
+    cell.showWork = c.showWork ?? false; cell.label = c.label ?? null;
     if (c.outLatex) cell.outLatex = c.outLatex;
+    if (c.outText) cell.outText = c.outText;
+    if (c.form) cell.form = c.form;
     if (c.echoLatex) cell.echoLatex = c.echoLatex;
     if (c.steps) cell.steps = c.steps;
     if (c.error) cell.error = c.error;
@@ -412,7 +454,7 @@ function restoreAutosave(): string | null {
 // ---------------------------------------------------------------------------
 
 function addCell(src = ""): Cell {
-  const cell: Cell = { id: `c${++cellSeq}`, src, label: null, showWork: true };
+  const cell: Cell = { id: `c${++cellSeq}`, src, label: null, showWork: false };
   S.cells.push(cell);
   renderCells();
   return cell;
@@ -425,7 +467,7 @@ function focusCell(i: number) {
 }
 
 function clearOutputs() {
-  for (const c of S.cells) { delete c.outLatex; delete c.echoLatex; delete c.error; delete c.plot; c.steps = []; c.label = null; c.ms = undefined; }
+  for (const c of S.cells) { delete c.outLatex; delete c.outText; delete c.echoLatex; delete c.error; delete c.plot; c.steps = []; c.label = null; c.ms = undefined; }
   nextLabel = 1; S.sel = null;
   renderCells(); renderSidebar(); renderPanel();
   log("ok", "outputs cleared");
@@ -494,7 +536,8 @@ function renderChrome() {
   const MENUS: Record<string, [string, () => void][]> = {
     File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs]],
     Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
-    View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }]],
+    View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }],
+      [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("lemma.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }]],
     Run: [["Run all", () => void runAll()], ["Run cell", () => { const c = S.cells[S.active]; if (c) void runCell(c); }]],
     Kernel: [["Restart kernel", () => void restartKernel()], ["Restart and run all", async () => { await restartKernel(); await runAll(); }]],
     Help: [["Reference", () => switchTab("reference")], ["Manim Studio", () => switchTab("studio")]],
@@ -764,28 +807,13 @@ function renderCellBody(cell: Cell) {
   const body = mid.querySelector(".cellbody") as HTMLElement;
   body.innerHTML = "";
 
-  if (cell.echoLatex) {
+  if (cell.echoLatex && S.showEcho) {
     const echo = h("div", "echo");
     echo.innerHTML = tex(cell.echoLatex, true);
     wireTerm(echo, cell, { kind: "input" });
     body.append(echo);
   }
 
-  const meta = h("div", "cellmeta");
-  const kind = cell.kind ?? cellKind(cell.src);
-  if (kind) {
-    const badge = h("span", "kindbadge");
-    badge.append(document.createTextNode(kind), h("span", "i", "i"));
-    const head = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(cell.src.trim())?.[1] ?? (/^let\s/.test(cell.src.trim()) ? "let" : "");
-    const doc = DOC_BY_NAME.get(head);
-    if (doc) {
-      badge.addEventListener("mouseenter", (ev) => showHover(doc, ev as MouseEvent));
-      badge.addEventListener("mouseleave", hideHover);
-    }
-    meta.append(badge);
-  }
-  if (cell.ms !== undefined) meta.append(h("span", "timing", `${cell.steps?.length ?? 0} rules · ${cell.ms.toFixed(1)} ms`));
-  body.append(meta);
 
   if (cell.error) {
     const err = h("div", "cellerr", cell.error.message);
@@ -798,7 +826,7 @@ function renderCellBody(cell: Cell) {
 
   if (cell.showWork && cell.steps?.length) {
     const work = h("div", "work");
-    const stepRow = (st: Step, label: string, status: string, term?: TermRef): HTMLElement => {
+    const stepRow = (st: Step, label: string, status: string, term?: TermRef, sub?: { steps: Step[]; index: number; top: number }): HTMLElement => {
       const row = h("div", "step");
       row.append(h("span", "no", label));
       const rule = h("span", "rule");
@@ -808,7 +836,21 @@ function renderCellBody(cell: Cell) {
       row.append(rule);
       const el = h("span", "el");
       const shown = S.deBruijn && st.afterDeBruijn ? st.afterDeBruijn : st.afterRendered;
-      if (shown) { el.innerHTML = tex(shown.latex, true); if (term && shown === st.afterRendered) wireTerm(el, cell, term); }
+      if (shown) {
+        el.innerHTML = tex(shown.latex, true);
+        if (term && shown === st.afterRendered) wireTerm(el, cell, term);
+        else if (sub && shown === st.afterRendered) {
+          // a nested step's term: selectable locally (the engine traces top-level terms only)
+          el.dataset["term"] = `sub:${label}`;
+          el.querySelectorAll<HTMLElement>("[data-path]").forEach((span) => {
+            span.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              const raw = span.dataset["path"]!;
+              selectSubStep(cell, sub.steps, sub.index, label, sub.top, raw === "root" ? [] : raw.split(".").map(Number));
+            });
+          });
+        }
+      }
       else el.append(inlineMath(st.explanation));
       row.append(el);
       return row;
@@ -818,7 +860,7 @@ function renderCellBody(cell: Cell) {
     const renderSub = (st: Step, label: string, top: number, depth: number) => {
       st.sub?.steps.forEach((sub, k) => {
         const l = `${label}.${k + 1}`;
-        const srow = stepRow(sub, l, statusOf(sub));
+        const srow = stepRow(sub, l, statusOf(sub), undefined, { steps: st.sub!.steps, index: k, top });
         srow.classList.add("sub");
         srow.style.marginLeft = `${26 * depth}px`;
         srow.title = sub.explanation.replace(/\$/g, "");
@@ -857,9 +899,20 @@ function renderCellBody(cell: Cell) {
       val.append(box, cap);
     } else if (S.deBruijn && cell.outDeBruijn) {
       val.innerHTML = tex(cell.outDeBruijn, true);
+    } else if (cell.form === "input") {
+      val.append(h("code", "outtext", cell.outText ?? ""));
     } else {
-      val.innerHTML = tex(cell.outLatex, true);
+      val.innerHTML = tex(formLatex(cell.outLatex, cell.form), true);
       wireTerm(val, cell, { kind: "output" });
+    }
+    // the output form: a per-cell choice of typesetting, like Mathematica's //MatrixForm
+    if (!cell.hasse && !cell.plot) {
+      const forms = formsFor(cell);
+      const fs = document.createElement("select"); fs.className = "formsel"; fs.title = "Output form";
+      for (const [v, label] of forms) { const o = document.createElement("option"); o.value = v; o.textContent = label; o.selected = (cell.form ?? forms[0]![0]) === v; fs.append(o); }
+      fs.addEventListener("mousedown", (e) => e.stopPropagation());
+      fs.addEventListener("change", () => { if (fs.value === forms[0]![0]) delete cell.form; else cell.form = fs.value; renderCellBody(cell); autosave(); });
+      out.querySelector(".prompt")!.append(fs);
     }
     if (cell.reading) { const rd = h("span", "reading", `≡ ${cell.reading}`); rd.title = "What the normal form encodes"; val.append(rd); }
     if (cell.summary && !cell.hasse) { const rd = h("span", "reading", cell.summary); val.append(rd); }
@@ -937,12 +990,14 @@ function renderPanelHead() {
 }
 
 /** Select a nested step: the panel shows its result, its explanation, its siblings and its status. */
-function selectSubStep(cell: Cell, steps: Step[], index: number, label: string, top: number) {
+function selectSubStep(cell: Cell, steps: Step[], index: number, label: string, top: number, path: Path = []) {
   const st = steps[index]!;
-  S.sel = { cellId: cell.id, term: { kind: "step", index: top }, path: [], latex: st.afterRendered?.latex ?? "", text: st.afterRendered?.text ?? st.rule,
-    related: [st], trace: new Map(), sub: { steps, index, label, top } };
+  const whole = st.afterRendered?.latex ?? "";
+  const latex = (path.length ? pathLatex(whole, path) : null) ?? whole;
+  S.sel = { cellId: cell.id, term: { kind: "step", index: top }, path, latex, text: st.afterRendered?.text ?? st.rule,
+    related: [st], trace: new Map(), sub: { steps, index, label, top, key: `sub:${label}` } };
   S.panelTab = "explain"; S.panelOpen = true;
-  document.querySelectorAll(".step.on").forEach((x) => x.classList.remove("on"));
+  markSelection();
   renderPanelHead(); renderPanel();
 }
 
@@ -955,7 +1010,7 @@ function renderSubPanel(body: HTMLElement, sel: Selection & { sub: NonNullable<S
   c1.append(h("h3", undefined, "Selection"));
   const selEl = h("div", "sel"); selEl.innerHTML = tex(stripPaths(sel.latex));
   c1.append(selEl);
-  c1.append(h("div", "kindname", `step ${label} · ${st.rule}`));
+  c1.append(h("div", "kindname", `step ${label} · ${st.rule}${sel.path.length ? ` · path ${sel.path.join(".")}` : ""}`));
   const p = h("p"); p.append(inlineMath(st.explanation)); c1.append(p);
   grid.append(c1);
   const c2 = h("div", "col");
@@ -1786,7 +1841,7 @@ if (saved) {
   try {
     const doc = JSON.parse(saved) as LemmaFile;
     S.docName = doc.name ?? S.docName;
-    for (const c of doc.cells) { const cell = addCell(c.src); cell.showWork = c.showWork ?? true; cell.label = c.label ?? null; if (c.outLatex) cell.outLatex = c.outLatex; if (c.echoLatex) cell.echoLatex = c.echoLatex; if (c.steps) cell.steps = c.steps; if (c.plot) cell.plot = c.plot; }
+    for (const c of doc.cells) { const cell = addCell(c.src); cell.showWork = c.showWork ?? false; cell.label = c.label ?? null; if (c.outLatex) cell.outLatex = c.outLatex; if (c.outText) cell.outText = c.outText; if (c.form) cell.form = c.form; if (c.echoLatex) cell.echoLatex = c.echoLatex; if (c.steps) cell.steps = c.steps; if (c.plot) cell.plot = c.plot; }
     nextLabel = Math.max(0, ...S.cells.map((c) => c.label ?? 0)) + 1;
     ST.scenes = Array.isArray(doc.scenes) ? doc.scenes : [];
   } catch { /* ignore a corrupt autosave */ }

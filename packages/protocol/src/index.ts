@@ -119,11 +119,16 @@ export interface EvaluateResult {
   visuals?: VisualSpec[];
   /** The parsed input, rendered by the engine (the frontend owns no printer). Sent with `showWork`. */
   inputRendered?: Rendered;
+  /** The evaluation's number in the session — Mathematica's `In[n]`/`Out[n]` — which `%`, `%%`
+   *  and `%n` in later cells refer to. Every evaluation takes one, error or not. Optional (rule 5). */
+  label?: number;
 }
 
 export interface EvaluateError {
   ok: false;
   error: { code: string; message: string; span?: { start: number; end: number } };
+  /** The evaluation's number (see `EvaluateResult.label`); a failed evaluation still takes one. */
+  label?: number;
 }
 
 export interface ExplainParams {
@@ -161,7 +166,7 @@ export interface PlotResult {
   value: WireExpr; rendered: Rendered;
   var: string; from: number; to: number;
   points: [number, number | null][];
-  derivation?: Derivation; inputRendered?: Rendered;
+  derivation?: Derivation; inputRendered?: Rendered; label?: number;
 }
 
 /** M-λ: a λ-cell's reply carries the de Bruijn view of the result and of every step

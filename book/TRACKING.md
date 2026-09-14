@@ -241,3 +241,13 @@ Order world (2026-09-14, Alex: partial orders, join/meet, plus monotone maps and
    Prop" — the same shape as `checked` in M5, but here the Prop is the textbook definition, which is what a reader
    should see next to a Hasse diagram.
 Six-month cut line: M5 — reached 2026-09-13.
+Notebook cleanup (2026-09-14, Alex's seven items): nested steps (1.1, 1.1.1) now select — the row lights up and any
+   piece of their math is clickable, resolved locally from the path annotations since the engine traces top-level
+   terms only; the kind badge and "n rules · ms" line are gone and show-work is off by default; a selected matrix
+   is highlighted as a block (the path span is inline-block when it holds a table); View › Input interpretation
+   hides the echo; every output has a form chip (matrix [ ] / ( ) / grid / table / input form, standard / input
+   form for scalars), a typesetting choice kept in the .lemma file; prompts align with the input line; and `%`,
+   `%%`, `%n` work as in Mathematica — the engine numbers every evaluation (`label` in the reply, error or not),
+   the notebook shows that number as In/Out, and the session substitutes the referenced output before anything
+   else, so the input interpretation shows what `%` stood for. Not done: the "Assuming a matrix | use as a list
+   of lists" interpretation bar from the Mathematica screenshot, which needs the engine to report alternatives.

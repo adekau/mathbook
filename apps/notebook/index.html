@@ -177,7 +177,7 @@ button { font-family: var(--font); }
 .cell { position:relative; display:grid; grid-template-columns:82px minmax(0,1fr) 30px; align-items:start; padding:8px 12px 10px 0; }
 .cell:hover { background:var(--p-cell-hover); }
 .cell.active { background:var(--p-cell-active); }
-.cell .prompt { text-align:right; padding:5px 12px 0 0; font-family:var(--code); font-size:11px; letter-spacing:0.01em; color:var(--p-mut3); user-select:none; }
+.cell .prompt { text-align:right; padding:5px 12px 0 0; line-height:23px; font-family:var(--code); font-size:11px; letter-spacing:0.01em; color:var(--p-mut3); user-select:none; }
 .cell.done .prompt { color:var(--p-acc); }
 .cell .mid { position:relative; min-width:0; }
 .cellin { width:100%; box-sizing:border-box; background:transparent; border:0; border-radius:6px; color:var(--p-ink); font-family:var(--code); font-size:14px; line-height:1.65; padding:5px 150px 5px 8px; }
@@ -233,11 +233,16 @@ svg .curve { fill:none; stroke:var(--acc); stroke-width:2; stroke-linejoin:round
 .cell:hover .brk { border-color:var(--p-br-hov); }
 .cell.active .brk { border-color:var(--p-acc-2); }
 .outrow { grid-column:1 / -1; display:grid; grid-template-columns:82px minmax(0,1fr) 30px; align-items:start; margin-top:10px; }
-.outrow .prompt { color:var(--p-acc); padding-top:4px; }
+.outrow .prompt { color:var(--p-acc); padding-top:4px; display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
+.formsel { font:9.5px var(--font); color:var(--p-mut); background:transparent; border:1px solid var(--p-br-idle); border-radius:3px; padding:1px 2px; max-width:66px; opacity:0; transition:opacity 110ms linear; cursor:pointer; }
+.cell:hover .formsel, .cell.active .formsel { opacity:1; }
+.outtext { font-family:var(--code); font-size:14px; color:var(--p-ink); white-space:pre-wrap; }
 .outrow .brk { border-color:var(--p-br-out); }
 .cell.active .outrow .brk { border-color:var(--p-acc-2); }
 .outval { font-size:22px; line-height:1.6; color:var(--p-ink-strong); padding-left:8px; min-width:0; overflow-x:auto; }
 .katex [data-path] { cursor:pointer; border-radius:3px; padding:0 1px; }
+/* a matrix (or any tall subterm) is taller than its line box; let the highlight follow the content */
+.katex [data-path]:has(.mtable) { display:inline-block; }
 .katex [data-path]:hover { background:var(--p-hov); }
 .katex [data-path].sel { background:var(--p-sel); box-shadow:0 0 0 1px var(--p-acc-2); }
 

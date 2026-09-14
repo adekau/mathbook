@@ -70,7 +70,7 @@ where
         let ds := (c :: cs).takeWhile isIdChar
         let text := String.ofList ds
         go ((c :: cs).drop ds.length) (i + ds.length) (acc.push ⟨.id, text, i, i + ds.length⟩)
-      else if "+-*/^()[],;=".contains c then go cs (i + 1) (acc.push ⟨.op, c.toString, i, i + 1⟩)
+      else if "+-*/^()[],;=%".contains c then go cs (i + 1) (acc.push ⟨.op, c.toString, i, i + 1⟩)
       else .error ⟨s!"unexpected character '{c}'", i, i + 1⟩
 
 structure PS where
@@ -88,7 +88,7 @@ private def fail (msg : String) (t : Tok) : PM α := throw ⟨msg, t.start, t.st
 private def expectOp (s : String) : PM Unit := do
   let t ← next
   if !isOp t s then fail s!"expected '{s}'" t
-private def startsAtom (t : Tok) : Bool := t.kind == .num || t.kind == .id || isOp t "(" || isOp t "["
+private def startsAtom (t : Tok) : Bool := t.kind == .num || t.kind == .id || isOp t "(" || isOp t "[" || isOp t "%"
 private def isFn (name : String) : PM Bool := do
   let s ← get; pure (builtinFunctions.contains name || s.known.contains name)
 
@@ -141,6 +141,19 @@ mutual
     | .op =>
       if t.s == "(" then
         let e ← expr; expectOp ")"; pure e
+      else if t.s == "%" then
+        -- Mathematica's output references: `%` is the last output, `%%` the one before, `%n` is Out[n].
+        -- The session resolves them (`resolveOuts`); they never reach the pipeline.
+        let n ← peek
+        if n.kind == .num && n.start == t.stop && n.s.all Char.isDigit then
+          discard next
+          pure (.fn "%out" [.num (Q.ofInt n.s.toNat!)])
+        else
+          let mut k := 1
+          while isOp (← peek) "%" do
+            discard next
+            k := k + 1
+          pure (.fn "%prev" [.num (Q.ofInt k)])
       else if t.s == "[" then
         let mut rows : List (List Expr) := []
         repeat

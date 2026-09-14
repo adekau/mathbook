@@ -262,6 +262,16 @@ def tests : TestM Unit := do
   (st, r) := ev st "if true a b"; check "λ: Church booleans" r "a"
   (st, r) := ev st "omega omega"; checkTrue "λ: Ω is refused, not looped" (r.startsWith "<error: λ: no normal form") r
   (st, r) := ev st "x^2 + y"; check "an ordinary cell is still ordinary" r "x^2 + y"
+  -- % output references, numbered like Mathematica's In/Out
+  (st, r) := ev st "x^2 + 1"; check "%: seed" r "x^2 + 1"
+  (st, r) := ev st "diff(%, x)"; check "% is the last output" r "2*x"
+  (st, r) := ev st "%% - %"; check "%% is the one before" r "x^2 - 2*x + 1"
+  (st, r) := ev st "2%"; check "% under implicit multiplication" r "2*(x^2 - 2*x + 1)"
+  (st, r) := ev st "%9999"; checkTrue "%n undefined is an error" (r.startsWith "<error: Out[9999] is not defined") r
+  let (_, r0) := sessionEval {} "%"; checkTrue "% in a fresh session is an error" (r0.startsWith "<error: % refers") r0
+  let (st3, _) := sessionEval {} "x + 0"
+  let (_, raw) := handleS st3 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"engine.evaluate\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"c\",\"source\":\"%1 + %\"}}"
+  checkTrue "the reply carries the evaluation number" ((raw.splitOn "\"label\":2").length == 2) raw
   -- user functions with parameters
   (st, r) := ev st "let sq(x) = x^2 + 1"; check "let with parameters" r "x^2 + 1"
   (st, r) := ev st "sq(3)"; check "call a session function" r "10"
@@ -325,7 +335,7 @@ def tests : TestM Unit := do
   check "rpc syntax error" (evalText "x +") "<error: unexpected end of input>"
   checkTrue "rpc inputRendered" (contains (rpc "engine.evaluate" "{\"source\":\"x + 0\",\"showWork\":true}") "\"inputRendered\":{\"text\":\"x + 0\"")
   checkTrue "rpc ruleStatus" (contains (rpc "engine.capabilities" "{}") "\"rule\":\"simp.collect-powers\",\"status\":\"conditional\"")
-  checkTrue "rpc error span" ((rpc "engine.evaluate" "{\"source\":\"3 4\"}").endsWith "\"span\":{\"start\":2,\"end\":3}}}}")
+  checkTrue "rpc error span" (contains (rpc "engine.evaluate" "{\"source\":\"3 4\"}") "\"span\":{\"start\":2,\"end\":3}},\"label\":")
   checkTrue "rpc value json" ((rpc "engine.evaluate" "{\"source\":\"2x\"}").startsWith "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"ok\":true,\"value\":{\"k\":\"mul\",\"args\":[{\"k\":\"num\",\"v\":{\"num\":\"2\",\"den\":\"1\"}},{\"k\":\"var\",\"name\":\"x\"}]}")
 
 /-- M2 golden test: `Tests/golden.tsv` holds the reference engine's rendered text for a corpus of

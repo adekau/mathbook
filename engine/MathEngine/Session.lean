@@ -28,6 +28,29 @@ structure Session where
   posets : List (String × Ord.Poset) := []
   pmaps : List (String × Ord.PMap) := []
   cells : List (String × Cell) := []
+  /-- Outputs by evaluation number, for `%`, `%%` and `%n`; `nextOut` is the number the next
+  evaluation gets (every evaluation takes one, error or not, like Mathematica's `In[n]`). -/
+  outs : List (Nat × Expr) := []
+  nextOut : Nat := 1
+
+/-- Number an evaluation and remember its output, if it had one. Returns the label. -/
+def Session.tick (s : Session) (out : Option Expr) : Session × Nat :=
+  let n := s.nextOut
+  ({ s with nextOut := n + 1, outs := match out with | some e => (n, e) :: s.outs | none => s.outs }, n)
+
+/-- Replace `%`, `%%`, `%n` (parsed as `%prev k` / `%out n`) by the outputs they name. -/
+partial def Session.resolveOuts (s : Session) : Expr → Except String Expr
+  | .fn "%prev" [.num k] =>
+    let k := k.val.num.toNat
+    if k ≥ s.nextOut then .error (if k == 1 then "% refers to the previous output, and there is none yet" else s!"{String.mk (List.replicate k '%')} refers to output {s.nextOut - k}, which does not exist")
+    else match s.outs.lookup (s.nextOut - k) with
+      | some e => .ok e
+      | none => .error s!"Out[{s.nextOut - k}] has no value (that evaluation failed)"
+  | .fn "%out" [.num n] =>
+    match s.outs.lookup n.val.num.toNat with
+    | some e => .ok e
+    | none => .error s!"Out[{n.toText}] is not defined"
+  | e => do pure (withChildren e (← (children e).mapM s.resolveOuts))
 
 /-- All sessions the engine knows about, keyed by `sessionId`. Threaded through `handle` by the host. -/
 abbrev Store := List (String × Session)
@@ -46,7 +69,10 @@ def evaluateCell (s : Session) (cellId source : String) :
     -- a function's parameters are bound by the definition, not by the session
     let params := match stmt with | .«let» _ ps _ => ps | _ => []
     let env := s.env.filter fun (x, _) => !params.contains x
-    let input := substitute env (substituteFns s.fns stmt.value)
+    match s.resolveOuts stmt.value with
+    | .error msg => (s, .error ("eval", msg, none))
+    | .ok value =>
+    let input := substitute env (substituteFns s.fns value)
     match (normalizeT pipelineRules pipelineOrdered input).run #[] with
     | (.error msg, _) => (s, .error ("eval", msg, none))
     | (.ok output, steps) =>
@@ -324,7 +350,10 @@ def plotCell (s : Session) (cellId source : String) :
   | .error e => (s, .error ("syntax", e.message, some (e.start, e.stop)))
   | .ok stmt =>
     let bad := (s, .error ("eval", "plot takes a function, a variable, and the range: plot(f, x, from, to)", none))
-    match stmt.value with
+    match s.resolveOuts stmt.value with
+    | .error msg => (s, .error ("eval", msg, none))
+    | .ok value =>
+    match value with
     | .fn "plot" (f :: .var x :: a :: b :: rest) =>
       let num (e : Expr) : Option Float := (evalNumeric [] (substitute s.env (substituteFns s.fns e))).toOption
       match num a, num b with

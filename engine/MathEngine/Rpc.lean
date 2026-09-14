@@ -147,29 +147,44 @@ def evaluateOrder (st : Store) (params : Json) (sessionId cellId src : String) :
     let r := match res.name with | some n => r.push ("bound", .arr #[.str n]) | none => r
     (st, .obj r)
 
+/-- Number the evaluation (`In[n]`), remember its output for `%`, and put the label in the reply. -/
+def withLabel (st : Store) (sessionId cellId : String) (j : Json) : Store × Json :=
+  let s := st.get sessionId
+  let ok := match j.get? "ok" with | some (.bool true) => true | _ => false
+  let out := if ok then (s.cells.lookup cellId).map (·.output) else none
+  let (s, n) := s.tick out
+  let j := match j with
+    | .obj fs => Json.obj (fs.push ("label", .num (toString n)))
+    | j => j
+  (st.set sessionId s, j)
+
 def evaluate (st : Store) (params : Json) : Store × Json :=
   match params.getStr? "source" with
   | none => (st, errorJson "params" "missing source")
   | some src =>
     let sessionId := (params.getStr? "sessionId").getD ""
     let cellId := (params.getStr? "cellId").getD ""
+    let (st, j) := evaluateCore st params sessionId cellId src
+    withLabel st sessionId cellId j
+where
+  evaluateCore (st : Store) (params : Json) (sessionId cellId src : String) : Store × Json :=
     if Ord.isOrderSource src then evaluateOrder st params sessionId cellId src else
-    if isLambdaCell (st.get sessionId) src then evaluateLambda st params sessionId cellId src else
-    let (s, r) := evaluateCell (st.get sessionId) cellId src
-    let st := st.set sessionId s
-    match r with
-    | .error (code, msg, span) => (st, errorJson code msg span)
-    | .ok (stmt, out, d) =>
-      let paths := params.getBool "paths"
-      let res := #[("ok", .bool true), ("value", out.toJson), ("rendered", Rendered.toJson out paths)]
-      let res := if params.getBool "showWork" then
-          (res.push ("derivation", d.toJson paths)).push ("inputRendered", Rendered.toJson d.input paths)
-        else res
-      let res := match stmt with
-        | .«let» name [] _ => res.push ("bound", .arr #[.str name])
-        | .«let» name ps _ => (res.push ("bound", .arr #[.str name])).push ("params", .arr (ps.map .str).toArray)
-        | _ => res
-      (st, .obj res)
+      if isLambdaCell (st.get sessionId) src then evaluateLambda st params sessionId cellId src else
+      let (s, r) := evaluateCell (st.get sessionId) cellId src
+      let st := st.set sessionId s
+      match r with
+      | .error (code, msg, span) => (st, errorJson code msg span)
+      | .ok (stmt, out, d) =>
+        let paths := params.getBool "paths"
+        let res := #[("ok", .bool true), ("value", out.toJson), ("rendered", Rendered.toJson out paths)]
+        let res := if params.getBool "showWork" then
+            (res.push ("derivation", d.toJson paths)).push ("inputRendered", Rendered.toJson d.input paths)
+          else res
+        let res := match stmt with
+          | .«let» name [] _ => res.push ("bound", .arr #[.str name])
+          | .«let» name ps _ => (res.push ("bound", .arr #[.str name])).push ("params", .arr (ps.map .str).toArray)
+          | _ => res
+        (st, .obj res)
 
 private def floatJson (x : Float) : Json := .num (toString x)
 
@@ -181,7 +196,7 @@ def plot (st : Store) (params : Json) : Store × Json :=
     let cellId := (params.getStr? "cellId").getD ""
     let (s, r) := plotCell (st.get sessionId) cellId src
     let st := st.set sessionId s
-    match r with
+    let (st, j) := match r with
     | .error (code, msg, span) => (st, errorJson code msg span)
     | .ok (_, out, d, pl) =>
       let paths := params.getBool "paths"
@@ -192,6 +207,7 @@ def plot (st : Store) (params : Json) : Store × Json :=
           (res.push ("derivation", d.toJson paths)).push ("inputRendered", Rendered.toJson d.input paths)
         else res
       (st, .obj res)
+    withLabel st sessionId cellId j
 
 def explain (st : Store) (params : Json) : Except String Json := do
   let sessionId := (params.getStr? "sessionId").getD ""

@@ -66,6 +66,16 @@ extension, borrowed because the reader of this book already knows it. And a cell
 ordinary term, a $\lambda$-term, an order-world command --- is decided by the engine and reported
 in the reply; the notebook only shows the badge.
 
+\section{Output references and forms}
+
+Two conveniences borrowed from Mathematica. \texttt{\%} is the previous output, \texttt{\%\%} the
+one before, \texttt{\%n} the output of evaluation $n$; the engine numbers every evaluation and
+reports the number, the notebook shows it as \texttt{In[n]} and \texttt{Out[n]}, and the session
+substitutes the referenced value before parsing goes any further, so the input interpretation shows
+what \texttt{\%} stood for. And every output carries a small form chip: a matrix can be shown with
+square or round brackets, as a bare grid, as a table, or in the engine's input syntax. The engine
+prints once; the form is a typesetting choice the notebook keeps in the file.
+
 \section{Exercises}
 
 \begin{exercisebox}[A fourth host]
