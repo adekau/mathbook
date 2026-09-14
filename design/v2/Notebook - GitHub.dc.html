@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;0,7..72,600;1,7..72,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root, html[data-theme="dark"] {
+    --bg:#151514; --panel:#1a1a19; --panel-2:#232322; --border:#31312e;
+    --ink:#e7e4dd; --ink-2:#cfccc4; --ink-mut:#9a978f; --ink-faint:#6f6c66;
+    --acc:#e2872f; --acc-hi:#f0a45c; --acc-on:#ffe4c6; --on-acc:#2b1a08;
+    --acc-soft-bg:rgba(226,135,47,0.16); --acc-soft-bg2:rgba(226,135,47,0.12); --acc-soft-bg3:rgba(226,135,47,0.2); --acc-soft-br:rgba(226,135,47,0.45); --sel-bg:rgba(226,135,47,0.28);
+    --pri:#e08a34; --pri-2:#b5641c; --pri-edge:#8a4a13; --pri-ink:#2b1a08;
+    --logo-a:#f2a95c; --logo-b:#b5601a;
+    --btn-a:#373734; --btn-b:#2b2b28; --btn-c:#3e3e3a; --btn-edge:#171716; --btn-edge2:#1b1b19; --btn-ink:#dcd8d0; --btn-ink2:#c4c0b8;
+    --danger:#f0897c; --danger-hi:#ffb0a4; --danger-2:#e0574a; --danger-soft:rgba(224,87,74,0.16);
+    --ok:#93b04f; --ok-2:#6d8a35; --ok-soft:rgba(147,176,79,0.16); --warn:#b07d16;
+    --stage-bg:#131312; --scrim:rgba(18,18,17,0.88);
+    --hov:rgba(255,255,255,0.06); --chip-bg:rgba(255,255,255,0.1); --pill-bg:rgba(255,255,255,0.18);
+    --hl-a:rgba(255,255,255,0.08); --hl-b:rgba(255,255,255,0.05); --hl-c:rgba(255,255,255,0.26);
+    --sh-a:rgba(0,0,0,0.5); --sh-b:rgba(0,0,0,0.45); --sh-c:rgba(0,0,0,0.35); --sh-d:rgba(0,0,0,0.3);
+    --paper-bg:#1f1f1d; --paper-tint:rgba(255,232,192,0.06); --paper-noise:0.34; --paper-blend:overlay; --paper-fiber:rgba(255,236,205,0.016);
+    --p-ink:#e5dbc5; --p-ink-strong:#f3ecda; --p-ink-2:#d9cfb8; --p-ink-3:#c8bda6;
+    --p-mut:#a49c89; --p-mut2:#9d9583; --p-mut3:#9c947f; --p-ph:#9e9682;
+    --p-btn-a:#383834; --p-btn-b:#2c2c29; --p-btn-ink:#ded4c0; --p-btn-br:#4a4a45;
+    --p-br-idle:#4a4a45; --p-br-hov:#63635d; --p-br-act:#d98b33; --p-br-out:#444440; --p-input-br:#42423d;
+    --p-acc:#f0a45c; --p-acc-2:#e2872f; --p-acc-ink:#ffdcb4;
+    --p-acc-bg:rgba(226,135,47,0.15); --p-acc-bg2:rgba(226,135,47,0.2); --p-acc-br:rgba(226,135,47,0.42); --p-acc-chip:rgba(240,164,92,0.16); --p-sel:rgba(226,135,47,0.28); --p-hov:rgba(226,135,47,0.12);
+    --p-row-bg:rgba(233,226,208,0.035); --p-no-bg:rgba(233,226,208,0.09);
+    --p-cell-active:rgba(233,226,208,0.05); --p-cell-hover:rgba(233,226,208,0.024); --p-input-bg:rgba(233,226,208,0.055);
+    --p-err:#f09a8e; --p-err-line:#c05a48; --p-err-bg:rgba(192,90,72,0.14);
+    --p-hl:rgba(255,255,255,0.05); --p-hl2:rgba(255,255,255,0.04); --p-sh:rgba(0,0,0,0.4); --p-sh2:rgba(0,0,0,0.5); --p-scroll:#52524d;
+    --paper-grain-blend:normal;
+    --paper-mottle-blend:normal;
+    --paper-fleck-blend:normal;
+    --paper-grain:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22160%22%20height%3D%22160%22%3E%3Cfilter%20id%3D%22s%22%20color-interpolation-filters%3D%22sRGB%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.9%22%20numOctaves%3D%222%22%20seed%3D%224%22%20stitchTiles%3D%22stitch%22%2F%3E%3CfeColorMatrix%20type%3D%22matrix%22%20values%3D%220%200%200%200%201%200%200%200%200%200.96%200%200%200%200%200.88%200.2126%200.7152%200.0722%200%200%22%2F%3E%3CfeComponentTransfer%3E%3CfeFuncA%20type%3D%22table%22%20tableValues%3D%220%200%200.35%201%22%2F%3E%3C%2FfeComponentTransfer%3E%3C%2Ffilter%3E%3Crect%20width%3D%22160%22%20height%3D%22160%22%20filter%3D%22url(%23s)%22%20opacity%3D%220.3%22%2F%3E%3C%2Fsvg%3E");
+    --paper-mottle:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22300%22%3E%3Cfilter%20id%3D%22s%22%20color-interpolation-filters%3D%22sRGB%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.32%22%20numOctaves%3D%222%22%20seed%3D%229%22%20stitchTiles%3D%22stitch%22%2F%3E%3CfeColorMatrix%20type%3D%22matrix%22%20values%3D%220%200%200%200%200.03%200%200%200%200%200.03%200%200%200%200%200.02%200.2126%200.7152%200.0722%200%200%22%2F%3E%3CfeComponentTransfer%3E%3CfeFuncA%20type%3D%22table%22%20tableValues%3D%220%200%200.4%201%22%2F%3E%3C%2FfeComponentTransfer%3E%3C%2Ffilter%3E%3Crect%20width%3D%22300%22%20height%3D%22300%22%20filter%3D%22url(%23s)%22%20opacity%3D%220.16%22%2F%3E%3C%2Fsvg%3E");
+    --paper-fleck:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0));
+  }
+  html[data-theme="light"] {
+    --bg:#efe7d9; --panel:#e8ddcb; --panel-2:#ddceb7; --border:#cdbda4;
+    --ink:#2f261d; --ink-2:#463a2d; --ink-mut:#7a6855; --ink-faint:#998772;
+    --acc:#a8541a; --acc-hi:#8f4512; --acc-on:#3a1c05; --on-acc:#fff6ea;
+    --acc-soft-bg:rgba(168,84,26,0.12); --acc-soft-bg2:rgba(168,84,26,0.09); --acc-soft-bg3:rgba(168,84,26,0.16); --acc-soft-br:rgba(168,84,26,0.4); --sel-bg:rgba(226,135,47,0.32);
+    --pri:#e08a34; --pri-2:#bd6a1c; --pri-edge:#93500f; --pri-ink:#2b1a08;
+    --logo-a:#f2a95c; --logo-b:#a8541a;
+    --btn-a:#fdf7ec; --btn-b:#e6d9c3; --btn-c:#f6eddc; --btn-edge:#bfae94; --btn-edge2:#c4b399; --btn-ink:#4a3c2e; --btn-ink2:#5a4a39;
+    --danger:#a33322; --danger-hi:#8d2a1a; --danger-2:#c0442f; --danger-soft:rgba(163,51,34,0.12);
+    --ok:#54691c; --ok-2:#455614; --ok-soft:rgba(92,117,32,0.14); --warn:#8a6206;
+    --stage-bg:#e4d9c5; --scrim:rgba(240,232,219,0.92);
+    --hov:rgba(90,70,45,0.07); --chip-bg:rgba(90,70,45,0.1); --pill-bg:rgba(90,70,45,0.16);
+    --hl-a:rgba(255,255,255,0.7); --hl-b:rgba(255,255,255,0.6); --hl-c:rgba(255,255,255,0.8);
+    --sh-a:rgba(90,74,48,0.22); --sh-b:rgba(90,74,48,0.18); --sh-c:rgba(90,74,48,0.14); --sh-d:rgba(90,74,48,0.12);
+    --paper-bg:#fdfaf2; --paper-tint:rgba(255,255,255,0.6); --paper-noise:0.5; --paper-blend:soft-light; --paper-fiber:rgba(120,104,76,0.02);
+    --p-ink:#332c23; --p-ink-strong:#2a241c; --p-ink-2:#3a332a; --p-ink-3:#4a4238;
+    --p-mut:#6d6154; --p-mut2:#7d7062; --p-mut3:#796c5d; --p-ph:#786a58;
+    --p-btn-a:#ffffff; --p-btn-b:#f0e8d8; --p-btn-ink:#4a4034; --p-btn-br:#d5c9b1;
+    --p-br-idle:#ddd2bd; --p-br-hov:#b8a88e; --p-br-act:#c06a1c; --p-br-out:#e0d6c2; --p-input-br:#e8dfcd;
+    --p-acc:#a8541a; --p-acc-2:#8f4512; --p-acc-ink:#3a1c05;
+    --p-acc-bg:rgba(200,120,40,0.14); --p-acc-bg2:rgba(200,120,40,0.2); --p-acc-br:rgba(168,84,26,0.42); --p-acc-chip:rgba(168,84,26,0.14); --p-sel:rgba(226,135,47,0.3); --p-hov:rgba(200,120,40,0.12);
+    --p-row-bg:rgba(84,72,48,0.045); --p-no-bg:rgba(84,72,48,0.1);
+    --p-cell-active:rgba(120,96,48,0.05); --p-cell-hover:rgba(120,96,48,0.025); --p-input-bg:rgba(255,255,255,0.85);
+    --p-err:#8c3628; --p-err-line:#b0533f; --p-err-bg:rgba(176,74,58,0.09);
+    --p-hl:rgba(255,255,255,0.9); --p-hl2:rgba(255,255,255,0.7); --p-sh:rgba(120,96,48,0.14); --p-sh2:rgba(120,96,48,0.24); --p-scroll:#cfc3ac;
+    --paper-grain-blend:normal;
+    --paper-mottle-blend:normal;
+    --paper-fleck-blend:normal;
+    --paper-grain:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22160%22%20height%3D%22160%22%3E%3Cfilter%20id%3D%22s%22%20color-interpolation-filters%3D%22sRGB%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.9%22%20numOctaves%3D%222%22%20seed%3D%224%22%20stitchTiles%3D%22stitch%22%2F%3E%3CfeColorMatrix%20type%3D%22matrix%22%20values%3D%220%200%200%200%200.36%200%200%200%200%200.28%200%200%200%200%200.14%200.2126%200.7152%200.0722%200%200%22%2F%3E%3CfeComponentTransfer%3E%3CfeFuncA%20type%3D%22table%22%20tableValues%3D%220%200%200.3%201%22%2F%3E%3C%2FfeComponentTransfer%3E%3C%2Ffilter%3E%3Crect%20width%3D%22160%22%20height%3D%22160%22%20filter%3D%22url(%23s)%22%20opacity%3D%220.3%22%2F%3E%3C%2Fsvg%3E");
+    --paper-mottle:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22300%22%3E%3Cfilter%20id%3D%22s%22%20color-interpolation-filters%3D%22sRGB%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.32%22%20numOctaves%3D%222%22%20seed%3D%229%22%20stitchTiles%3D%22stitch%22%2F%3E%3CfeColorMatrix%20type%3D%22matrix%22%20values%3D%220%200%200%200%200.42%200%200%200%200%200.34%200%200%200%200%200.18%200.2126%200.7152%200.0722%200%200%22%2F%3E%3CfeComponentTransfer%3E%3CfeFuncA%20type%3D%22table%22%20tableValues%3D%220%200%200.35%201%22%2F%3E%3C%2FfeComponentTransfer%3E%3C%2Ffilter%3E%3Crect%20width%3D%22300%22%20height%3D%22300%22%20filter%3D%22url(%23s)%22%20opacity%3D%220.14%22%2F%3E%3C%2Fsvg%3E");
+    --paper-fleck:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0));
+  }
+  html, body { height: 100%; overflow: hidden; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; font-size: 13px; }
+  a { color: var(--acc-hi); text-decoration: none; }
+  a:hover { color: var(--acc); text-decoration: underline; }
+  ::selection { background: var(--sel-bg); }
+  :focus { outline: none; }
+  input.cellin::placeholder { color: var(--p-ph); }
+  .paper {
+    background-color: var(--paper-bg);
+    background-image: var(--paper-fleck), var(--paper-mottle), var(--paper-grain);
+    background-attachment: local, local, local;
+    background-size: auto, 300px 300px, 160px 160px;
+    background-blend-mode: var(--paper-fleck-blend), var(--paper-mottle-blend), var(--paper-grain-blend);
+  }
+  .paper::-webkit-scrollbar-thumb { background: var(--p-scroll); }
+  .paper ::selection { background: var(--p-sel); }
+  *::-webkit-scrollbar { width: 11px; }
+  *::-webkit-scrollbar-thumb { background: var(--ink-faint); border-radius: 6px; border: 3px solid transparent; background-clip: content-box; }
+  *::-webkit-scrollbar-track { background: transparent; }
+</style>
+</helmet>
+<div style="display:flex; flex-direction:column; height:100vh; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px; overflow:hidden">
+
+  <div style="display:flex; align-items:center; gap:14px; height:38px; flex:0 0 38px; padding:0 12px; background:var(--panel); border-bottom:1px solid var(--border); box-shadow:none">
+    <div style="display:flex; align-items:center; gap:8px">
+      <span style="display:inline-block; width:16px; height:16px; border-radius:5px; background:linear-gradient(160deg,var(--logo-a),var(--logo-b)); box-shadow:0 1px 0 var(--hl-c) inset, 0 2px 5px var(--sh-a)"></span>
+      <span style="font-weight:700; font-size:13px">Lemma</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:2px">
+      <sc-for list="{{ menus }}" as="m" hint-placeholder-count="5">
+        <span style-hover="background:var(--hov); box-shadow:none" style="font-size:12px; color:var(--ink-mut); padding:5px 10px; border-radius:6px; cursor:default">{{ m }}</span>
+      </sc-for>
+    </div>
+    <div style="flex:1"></div>
+    <span onClick="{{ toggleTheme }}" title="Toggle light and dark" style-hover="filter:brightness(1.15)" style-active="transform:translateY(1px)" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:var(--btn-ink); background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:1px solid var(--btn-edge); border-radius:999px; padding:4px 11px; cursor:pointer; box-shadow:0 1px 0 var(--hl-a) inset">{{ themeGlyph }}</span>
+    <div style="display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--ink-2); padding:4px 11px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border); box-shadow:none">
+      <span style="width:7px; height:7px; border-radius:50%; background:{{ kernelDot }}"></span>
+      <span>lemma-engine</span>
+      <span style="color:var(--ink-mut)">·</span>
+      <span style="color:{{ kernelDot }}">{{ kernelState }}</span>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:flex-end; gap:5px; height:38px; flex:0 0 38px; padding:0 10px; background:var(--bg); border-bottom:1px solid var(--border)">
+    <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="2">
+      <div onClick="{{ tb.onClick }}" style-hover="filter:brightness(1.14)" style="display:flex; align-items:center; gap:9px; padding:6px 14px 7px; cursor:pointer; font-size:12px; font-weight:{{ tb.weight }}; color:{{ tb.color }}; background:{{ tb.bg }}; border:1px solid {{ tb.border }}; border-bottom:0; border-radius:7px 7px 0 0; box-shadow:{{ tb.shadow }}">
+        <span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:11.5px">{{ tb.label }}</span>
+        <span style="color:var(--ink-mut); font-size:13px">×</span>
+      </div>
+    </sc-for>
+    <div style-hover="color:var(--ink)" style="padding:6px 10px; color:var(--ink-mut); font-size:15px; cursor:pointer">+</div>
+  </div>
+
+  <div style="flex:1; display:flex; align-items:stretch; min-height:0; background:var(--bg)">
+
+    <div style="width:44px; flex:0 0 44px; display:flex; flex-direction:column; align-items:center; padding:8px 0; gap:6px; background:var(--bg); border-right:1px solid var(--border)">
+      <sc-for list="{{ rails }}" as="rl" hint-placeholder-count="2">
+        <div onClick="{{ rl.onClick }}" title="{{ rl.label }}" style="width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; color:{{ rl.color }}; background:{{ rl.bg }}; box-shadow:{{ rl.shadow }}">{{ rl.glyph }}</div>
+      </sc-for>
+    </div>
+
+    <div style="width:236px; flex:0 0 236px; display:flex; flex-direction:column; min-height:0; background:var(--bg); border-right:1px solid var(--border); overflow:hidden">
+      <div style="display:flex; align-items:center; height:34px; flex:0 0 34px; padding:0 14px; font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-mut); background:var(--panel); border-bottom:1px solid var(--border); box-shadow:none">{{ sidebarTitle }}</div>
+      <div style="flex:1; overflow-y:auto; padding:8px">
+        <sc-if value="{{ showOutline }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:5px">
+            <sc-for list="{{ outline }}" as="ol" hint-placeholder-count="4">
+              <div onClick="{{ ol.onClick }}" style-hover="filter:brightness(1.15)" style="display:grid; grid-template-columns:40px minmax(0,1fr); gap:9px; align-items:center; padding:7px 10px; cursor:pointer; border-radius:8px; background:{{ ol.bg }}; box-shadow:{{ ol.shadow }}">
+                <span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:10.5px; color:{{ ol.numColor }}">{{ ol.num }}</span>
+                <span style="min-width:0">
+                  <span style="display:block; font-size:11.5px; font-weight:600; color:{{ ol.kindColor }}">{{ ol.kind }}</span>
+                  <span style="display:block; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:10.5px; color:var(--ink-mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ ol.src }}</span>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showPalette }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:5px">
+            <sc-for list="{{ palette }}" as="pl" hint-placeholder-count="6">
+              <div onClick="{{ pl.onClick }}" style-hover="background:var(--panel-2); box-shadow:none" style="padding:7px 10px; cursor:pointer; border-radius:8px">
+                <span style="display:block; font-size:11.5px; font-weight:600; color:var(--acc-hi)">{{ pl.name }}</span>
+                <span style="display:block; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:10.5px; color:var(--ink-mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ pl.sig }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div style="flex:1; display:flex; flex-direction:column; min-width:0; min-height:0">
+
+      <sc-if value="{{ showToolbar }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; align-items:center; gap:8px; height:34px; flex:0 0 34px; padding:0 12px; border-bottom:1px solid var(--border); background:var(--panel)">
+          <div style="display:flex; align-items:stretch; height:22px; border:1px solid var(--btn-edge); border-radius:4px; overflow:hidden; box-shadow:0 1px 0 var(--hl-b) inset, 0 1px 3px var(--sh-b)">
+            <button onClick="{{ runActive }}" title="Run the active cell" style-hover="filter:brightness(1.14)" style-active="transform:translateY(1px); filter:brightness(0.9)" style="display:flex; align-items:center; gap:5px; background:linear-gradient(180deg,var(--pri),var(--pri-2)); border:0; border-right:1px solid var(--pri-edge); color:var(--pri-ink); font-family:-apple-system,sans-serif; font-size:11px; font-weight:600; padding:0 9px; cursor:pointer">▶ Run</button>
+            <button onClick="{{ runAll }}" title="Run every cell" style-hover="filter:brightness(1.16)" style-active="transform:translateY(1px); filter:brightness(0.9)" style="background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:0; border-right:1px solid var(--btn-edge); color:var(--ink-2); font-size:11px; font-weight:500; padding:0 9px; cursor:pointer">▶▶ All</button>
+            <button onClick="{{ clearOutputs }}" title="Clear all outputs" style-hover="filter:brightness(1.16)" style-active="transform:translateY(1px); filter:brightness(0.9)" style="background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:0; border-right:1px solid var(--btn-edge); color:var(--ink-mut); font-size:11px; padding:0 9px; cursor:pointer">Clear</button>
+            <button onClick="{{ addCell }}" title="Add a cell" style-hover="filter:brightness(1.16)" style-active="transform:translateY(1px); filter:brightness(0.9)" style="background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:0; color:var(--btn-ink2); font-size:11px; padding:0 9px; cursor:pointer">+ Cell</button>
+          </div>
+          <div style="width:1px; height:18px; background:var(--border)"></div>
+          <span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:10px; color:var(--ink-mut)">{{ statusCells }}</span>
+          <div style="flex:1"></div>
+          <span style="font-size:10.5px; color:var(--ink-mut)">{{ toolbarHint }}</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showNotebook }}" hint-placeholder-val="{{ true }}">
+        <div ref="{{ scrollRef }}" onClick="{{ clearSel }}" class="paper" style="flex:1; overflow-y:auto; min-height:0; padding:22px 0 70px; color:var(--p-ink); font-family:'Literata',Georgia,'Iowan Old Style',serif; box-shadow:inset 0 1px 0 var(--p-hl2), inset 0 -16px 30px -30px var(--p-sh2)">
+          <div style="display:flex; flex-direction:column">
+            <sc-for list="{{ cells }}" as="cell" hint-placeholder-count="3">
+              <div data-cell="{{ cell.i }}" onClick="{{ cell.onActivate }}" onMouseEnter="{{ cell.onEnter }}" onMouseLeave="{{ cell.onLeave }}" style="position:relative; display:grid; grid-template-columns:82px minmax(0,1fr) 30px; align-items:start; padding:8px 12px 10px 0; background:{{ cell.bg }}">
+
+                <div style="text-align:right; padding:5px 12px 0 0; font-family:'JetBrains Mono',ui-monospace,Menlo,monospace; font-size:11px; letter-spacing:0.01em; color:{{ cell.promptColor }}; user-select:none">In[{{ cell.label }}]:=</div>
+
+                <div style="position:relative; min-width:0">
+                  <input class="cellin" type="text" ref="{{ cell.inputRef }}" value="{{ cell.src }}" placeholder="{{ cell.placeholder }}" onChange="{{ cell.onChange }}" onKeyDown="{{ cell.onKey }}" onFocus="{{ cell.onFocus }}" onBlur="{{ cell.onBlur }}" style="width:100%; box-sizing:border-box; background:{{ cell.inputBg }}; border:0; border-radius:6px; color:var(--p-ink); font-family:'JetBrains Mono',ui-monospace,Menlo,monospace; font-size:14px; line-height:1.65; padding:5px 150px 5px 8px; box-shadow:{{ cell.inputShadow }}" />
+
+
+                  <sc-if value="{{ cell.inputEl }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:18px; line-height:1.7; color:var(--p-ink-3); padding:9px 8px 0">{{ cell.inputEl }}</div>
+                  </sc-if>
+
+                  <div style="display:flex; align-items:center; gap:8px; height:20px; margin-top:8px; padding-left:8px">
+                    <sc-if value="{{ cell.kindLabel }}" hint-placeholder-val="{{ true }}">
+                      <span onMouseEnter="{{ cell.onHoverKind }}" onMouseLeave="{{ leaveHover }}" onClick="{{ cell.onOpenDoc }}" style-hover="filter:brightness(1.18)" style="display:inline-flex; align-items:center; gap:5px; font-size:9.5px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--p-acc-ink); background:var(--p-acc-bg); border:1px solid var(--p-acc-br); border-radius:3px; padding:2px 7px; cursor:help; box-shadow:none">{{ cell.kindLabel }}<span style="display:inline-flex; align-items:center; justify-content:center; width:12px; height:12px; border-radius:50%; background:var(--p-acc-chip); font-size:8px; font-style:italic">i</span></span>
+                    </sc-if>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,Menlo,monospace; font-size:10px; color:var(--p-mut2)">{{ cell.timing }}</span>
+                  </div>
+
+                  <sc-if value="{{ cell.err }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin:10px 0 0 8px; font-size:12.5px; line-height:1.65; color:var(--p-err); background:var(--p-err-bg); border-left:2px solid var(--p-err-line); border-radius:0 6px 6px 0; padding:8px 12px">{{ cell.err }}</div>
+                  </sc-if>
+
+                  <sc-if value="{{ cell.work }}" hint-placeholder-val="{{ true }}">
+                    <div style="margin:12px 0 0 8px; display:flex; flex-direction:column; gap:5px">
+                      <sc-for list="{{ cell.steps }}" as="st" hint-placeholder-count="3">
+                        <div onClick="{{ st.onSelectRow }}" style-hover="filter:brightness(1.14)" style="display:grid; grid-template-columns:24px minmax(0,180px) minmax(0,1fr); gap:12px; align-items:center; padding:7px 11px; border-radius:7px; cursor:pointer; background:{{ st.bg }}; box-shadow:{{ st.shadow }}">
+                          <span style="display:inline-flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%; font-family:'JetBrains Mono',ui-monospace,Menlo,monospace; font-size:9.5px; color:{{ st.noColor }}; background:{{ st.noBg }}; box-shadow:none">{{ st.no }}</span>
+                          <span style="font-size:11.5px; font-weight:600; color:{{ st.ruleColor }}">{{ st.rule }}</span>
+                          <span style="font-size:17px; line-height:1.65; min-width:0; color:var(--p-ink-2)">{{ st.el }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+
+                <div style="position:absolute; top:6px; right:44px; display:flex; align-items:center; gap:5px; opacity:{{ cell.metaOpacity }}; pointer-events:{{ cell.metaPointer }}; transition:opacity 110ms linear">
+                  <span onClick="{{ cell.onRun }}" title="Run this cell" style-hover="filter:brightness(1.22)" style-active="transform:translateY(1px); filter:brightness(0.92); box-shadow:0 2px 5px var(--sh-a) inset" style="display:inline-flex; align-items:center; gap:4px; height:20px; font-size:9.5px; font-weight:600; color:var(--p-btn-ink); background:linear-gradient(180deg,var(--p-btn-a),var(--p-btn-b)); border:1px solid var(--p-btn-br); border-radius:3px; padding:0 7px; cursor:pointer; box-shadow:0 1px 0 var(--p-hl) inset, 0 1px 2px var(--p-sh)">▶ Run</span>
+                  <sc-if value="{{ cell.hasOut }}" hint-placeholder-val="{{ true }}">
+                    <span onClick="{{ cell.toggleWork }}" style-hover="filter:brightness(1.18)" style-active="transform:translateY(1px); filter:brightness(0.92); box-shadow:0 2px 5px var(--sh-a) inset" style="display:inline-flex; align-items:center; height:20px; font-size:9.5px; font-weight:600; letter-spacing:0.03em; text-transform:uppercase; color:var(--p-btn-ink); background:linear-gradient(180deg,var(--p-btn-a),var(--p-btn-b)); border:1px solid var(--p-btn-br); border-radius:3px; padding:0 7px; cursor:pointer; box-shadow:0 1px 0 var(--p-hl) inset, 0 1px 2px var(--p-sh)">{{ cell.workLabel }}</span>
+                  </sc-if>
+                  <sc-if value="{{ cell.hasOut }}" hint-placeholder-val="{{ true }}">
+                    <span onClick="{{ cell.onSendScene }}" title="Send this derivation to Manim Studio" style-hover="filter:brightness(1.18)" style-active="transform:translateY(1px); filter:brightness(0.92); box-shadow:0 2px 5px var(--sh-a) inset" style="display:inline-flex; align-items:center; height:20px; font-size:9.5px; font-weight:600; color:var(--p-acc-ink); background:linear-gradient(180deg,var(--p-btn-a),var(--p-btn-b)); border:1px solid var(--p-btn-br); border-radius:3px; padding:0 7px; cursor:pointer; box-shadow:0 1px 0 var(--p-hl) inset, 0 1px 2px var(--p-sh)">{{ cell.sceneLabel }}</span>
+                  </sc-if>
+                </div>
+
+                <div style="justify-self:end; align-self:stretch; width:9px; min-height:26px; border-top:1.5px solid {{ cell.bracket }}; border-right:1.5px solid {{ cell.bracket }}; border-bottom:1.5px solid {{ cell.bracket }}; border-radius:0 2px 2px 0"></div>
+
+                <sc-if value="{{ cell.hasOut }}" hint-placeholder-val="{{ true }}">
+                  <div style="grid-column:1 / -1; display:grid; grid-template-columns:82px minmax(0,1fr) 30px; align-items:start; margin-top:10px">
+                    <div style="text-align:right; padding:4px 12px 0 0; font-family:'JetBrains Mono',ui-monospace,Menlo,monospace; font-size:11px; letter-spacing:0.01em; color:var(--p-acc); user-select:none">Out[{{ cell.label }}]=</div>
+                    <div style="font-size:22px; line-height:1.6; color:var(--p-ink-strong); padding-left:8px; min-width:0">{{ cell.resultEl }}</div>
+                    <div style="justify-self:end; align-self:stretch; width:9px; min-height:22px; border-top:1.5px solid {{ cell.outBracket }}; border-right:1.5px solid {{ cell.outBracket }}; border-bottom:1.5px solid {{ cell.outBracket }}; border-radius:0 2px 2px 0"></div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showReference }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; overflow-y:auto; min-height:0; padding:14px 14px 40px">
+          <div style="max-width:900px; display:flex; flex-direction:column; gap:10px">
+            <sc-for list="{{ reference }}" as="rf" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:minmax(0,200px) minmax(0,1fr); gap:20px; padding:16px; border-radius:11px; background:var(--panel); border:1px solid {{ rf.border }}; box-shadow:none">
+                <div>
+                  <div style="font-size:13.5px; font-weight:700; color:{{ rf.nameColor }}">{{ rf.name }}</div>
+                  <div style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:11px; color:var(--ink-mut); margin-top:4px">{{ rf.sig }}</div>
+                </div>
+                <div>
+                  <div style="font-size:12.5px; line-height:1.6; color:var(--ink-2); max-width:70ch">{{ rf.blurb }}</div>
+                  <div style="display:flex; gap:7px; flex-wrap:wrap; margin-top:11px">
+                    <sc-for list="{{ rf.examples }}" as="ex" hint-placeholder-count="2">
+                      <button onClick="{{ ex.onClick }}" style-hover="filter:brightness(1.16)" style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:11px; color:var(--acc-hi); background:var(--acc-soft-bg); border:1px solid var(--acc-soft-br); border-radius:999px; padding:4px 11px; cursor:pointer; box-shadow:none">{{ ex.label }}</button>
+                    </sc-for>
+                  </div>
+                  <a href="{{ rf.ref }}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:10px; font-size:11.5px">Reference entry ↗</a>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showStudio }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; min-height:0; display:flex; flex-direction:column">
+         <div style="flex:1; min-height:0; display:flex; align-items:stretch">
+
+          <div style="flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; border-right:1px solid var(--border)">
+            <div style="display:flex; align-items:center; gap:8px; flex:0 0 auto; padding:7px 12px; border-bottom:1px solid var(--border); background:var(--panel)">
+              <sc-for list="{{ sceneTabs }}" as="sc" hint-placeholder-count="2">
+                <span onClick="{{ sc.onClick }}" style-hover="filter:brightness(1.18)" style-active="transform:translateY(1px)" style="display:inline-flex; align-items:center; gap:6px; height:21px; padding:0 4px 0 9px; border-radius:3px; cursor:pointer; font-size:10.5px; font-weight:600; color:{{ sc.color }}; background:{{ sc.bg }}; border:1px solid {{ sc.border }}">{{ sc.label }}<span onClick="{{ sc.onClose }}" title="Delete scene" style-hover="color:var(--danger-hi)" style="color:{{ sc.xColor }}; font-size:12px; padding:0 3px">×</span></span>
+              </sc-for>
+              <span onClick="{{ newScene }}" title="New scene" style-hover="filter:brightness(1.18)" style-active="transform:translateY(1px); filter:brightness(0.9)" style="display:inline-flex; align-items:center; height:21px; padding:0 9px; border-radius:3px; cursor:pointer; font-size:10.5px; font-weight:600; color:var(--ink-2); background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:1px solid var(--btn-edge); box-shadow:0 1px 0 var(--hl-a) inset">+ New scene</span>
+              <div style="flex:1"></div>
+              <span style="font-size:10.5px; color:var(--ink-mut)">{{ studioSrcText }}</span>
+            </div>
+
+            <div ref="{{ stageRef }}" style="flex:1; min-height:170px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:18px; background:var(--stage-bg); position:relative; overflow:hidden">
+              <div style="position:absolute; inset:0; background-image:linear-gradient(var(--panel) 1px, transparent 1px), linear-gradient(90deg, var(--panel) 1px, transparent 1px); background-size:40px 40px; opacity:0.5"></div>
+              <div style="position:absolute; top:10px; left:14px; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:9.5px; color:var(--ink-mut)">1920×1080 · {{ studioSceneLabel }}</div>
+
+              <sc-if value="{{ hasShots }}" hint-placeholder-val="{{ false }}">
+                <div style="position:relative; text-align:center; max-width:100%; display:flex; flex-direction:column; align-items:center">
+                  <div style="position:relative; transform:scale({{ stageScale }}); transform-origin:center center">{{ stageMorph }}</div>
+                  <sc-if value="{{ stagePlot }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:16px; overflow:hidden; width:{{ stagePlotWidth }}">{{ stagePlot }}</div>
+                  </sc-if>
+                </div>
+              </sc-if>
+              <sc-if value="{{ noShots }}" hint-placeholder-val="{{ true }}">
+                <div style="position:relative; text-align:center; max-width:44ch">
+                  <div style="font-size:13px; color:var(--ink-2); margin-bottom:6px">This scene is empty</div>
+                  <div style="font-size:11.5px; line-height:1.6; color:var(--ink-mut)">Open the notebook and press <span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; color:var(--acc-hi)">→ Scene</span> on any evaluated cell to send its derivation here as shots.</div>
+                </div>
+              </sc-if>
+
+              <div style="position:absolute; bottom:14px; left:0; right:0; display:flex; justify-content:center; gap:8px; flex-wrap:wrap; padding:0 16px">
+                <sc-if value="{{ studioCaption }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:12.5px; font-weight:600; color:var(--acc-hi); opacity:{{ captionOpacity }}">{{ studioCaption }}</span>
+                </sc-if>
+                <sc-for list="{{ studioMarks }}" as="mk" hint-placeholder-count="0">
+                  <span style="font-size:10.5px; font-weight:600; color:{{ mk.color }}; background:{{ mk.bg }}; border-radius:3px; padding:1px 7px; opacity:{{ captionOpacity }}">{{ mk.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px; flex:0 0 auto; padding:8px 12px; border-top:1px solid var(--border); background:var(--panel)">
+              <div style="display:flex; align-items:stretch; height:22px; border:1px solid var(--btn-edge); border-radius:4px; overflow:hidden; box-shadow:0 1px 0 var(--hl-b) inset, 0 1px 3px var(--sh-b)">
+                <button onClick="{{ studioRestart }}" title="Back to start" style-hover="filter:brightness(1.16)" style-active="transform:translateY(1px); filter:brightness(0.9)" style="background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:0; border-right:1px solid var(--btn-edge); color:var(--ink-2); font-size:11px; padding:0 9px; cursor:pointer">⏮</button>
+                <button onClick="{{ studioPlay }}" title="Play or pause" style-hover="filter:brightness(1.14)" style-active="transform:translateY(1px); filter:brightness(0.9)" style="background:linear-gradient(180deg,var(--pri),var(--pri-2)); border:0; border-right:1px solid var(--pri-edge); color:var(--pri-ink); font-size:11px; font-weight:600; padding:0 11px; cursor:pointer">{{ studioPlayLabel }}</button>
+                <button onClick="{{ studioStep }}" title="Next scene" style-hover="filter:brightness(1.16)" style-active="transform:translateY(1px); filter:brightness(0.9)" style="background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:0; color:var(--ink-2); font-size:11px; padding:0 9px; cursor:pointer">⏭</button>
+              </div>
+              <input type="range" min="0" max="{{ studioMax }}" step="0.01" value="{{ studioT }}" onChange="{{ studioScrub }}" style="flex:1; min-width:0; accent-color:var(--pri); height:4px; cursor:pointer" />
+              <span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:10px; color:var(--ink-mut); white-space:nowrap">{{ studioTime }}</span>
+              <div style="display:flex; align-items:stretch; height:22px; border:1px solid var(--btn-edge); border-radius:4px; overflow:hidden">
+                <sc-for list="{{ studioSpeeds }}" as="sp" hint-placeholder-count="3">
+                  <button onClick="{{ sp.onClick }}" style-hover="filter:brightness(1.16)" style-active="transform:translateY(1px); filter:brightness(0.9)" style="background:{{ sp.bg }}; border:0; border-right:1px solid var(--btn-edge); color:{{ sp.color }}; font-size:10px; font-weight:600; padding:0 8px; cursor:pointer">{{ sp.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <div style="flex:0 0 300px; width:300px; display:flex; flex-direction:column; min-height:0; background:var(--bg)">
+            <div style="display:flex; align-items:center; height:32px; flex:0 0 32px; padding:0 12px; font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-mut); background:var(--panel); border-bottom:1px solid var(--border)"><span>Shots</span><span style="flex:1"></span><span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:9.5px; font-weight:400; letter-spacing:0; text-transform:none; color:var(--ink-mut)">{{ shotCount }}</span></div>
+            <div style="flex:1; overflow-y:auto; padding:8px">
+              <div style="display:flex; flex-direction:column; gap:4px">
+                <sc-for list="{{ studioShots }}" as="sn" hint-placeholder-count="4">
+                  <div style="border-radius:7px; background:{{ sn.bg }}; border:1px solid {{ sn.border }}; padding:7px 8px">
+                    <div style="display:flex; align-items:center; gap:7px">
+                      <span onClick="{{ sn.onSeek }}" title="Jump to this shot" style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; cursor:pointer; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:9px; color:{{ sn.noColor }}; background:{{ sn.noBg }}">{{ sn.no }}</span>
+                      <input value="{{ sn.label }}" onChange="{{ sn.onLabel }}" style="flex:1; min-width:0; background:transparent; border:0; color:{{ sn.labelColor }}; font-family:Inter,sans-serif; font-size:11.5px; font-weight:600; padding:2px 3px; border-radius:3px" />
+                      <span onClick="{{ sn.onToggle }}" title="Include in render" style="font-size:10px; color:{{ sn.onColor }}; cursor:pointer">{{ sn.onGlyph }}</span>
+                      <span onClick="{{ sn.onUp }}" title="Move up" style-hover="color:var(--ink-2)" style="font-size:9px; color:var(--ink-faint); cursor:pointer">▲</span>
+                      <span onClick="{{ sn.onDown }}" title="Move down" style-hover="color:var(--ink-2)" style="font-size:9px; color:var(--ink-faint); cursor:pointer">▼</span>
+                      <span onClick="{{ sn.onDelete }}" title="Delete shot" style-hover="color:var(--danger-hi)" style="font-size:12px; color:var(--ink-faint); cursor:pointer">×</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:6px">
+                      <select value="{{ sn.anim }}" onChange="{{ sn.onAnim }}" style="flex:1; min-width:0; height:20px; background:var(--panel-2); color:var(--ink-2); border:1px solid var(--border); border-radius:3px; font-size:10px; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; padding:0 4px">
+                        <option value="TransformMatchingTex">TransformMatchingTex</option>
+                        <option value="TransformMatchingShapes">TransformMatchingShapes</option>
+                        <option value="FadeTransform">FadeTransform</option>
+                        <option value="Write">Write</option>
+                        <option value="Create">Create</option>
+                      </select>
+                      <input type="number" min="0.2" max="8" step="0.1" value="{{ sn.dur }}" onChange="{{ sn.onDur }}" style="width:46px; height:20px; background:var(--panel-2); color:var(--ink-2); border:1px solid var(--border); border-radius:3px; font-size:10px; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; padding:0 4px" />
+                      <span style="font-size:9.5px; color:var(--ink-mut)">s</span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+         </div>
+
+          <div style="flex:0 0 auto; display:flex; flex-direction:column; height:{{ codeH }}; min-height:0; border-top:1px solid var(--border); background:var(--bg); overflow:hidden">
+            <div style="display:flex; align-items:center; gap:8px; height:32px; flex:0 0 32px; padding:0 8px 0 12px; background:var(--panel); border-bottom:1px solid var(--border)">
+              <span onClick="{{ toggleCode }}" style="font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-mut); cursor:pointer">{{ codeLabel }}</span>
+              <span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:10px; color:var(--ink-mut)">{{ codeFileName }}</span>
+              <div style="flex:1"></div>
+              <span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:10px; color:var(--ink-mut)">{{ renderCmd }}</span>
+              <span onClick="{{ copyCode }}" style-hover="filter:brightness(1.2)" style-active="transform:translateY(1px); filter:brightness(0.92); box-shadow:0 2px 5px var(--sh-a) inset" style="height:20px; display:flex; align-items:center; padding:0 9px; cursor:pointer; color:var(--btn-ink); font-size:10px; border-radius:3px; background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:1px solid var(--btn-edge2); box-shadow:0 1px 0 var(--hl-a) inset">{{ copyLabel }}</span>
+            </div>
+            <div style="flex:1; overflow:auto; padding:12px 14px">
+              <pre style="margin:0; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:11px; line-height:1.55; color:var(--ink-2); white-space:pre">{{ manimCode }}</pre>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showPanel }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; flex-direction:column; flex:{{ panelFlex }}; min-height:0; background:var(--bg); border-top:1px solid var(--border); box-shadow:none; overflow:hidden">
+        <div style="display:flex; align-items:center; gap:6px; height:38px; flex:0 0 38px; padding:0 8px; background:var(--panel); border-bottom:1px solid var(--border)">
+          <sc-for list="{{ panelTabs }}" as="pt" hint-placeholder-count="2">
+            <div onClick="{{ pt.onClick }}" style-hover="filter:brightness(1.15)" style-active="transform:translateY(1px); filter:brightness(0.92); box-shadow:0 2px 5px var(--sh-a) inset" style="display:flex; align-items:center; gap:7px; height:24px; padding:0 11px; cursor:pointer; font-size:11.5px; font-weight:600; color:{{ pt.color }}; background:{{ pt.bg }}; border-radius:4px; box-shadow:{{ pt.shadow }}">{{ pt.label }}<sc-if value="{{ pt.badge }}" hint-placeholder-val="{{ false }}"><span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:9.5px; color:var(--ink-2); background:var(--chip-bg); border-radius:999px; padding:1px 7px">{{ pt.badge }}</span></sc-if></div>
+          </sc-for>
+          <div style="flex:1"></div>
+          <div onClick="{{ toggleExpand }}" style-hover="filter:brightness(1.2)" style-active="transform:translateY(1px); filter:brightness(0.92); box-shadow:0 2px 5px var(--sh-a) inset" style="height:24px; display:flex; align-items:center; padding:0 10px; cursor:pointer; color:var(--btn-ink); font-size:11px; border-radius:4px; background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:1px solid var(--btn-edge2); box-shadow:0 1px 0 var(--hl-a) inset">{{ expandLabel }}</div>
+          <sc-if value="{{ showCollapse }}" hint-placeholder-val="{{ true }}">
+            <div onClick="{{ togglePanel }}" style-hover="filter:brightness(1.2)" style-active="transform:translateY(1px); filter:brightness(0.92); box-shadow:0 2px 5px var(--sh-a) inset" style="height:24px; display:flex; align-items:center; padding:0 10px; cursor:pointer; color:var(--btn-ink); font-size:11px; border-radius:4px; background:linear-gradient(180deg,var(--btn-a),var(--btn-b)); border:1px solid var(--btn-edge2); box-shadow:0 1px 0 var(--hl-a) inset">{{ panelToggleLabel }}</div>
+          </sc-if>
+        </div>
+
+        <div style="flex:{{ panelBodyFlex }}; height:{{ panelH }}; overflow-y:auto; transition:height 160ms ease">
+          <sc-if value="{{ showExplain }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr); gap:10px; padding:12px">
+              <div style="padding:13px 15px; border-radius:9px; background:var(--panel); box-shadow:none">
+                <div style="font-size:10px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:var(--ink-mut); margin-bottom:10px">Selection</div>
+                <div style="font-size:22px; color:var(--ink); margin-bottom:12px">{{ selEl }}</div>
+                <div style="font-size:12px; font-weight:600; color:var(--acc-hi); margin-bottom:6px">{{ selKind }}</div>
+                <div style="font-size:12px; line-height:1.6; color:var(--ink-2)">{{ selNote }}</div>
+                <sc-if value="{{ selRef }}" hint-placeholder-val="{{ false }}">
+                  <a href="{{ selRef }}" target="_blank" rel="noreferrer" style="display:inline-block; margin-top:10px; font-size:11.5px">Definition and identities ↗</a>
+                </sc-if>
+              </div>
+              <div style="padding:13px 15px; border-radius:9px; background:var(--panel); box-shadow:none">
+                <div style="font-size:10px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:var(--ink-mut); margin-bottom:10px">Derivation trail</div>
+                <sc-if value="{{ hasTrail }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; flex-direction:column; gap:5px; margin-bottom:11px">
+                    <sc-for list="{{ trail }}" as="tr" hint-placeholder-count="3">
+                      <div style="display:grid; grid-template-columns:20px minmax(0,1fr); gap:9px; align-items:center; padding:4px 7px; border-radius:6px; background:{{ tr.bg }}">
+                        <span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:9px; color:{{ tr.noColor }}; background:{{ tr.noBg }}">{{ tr.no }}</span>
+                        <span style="font-size:12px; color:{{ tr.color }}">{{ tr.rule }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <div style="font-size:12px; line-height:1.6; color:var(--ink-2)">{{ stepNote }}</div>
+              </div>
+              <div style="padding:13px 15px; border-radius:9px; background:var(--panel); box-shadow:none">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px">
+                  <span style="font-size:10px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:var(--ink-mut)">{{ checkLabel }}</span>
+                  <sc-if value="{{ checkBadge }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:9.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--on-acc); background:{{ checkBadgeBg }}; border-radius:999px; padding:2px 8px; box-shadow:none">{{ checkBadge }}</span>
+                  </sc-if>
+                </div>
+                <div style="font-size:12px; line-height:1.6; color:var(--ink-2); margin-bottom:11px">{{ checkText }}</div>
+                <sc-if value="{{ plotEl }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-radius:8px; padding:9px 11px; background:var(--bg); box-shadow:none; display:inline-block">
+                    <div style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:9.5px; color:var(--ink-mut); margin-bottom:6px">{{ plotCaption }}</div>
+                    {{ plotEl }}
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ showHint }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:15px 17px; font-size:12px; color:var(--ink-mut); max-width:80ch; line-height:1.6">Click any symbol, factor, fraction, or whole line in a cell. This panel names the rule that produced it, the trail of rules leading up to it, and checks the result numerically.</div>
+          </sc-if>
+
+          <sc-if value="{{ showLog }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:10px 12px; display:flex; flex-direction:column; gap:4px">
+              <sc-for list="{{ log }}" as="lg" hint-placeholder-count="3">
+                <div style="display:grid; grid-template-columns:76px 68px minmax(0,1fr); gap:12px; padding:6px 11px; border-radius:7px; background:var(--panel); box-shadow:none; font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:11px">
+                  <span style="color:var(--ink-mut)">{{ lg.time }}</span>
+                  <span style="font-weight:600; color:{{ lg.tone }}">{{ lg.level }}</span>
+                  <span style="color:var(--ink-2); min-width:0">{{ lg.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:14px; height:26px; flex:0 0 26px; padding:0 13px; background:var(--panel); border-top:1px solid var(--border); color:var(--ink-mut); font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:10.5px">
+    <span>{{ statusMode }}</span><span style="opacity:0.5">|</span>
+    <span>{{ statusCell }}</span><span style="opacity:0.5">|</span>
+    <span>{{ statusCells }}</span>
+    <div style="flex:1"></div>
+    <span style="color:var(--acc-hi)">{{ statusRules }}</span><span style="opacity:0.5">|</span>
+    <span>exact arithmetic</span>
+  </div>
+
+  <sc-if value="{{ showCompletions }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; left:{{ compX }}px; top:{{ compY }}px; z-index:70; width:330px; border-radius:6px; background:var(--panel-2); border:1px solid var(--bg); box-shadow:0 8px 24px var(--scrim); overflow:hidden">
+      <sc-for list="{{ completions }}" as="cp" hint-placeholder-count="3">
+        <div onMouseDown="{{ cp.onPick }}" onMouseEnter="{{ cp.onHover }}" style="display:grid; grid-template-columns:minmax(0,150px) minmax(0,1fr); gap:10px; align-items:baseline; padding:6px 10px; cursor:pointer; background:{{ cp.bg }}; border-top:1px solid {{ cp.sep }}">
+          <span style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:11.5px; color:{{ cp.nameColor }}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ cp.name }}</span>
+          <span style="font-size:10.5px; color:var(--ink-mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ cp.hint }}</span>
+        </div>
+      </sc-for>
+      <div style="padding:4px 10px; font-size:9.5px; color:var(--ink-mut); background:var(--panel); border-top:1px solid var(--bg)">Tab or Enter to accept · Esc to dismiss</div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hoverDoc }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; left:{{ hoverX }}px; top:{{ hoverY }}px; width:330px; z-index:60; background:var(--panel-2); border:1px solid var(--bg); border-radius:10px; box-shadow:0 8px 24px var(--scrim); padding:14px 16px; pointer-events:none">
+      <div style="display:flex; align-items:center; gap:9px; margin-bottom:7px">
+        <span style="font-size:13px; font-weight:700">{{ hoverDoc.name }}</span>
+        <span style="flex:1"></span>
+        <span style="display:inline-flex; align-items:center; justify-content:center; width:17px; height:17px; border-radius:50%; background:var(--chip-bg); color:var(--acc-hi); font-size:10px; font-style:italic">i</span>
+      </div>
+      <div style="font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:11px; color:var(--acc-hi); margin-bottom:8px">{{ hoverDoc.sig }}</div>
+      <div style="font-size:12px; line-height:1.55; color:var(--ink-2)">{{ hoverDoc.blurb }}</div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showTrail&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Explanation panel&quot;},&quot;plots&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Explanation panel&quot;}}">
+const THEME = { op:'color-mix(in oklab, currentColor 74%, transparent)', rule:'color-mix(in oklab, currentColor 66%, transparent)', fnColor:'currentColor', bracket:'color-mix(in oklab, currentColor 52%, transparent)',
+  selBg:'var(--p-sel)', selRing:'var(--p-acc-2)', hoverBg:'var(--p-hov)', plot:'currentColor', axis:'color-mix(in oklab, currentColor 45%, transparent)', axis2:'color-mix(in oklab, currentColor 22%, transparent)' };
+
+const FNDOC = {
+  sin: { sig:'sin(x)', blurb:'Sine. Derivative cos x; antiderivative −cos x.', ref:'https://mathworld.wolfram.com/Sine.html', also:['d/dx sin(2x)'] },
+  cos: { sig:'cos(x)', blurb:'Cosine. Derivative −sin x; antiderivative sin x.', ref:'https://mathworld.wolfram.com/Cosine.html', also:['integrate x cos(x) dx'] },
+  tan: { sig:'tan(x)', blurb:'Tangent. Derivative sec² x.', ref:'https://mathworld.wolfram.com/Tangent.html', also:['d/dx tan(x)'] },
+  exp: { sig:'exp(x)', blurb:'Its own derivative and its own antiderivative.', ref:'https://mathworld.wolfram.com/ExponentialFunction.html', also:['integrate x exp(x) dx'] },
+  ln: { sig:'ln(x)', blurb:'Natural logarithm. Derivative 1/x.', ref:'https://mathworld.wolfram.com/NaturalLogarithm.html', also:['d/dx ln(x)/x'] },
+  sqrt: { sig:'sqrt(x)', blurb:'Square root, i.e. x^(1/2).', ref:'https://mathworld.wolfram.com/SquareRoot.html', also:['d/dx sqrt(x)'] },
+  atan: { sig:'atan(x)', blurb:'Inverse tangent. Derivative 1/(1+x²).', ref:'https://mathworld.wolfram.com/InverseTangent.html', also:['integrate 1/(1+x^2) dx'] },
+};
+const SEEDS = [['integrate x sin(x) dx', true], ['d/dx sin(x) x^2', false], ['rref [[1,2,-1],[2,4,1],[3,6,2]]', false], ['eigen [[2,1],[1,2]]', false]];
+const REF_NAMES = ['Integrate', 'Derivative', 'Grad', 'RowReduce', 'Eigensystem', 'Det', 'MatrixRank', 'Simplify'];
+const MENUS = ['File', 'Edit', 'View', 'Run', 'Kernel', 'Help'];
+const RAISED = '0 1px 0 var(--hl-a) inset, 0 2px 6px var(--sh-c)';
+const SUNK = 'none';
+
+const VOCAB = [
+  { name: 'integrate', hint: 'integrate f dx — antiderivative', snippet: 'integrate ' },
+  { name: 'd/dx', hint: 'derivative with respect to x', snippet: 'd/dx ' },
+  { name: 'differentiate', hint: 'differentiate f wrt x', snippet: 'differentiate ' },
+  { name: 'grad', hint: 'gradient — all partials', snippet: 'grad ' },
+  { name: 'rref', hint: 'reduced row echelon form', snippet: 'rref ' },
+  { name: 'eigen', hint: 'eigenvalues and eigenvectors', snippet: 'eigen ' },
+  { name: 'det', hint: 'determinant', snippet: 'det ' },
+  { name: 'rank', hint: 'matrix rank', snippet: 'rank ' },
+  { name: 'sin', hint: 'sine', snippet: 'sin(' },
+  { name: 'cos', hint: 'cosine', snippet: 'cos(' },
+  { name: 'tan', hint: 'tangent', snippet: 'tan(' },
+  { name: 'sec', hint: 'secant', snippet: 'sec(' },
+  { name: 'csc', hint: 'cosecant', snippet: 'csc(' },
+  { name: 'cot', hint: 'cotangent', snippet: 'cot(' },
+  { name: 'exp', hint: 'exponential', snippet: 'exp(' },
+  { name: 'ln', hint: 'natural logarithm', snippet: 'ln(' },
+  { name: 'log', hint: 'logarithm', snippet: 'log(' },
+  { name: 'sqrt', hint: 'square root', snippet: 'sqrt(' },
+  { name: 'abs', hint: 'absolute value', snippet: 'abs(' },
+  { name: 'asin', hint: 'inverse sine', snippet: 'asin(' },
+  { name: 'acos', hint: 'inverse cosine', snippet: 'acos(' },
+  { name: 'atan', hint: 'inverse tangent', snippet: 'atan(' },
+  { name: 'sinh', hint: 'hyperbolic sine', snippet: 'sinh(' },
+  { name: 'cosh', hint: 'hyperbolic cosine', snippet: 'cosh(' },
+  { name: 'tanh', hint: 'hyperbolic tangent', snippet: 'tanh(' },
+  { name: 'pi', hint: 'π', snippet: 'pi' },
+  { name: 'lambda', hint: 'λ', snippet: 'lambda' },
+];
+function tokenAt(value, caret) {
+  let start = caret;
+  while (start > 0 && /[A-Za-z/]/.test(value[start - 1])) start--;
+  return { text: value.slice(start, caret), start, end: caret };
+}
+
+const STUDIO_EMPTY = { showStudio: false, sceneTabs: [], studioShots: [], studioMarks: [], studioSpeeds: [],
+  studioMax: 1, studioT: 0, studioTime: '0.0s / 0.0s', studioPlayLabel: '▶ Play', studioCaption: '',
+  studioSceneLabel: '', studioSrcText: '', stageMorph: null, stagePlot: null, stagePlotWidth: '0%',
+  captionOpacity: 1, hasShots: false, noShots: true, shotCount: '',
+  manimCode: '', codeH: '32px', codeLabel: '', codeFileName: '', renderCmd: '', copyLabel: 'Copy' };
+
+function defaultAnim(rule) {
+  const r = (rule || '').toLowerCase();
+  if (r.indexOf('←') >= 0 || r.indexOf('↔') >= 0) return 'TransformMatchingShapes';
+  if (r.indexOf('simplify') >= 0) return 'FadeTransform';
+  if (r.indexOf('solve') >= 0 || r.indexOf('roots') >= 0 || r.indexOf('null space') >= 0) return 'Write';
+  return 'TransformMatchingTex';
+}
+const pyName = (s) => String(s || '').replace(/[^A-Za-z0-9]+/g, ' ').trim().split(' ')
+  .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('').slice(0, 30) || 'LemmaScene';
+let SHOT_ID = 0;
+const fmtT = (x) => x.toFixed(1) + 's';
+
+class Component extends DCLogic {
+  inputs = {};
+  state = { ready: false, cells: [], sel: null, hover: null, hoverCell: null, comp: null, active: 0, mode: 'Command',
+    mainTab: 'notebook', panelTab: 'explain', panelOpen: true, panelExpanded: false, rail: 'outline', docFocus: null, log: [],
+    studio: { scenes: [], active: 0, playing: false, t: 0, speed: 1, codeOpen: true, copied: false } };
+
+  componentDidMount() {
+    let t = 'dark';
+    try { t = localStorage.getItem('lemma.theme') || 'dark'; } catch (e) {}
+    document.documentElement.setAttribute('data-theme', t);
+    this.setState({ theme: t });
+    this.loadKatex();
+    Promise.all([import('./engine.js'), import('./render.js'), import('./glyphmorph.js')]).then(([E, R, M]) => {
+      this.E = E; this.M = M;
+      this.R = R.makeRenderer(React, THEME); this.R.setEval(E.evalAt);
+      const log = [];
+      const cells = SEEDS.map(([src, work], i) => { const out = this.run(src); log.push(this.logLine(i + 1, out)); return { n: i + 1, src, work, ...out }; });
+      cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null, ms: null });
+      this.setState({ ready: true, cells, log: log.reverse(), active: 0 });
+    }).catch(e => this.setState({ ready: true, log: [{ time: this.now(), level: 'ERROR', tone: 'var(--danger)', text: String(e) }] }));
+  }
+
+  componentWillUnmount() { if (this._raf) cancelAnimationFrame(this._raf); }
+
+  loadKatex() {
+    if (document.getElementById('lemma-katex-css')) return;
+    const l = document.createElement('link');
+    l.id = 'lemma-katex-css'; l.rel = 'stylesheet';
+    l.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
+    document.head.appendChild(l);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js';
+    s.onload = () => this.forceUpdate();
+    document.head.appendChild(s);
+  }
+
+  now() { const d = new Date(); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':'); }
+
+  logLine(n, out) {
+    if (out.err) return { time: this.now(), level: 'ERROR', tone: 'var(--danger)', text: 'In[' + n + '] ' + out.err };
+    if (!out.res) return { time: this.now(), level: 'INFO', tone: 'var(--ink-mut)', text: 'In[' + n + '] empty cell skipped' };
+    return { time: this.now(), level: 'OK', tone: 'var(--ok)', text: 'In[' + n + '] ' + out.res.fnName + ' \u00b7 ' + out.res.steps.length + ' rules \u00b7 ' + out.ms + ' ms' };
+  }
+
+  run(src) {
+    if (!src.trim()) return { res: null, err: null, ms: null };
+    const t0 = performance.now();
+    try { return { res: this.E.evaluate(src), err: null, ms: (performance.now() - t0).toFixed(2) }; }
+    catch (e) { return { res: null, err: (e.message || String(e)) + ' \u2014 check the syntax, or open the reference tab.', ms: null }; }
+  }
+
+  setSrc(i, src) { this.setState(s => ({ cells: s.cells.map((c, j) => j === i ? { ...c, src } : c) })); }
+
+  updateCompletions(i, v, caret) {
+    const tok = tokenAt(v, caret == null ? v.length : caret);
+    const q = tok.text.toLowerCase();
+    if (q.length < 1) { if (this.state.comp) this.setState({ comp: null }); return; }
+    const items = VOCAB.filter(x => x.name.toLowerCase().indexOf(q) === 0 && x.name.toLowerCase() !== q).slice(0, 7);
+    if (!items.length) { if (this.state.comp) this.setState({ comp: null }); return; }
+    const el = this.inputs[i];
+    let x = 0, y = 0;
+    if (el) { const r = el.getBoundingClientRect(); x = Math.min(r.left + 8, window.innerWidth - 344); y = Math.min(r.bottom + 4, window.innerHeight - 180); }
+    this.setState({ comp: { cellIdx: i, items, index: 0, x, y, start: tok.start, end: tok.end } });
+  }
+
+  acceptCompletion(i, item) {
+    const c = this.state.comp;
+    if (!item || !c) return;
+    const src = this.state.cells[i].src;
+    const next = src.slice(0, c.start) + item.snippet + src.slice(c.end);
+    this.setSrc(i, next);
+    this.setState({ comp: null }, () => {
+      const el = this.inputs[i];
+      if (el) { const p = c.start + item.snippet.length; el.focus(); el.setSelectionRange(p, p); }
+    });
+  }
+
+  evalCell(i) {
+    this.setState(s => {
+      const cells = s.cells.slice(); const c = cells[i]; if (!c) return {};
+      const out = this.run(c.src); const entry = this.logLine(c.n, out);
+      cells[i] = { ...c, ...out, work: out.res ? c.work : true };
+      if (cells[cells.length - 1].src.trim()) cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null, ms: null });
+      return { cells, sel: null, comp: null, log: [entry, ...s.log].slice(0, 60), active: Math.min(i + 1, cells.length - 1) };
+    });
+  }
+
+  runAll() {
+    this.setState(s => {
+      const log = [];
+      const cells = s.cells.map(c => { if (!c.src.trim()) return c; const out = this.run(c.src); log.unshift(this.logLine(c.n, out)); return { ...c, ...out }; });
+      return { cells, sel: null, log: [...log.reverse(), ...s.log].slice(0, 60) };
+    });
+  }
+
+  insert(src) {
+    this.setState(s => {
+      const cells = s.cells.slice(); const i = cells.length - 1; const out = this.run(src);
+      cells[i] = { ...cells[i], src, ...out, work: true };
+      cells.push({ n: cells.length + 1, src: '', work: true, res: null, err: null, ms: null });
+      return { cells, sel: null, mainTab: 'notebook', panelExpanded: false, active: i, log: [this.logLine(cells[i].n, out), ...s.log].slice(0, 60) };
+    }, () => this.scrollToCell(this.state.cells.length - 2));
+  }
+
+  scrollToCell(i) { const box = this.scroller; if (!box) return; const el = box.querySelector('[data-cell="' + i + '"]'); if (el) box.scrollTop = Math.max(0, el.offsetTop - 20); }
+
+  /* ---------------- Manim Studio ---------------- */
+
+  setStudio(patch, cb) { this.setState(s => ({ studio: { ...s.studio, ...patch } }), cb); }
+
+  activeScene() { const st = this.state.studio; return st.scenes[st.active] || null; }
+
+  newScene() {
+    this.setState(s => {
+      const n = s.studio.scenes.length + 1;
+      const scenes = [...s.studio.scenes, { id: Date.now(), name: 'Scene ' + n, shots: [] }];
+      return { studio: { ...s.studio, scenes, active: scenes.length - 1, t: 0, playing: false } };
+    });
+  }
+
+  deleteScene(idx) {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this.setState(s => {
+      const scenes = s.studio.scenes.filter((x, i) => i !== idx);
+      const active = Math.max(0, Math.min(s.studio.active > idx ? s.studio.active - 1 : s.studio.active, scenes.length - 1));
+      return { studio: { ...s.studio, scenes, active, t: 0, playing: false } };
+    });
+  }
+
+  patchActiveScene(patch) {
+    this.setState(s => {
+      const scenes = s.studio.scenes.slice();
+      const i = s.studio.active;
+      if (!scenes[i]) return {};
+      scenes[i] = { ...scenes[i], ...patch };
+      return { studio: { ...s.studio, scenes } };
+    });
+  }
+
+  patchShot(id, patch) {
+    const sc = this.activeScene(); if (!sc) return;
+    this.patchActiveScene({ shots: sc.shots.map(x => x.id === id ? { ...x, ...patch } : x) });
+  }
+
+  removeShot(id) {
+    const sc = this.activeScene(); if (!sc) return;
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this.setState(s => {
+      const scenes = s.studio.scenes.slice(); const i = s.studio.active;
+      scenes[i] = { ...scenes[i], shots: scenes[i].shots.filter(x => x.id !== id) };
+      return { studio: { ...s.studio, scenes, t: 0, playing: false } };
+    });
+  }
+
+  moveShot(id, dir) {
+    const sc = this.activeScene(); if (!sc) return;
+    const shots = sc.shots.slice();
+    const i = shots.findIndex(x => x.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= shots.length) return;
+    const t = shots[i]; shots[i] = shots[j]; shots[j] = t;
+    this.patchActiveScene({ shots });
+  }
+
+  sendToScene(cellIdx) {
+    const E = this.E, c = this.state.cells[cellIdx];
+    if (!c || !c.res) return;
+    const res = c.res, v = res.v || 'x';
+    const mk = (label, node, anim, dur, note, extra) => {
+      let tx = '';
+      try { tx = E.tex(node); } catch (e) { tx = ''; }
+      return Object.assign({ id: ++SHOT_ID, label, tex: tx, node, anim, dur, note: note || '',
+        on: true, gone: [], added: [], plot: null, cell: c.n }, extra || {});
+    };
+    const shots = [mk('Statement', res.input, 'Write', 1.2, 'Write the problem exactly as the engine parsed it.')];
+    res.steps.forEach((st, k) => {
+      const prev = k === 0 ? res.input : res.steps[k - 1].expr;
+      let d = { gone: [], added: [] };
+      try {
+        d = E.diffTerms(prev, st.expr);
+        const pw = E.fmt(prev), nw = E.fmt(st.expr);
+        d = { gone: d.gone.filter(x => x !== pw), added: d.added.filter(x => x !== nw) };
+      } catch (e) { d = { gone: [], added: [] }; }
+      shots.push(mk(st.rule, st.expr, defaultAnim(st.rule), 1.4, st.note, { gone: d.gone, added: d.added }));
+    });
+    let pn = null;
+    try { pn = (res.check && res.check.plot) ? (res.check.plot.fp || res.check.plot.f) : (E.hasVar(res.result, v) ? res.result : null); } catch (e) {}
+    if (pn) {
+      let pyx = '0';
+      try { pyx = E.py(pn, v); } catch (e) {}
+      shots.push(mk('Graph the result', res.result, 'Create', 2.2, 'Draw the axes, then trace the curve.', { plot: { node: pn, v: v, py: pyx } }));
+    }
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this.setState(s => {
+      const scenes = s.studio.scenes.slice();
+      let idx = s.studio.active;
+      if (!scenes.length) { scenes.push({ id: Date.now(), name: 'Scene 1', shots: [] }); idx = 0; }
+      if (idx >= scenes.length) idx = scenes.length - 1;
+      scenes[idx] = { ...scenes[idx], shots: [...scenes[idx].shots, ...shots] };
+      return { mainTab: 'studio', panelExpanded: false, sel: null, comp: null,
+        studio: { ...s.studio, scenes, active: idx, t: 0, playing: false } };
+    });
+  }
+
+  timeline(shots) {
+    let at = 0;
+    const on = (shots || []).filter(s => s.on).map(s => { const e = { ...s, start: at, end: at + s.dur }; at += s.dur; return e; });
+    return { on, total: at || 0.001 };
+  }
+
+  tick = () => {
+    const S = this.state;
+    if (!S.studio.playing) return;
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - (this._last || now)) / 1000) * S.studio.speed;
+    this._last = now;
+    const sc = this.activeScene();
+    const { total } = this.timeline(sc ? sc.shots : []);
+    const t = S.studio.t + dt;
+    if (t >= total) { this.setStudio({ t: total, playing: false }); return; }
+    this.setStudio({ t });
+    this._raf = requestAnimationFrame(this.tick);
+  };
+
+  studioPlayPause() {
+    const st = this.state.studio;
+    if (st.playing) { if (this._raf) cancelAnimationFrame(this._raf); this.setStudio({ playing: false }); return; }
+    const sc = this.activeScene();
+    const { total } = this.timeline(sc ? sc.shots : []);
+    this._last = performance.now();
+    this.setStudio({ playing: true, t: st.t >= total - 0.01 ? 0 : st.t }, () => { this._raf = requestAnimationFrame(this.tick); });
+  }
+
+  manimSceneCode(scene) {
+    if (!scene) return '# Create a scene, then send a cell to it.';
+    const on = scene.shots.filter(s => s.on);
+    if (!on.length) return '# This scene has no shots yet.\n# Open the notebook and press "\u2192 Scene" on an evaluated cell.';
+    const flat = on.filter(s => !s.plot);
+    const graph = on.filter(s => s.plot);
+    const cls = pyName(scene.name);
+    const q = (s) => String(s).replace(/"/g, "'");
+    const L = ['from manim import *', 'import numpy as np', '', ''];
+    L.push('class ' + cls + '(Scene):');
+    L.push('    """' + q(scene.name) + ' \u2014 storyboard generated by Lemma Manim Studio."""');
+    L.push('');
+    L.push('    def construct(self):');
+    let first = true;
+    flat.forEach((s) => {
+      L.push('        # ' + q(s.label));
+      if (s.gone && s.gone.length) L.push('        # cancels: ' + q(s.gone.join(', ')));
+      if (s.added && s.added.length) L.push('        # introduces: ' + q(s.added.join(', ')));
+      if (first) {
+        L.push('        expr = MathTex(r"' + s.tex + '", font_size=54)');
+        L.push('        self.play(Write(expr), run_time=' + s.dur.toFixed(1) + ')');
+        L.push('        self.wait(0.3)');
+        first = false;
+      } else {
+        L.push('        caption = Text("' + q(s.label) + '", font_size=24, color=GREY_B).to_edge(DOWN, buff=0.7)');
+        L.push('        self.play(FadeIn(caption, shift=UP * 0.2), run_time=0.3)');
+        L.push('        nxt = MathTex(r"' + s.tex + '", font_size=54)');
+        if (s.anim === 'Write' || s.anim === 'Create') {
+          L.push('        self.play(FadeOut(expr), run_time=0.2)');
+          L.push('        self.play(' + s.anim + '(nxt), run_time=' + s.dur.toFixed(1) + ')');
+        } else {
+          L.push('        self.play(' + s.anim + '(expr, nxt), run_time=' + s.dur.toFixed(1) + ')');
+        }
+        L.push('        expr = nxt');
+        L.push('        self.play(FadeOut(caption), run_time=0.25)');
+      }
+      L.push('');
+    });
+    L.push('        self.wait(1)');
+    graph.forEach((g, k) => {
+      const v = g.plot.v;
+      L.push('');
+      L.push('');
+      L.push('class ' + cls + 'Graph' + (k ? k + 1 : '') + '(Scene):');
+      L.push('    """' + q(g.label) + ' \u2014 plot over ' + v + ' in [-3, 3]."""');
+      L.push('');
+      L.push('    def construct(self):');
+      L.push('        ax = Axes(x_range=[-3, 3, 1], y_range=[-4, 4, 1], axis_config={"include_tip": False})');
+      L.push('        labels = ax.get_axis_labels(x_label="' + v + '", y_label="y")');
+      L.push('        curve = ax.plot(lambda x: ' + g.plot.py + ', color=BLUE_C, x_range=[-3, 3])');
+      L.push('        eq = MathTex(r"' + g.tex + '", font_size=36).to_corner(UR)');
+      L.push('        self.play(Create(ax), FadeIn(labels), run_time=1.0)');
+      L.push('        self.play(Write(eq), run_time=0.6)');
+      L.push('        self.play(Create(curve), run_time=' + g.dur.toFixed(1) + ')');
+      L.push('        self.wait(1)');
+    });
+    return L.join('\n');
+  }
+
+  studioVals() {
+    const S = this.state, R = this.R, M = this.M;
+    const st = S.studio;
+    const scene = st.scenes[st.active] || null;
+    const shots = scene ? scene.shots : [];
+    const { on, total } = this.timeline(shots);
+
+    const sceneTabs = st.scenes.map((sc, i) => ({
+      label: sc.name,
+      color: i === st.active ? 'var(--on-acc)' : 'var(--ink-mut)',
+      bg: i === st.active ? 'linear-gradient(180deg,var(--pri),var(--pri-2))' : 'var(--panel-2)',
+      border: i === st.active ? 'var(--pri-edge)' : 'var(--border)',
+      xColor: i === st.active ? 'var(--p-hl)' : 'var(--ink-faint)',
+      onClick: () => { if (this._raf) cancelAnimationFrame(this._raf); this.setStudio({ active: i, t: 0, playing: false }); },
+      onClose: (ev) => { ev.stopPropagation(); this.deleteScene(i); },
+    }));
+
+    const base = {
+      showStudio: true, sceneTabs,
+      newScene: () => this.newScene(),
+      studioSrcText: scene ? (on.length + ' shots \u00b7 ' + fmtT(total) + ' \u00b7 60 fps') : 'No scene yet',
+      shotCount: shots.length ? (on.length + ' of ' + shots.length + ' on') : 'empty',
+      hasShots: on.length > 0, noShots: on.length === 0,
+      studioShots: [],
+      studioMarks: [],
+      studioMax: total, studioT: Math.min(st.t, total),
+      studioTime: fmtT(Math.min(st.t, total)) + ' / ' + fmtT(total),
+      studioPlayLabel: st.playing ? '\u275a\u275a Pause' : '\u25b6 Play',
+      studioPlay: () => this.studioPlayPause(),
+      studioRestart: () => { if (this._raf) cancelAnimationFrame(this._raf); this.setStudio({ t: 0, playing: false }); },
+      studioStep: () => {
+        let ci = 0;
+        for (let k = 0; k < on.length; k++) if (st.t >= on[k].start - 1e-6) ci = k;
+        const nx = on[Math.min(on.length - 1, ci + 1)];
+        if (this._raf) cancelAnimationFrame(this._raf);
+        this.setStudio({ t: nx ? nx.start : total, playing: false });
+      },
+      studioScrub: (ev) => { if (this._raf) cancelAnimationFrame(this._raf); this.setStudio({ t: parseFloat(ev.target.value) || 0, playing: false }); },
+      studioSpeeds: [0.5, 1, 2].map(x => ({ label: x + '\u00d7',
+        bg: st.speed === x ? 'linear-gradient(180deg,var(--pri),var(--pri-2))' : 'linear-gradient(180deg,var(--btn-a),var(--btn-b))',
+        color: st.speed === x ? 'var(--on-acc)' : 'var(--ink-mut)',
+        onClick: () => this.setStudio({ speed: x }) })),
+      manimCode: this.manimSceneCode(scene),
+      codeH: st.codeOpen ? '200px' : '32px',
+      codeLabel: st.codeOpen ? '\u25be Manim scene' : '\u25b8 Manim scene',
+      codeFileName: scene ? (pyName(scene.name).toLowerCase() + '.py') : 'lemma_scene.py',
+      renderCmd: scene ? ('manim -pqh ' + pyName(scene.name).toLowerCase() + '.py') : '',
+      copyLabel: st.copied ? 'Copied' : 'Copy',
+      toggleCode: () => this.setStudio({ codeOpen: !st.codeOpen }),
+      copyCode: () => {
+        const code = this.manimSceneCode(this.activeScene());
+        if (navigator.clipboard) navigator.clipboard.writeText(code);
+        this.setStudio({ copied: true });
+        setTimeout(() => this.setStudio({ copied: false }), 1400);
+      },
+      studioSceneLabel: '\u2014', studioCaption: '', captionOpacity: 1,
+      stageMorph: null, stagePlot: null, stagePlotWidth: '0%', stageScale: 1,
+      stageRef: (el) => { if (el && el !== this.stageEl) { this.stageEl = el; setTimeout(() => this.forceUpdate(), 0); } },
+    };
+
+    base.studioShots = shots.map((s, i) => {
+      const live = on.find(x => x.id === s.id);
+      const active = !!(live && st.t >= live.start - 1e-6 && st.t < live.end - 1e-6) ||
+        (!!live && st.t >= total - 1e-6 && live.end >= total - 1e-6);
+      return {
+        no: i + 1, label: s.label, anim: s.anim, dur: s.dur,
+        bg: active ? 'var(--acc-soft-bg2)' : 'var(--panel)',
+        border: active ? 'var(--acc)' : 'var(--border)',
+        labelColor: s.on ? (active ? 'var(--acc-on)' : 'var(--ink-2)') : 'var(--ink-faint)',
+        noColor: active ? 'var(--on-acc)' : 'var(--ink-mut)',
+        noBg: active ? 'var(--acc)' : 'var(--hov)',
+        onGlyph: s.on ? '\u25c9' : '\u25cb', onColor: s.on ? 'var(--ok)' : 'var(--ink-faint)',
+        onSeek: () => { if (live) { if (this._raf) cancelAnimationFrame(this._raf); this.setStudio({ t: live.start, playing: false }); } },
+        onToggle: (ev) => { ev.stopPropagation(); this.patchShot(s.id, { on: !s.on }); },
+        onLabel: (ev) => this.patchShot(s.id, { label: ev.target.value }),
+        onAnim: (ev) => this.patchShot(s.id, { anim: ev.target.value }),
+        onDur: (ev) => { const d = parseFloat(ev.target.value); if (isFinite(d) && d > 0) this.patchShot(s.id, { dur: d }); },
+        onUp: (ev) => { ev.stopPropagation(); this.moveShot(s.id, -1); },
+        onDown: (ev) => { ev.stopPropagation(); this.moveShot(s.id, 1); },
+        onDelete: (ev) => { ev.stopPropagation(); this.removeShot(s.id); },
+      };
+    });
+
+    if (!on.length) return base;
+
+    const t = Math.min(st.t, total);
+    let cur = on[0], ci = 0;
+    for (let k = 0; k < on.length; k++) if (t >= on[k].start - 1e-6) { cur = on[k]; ci = k; }
+    const p = Math.max(0, Math.min(1, (t - cur.start) / Math.max(0.001, cur.dur)));
+    const writeOn = ci === 0 || cur.anim === 'Write' || cur.anim === 'Create';
+    const prev = (!writeOn && ci > 0) ? on[ci - 1] : null;
+
+    let morph = null;
+    if (M && window.katex && cur.tex) {
+      try { morph = M.frame(React, prev ? prev.tex : null, cur.tex, p, 34, { ink: 'var(--ink)', gone: 'var(--danger-2)', added: 'var(--ok)' }); } catch (e) { morph = null; }
+    }
+    if (!morph && R && cur.node) {
+      morph = React.createElement('div', { style: { fontSize: '30px', color: 'var(--ink)', opacity: Math.min(1, 0.25 + p * 1.6) } },
+        R.render(cur.node, { selected: null }, 'stage' + cur.id));
+    }
+
+    let stagePlot = null;
+    if (cur.plot) { try { stagePlot = R.plot({ f: cur.plot.node, v: cur.plot.v }, 420, 150); } catch (e) { stagePlot = null; } }
+
+    const marks = [];
+    (cur.gone || []).forEach(g => marks.push({ label: '\u2212 ' + g, color: 'var(--danger)', bg: 'var(--danger-soft)' }));
+    (cur.added || []).forEach(a => marks.push({ label: '+ ' + a, color: 'var(--ok)', bg: 'var(--ok-soft)' }));
+
+    const avail = Math.max(180, (this.stageEl ? this.stageEl.clientWidth : 460) - 52);
+    let need = 0;
+    try { need = M && window.katex ? M.widthOf(cur.tex, 34) : 0; } catch (e) { need = 0; }
+    if (cur.plot) need = Math.max(need, 430);
+    const stageScale = need > avail ? Math.max(0.42, avail / need) : 1;
+
+    return { ...base, stageScale,
+      studioSceneLabel: 'shot ' + (ci + 1) + ' of ' + on.length,
+      studioCaption: ci > 0 ? cur.label : '',
+      studioMarks: marks,
+      captionOpacity: Math.min(1, p * 3),
+      stageMorph: morph, stagePlot,
+      stagePlotWidth: Math.round(Math.max(0, Math.min(1, p)) * 100) + '%',
+    };
+  }
+
+  hoverAt(name, el) { const r = el.getBoundingClientRect(); this.setState({ hover: { name, x: Math.min(r.left, window.innerWidth - 350), y: Math.max(8, r.top - 165) } }); }
+  mkOpts(key, cellIdx, stepIdx, meta) {
+    const sel = this.state.sel;
+    return { selected: sel && sel.key === key ? sel.mid : null,
+      onSelect: (mid, node) => this.setState({ sel: { key, mid, node, cellIdx, stepIdx, meta }, panelTab: 'explain', panelOpen: true, active: cellIdx }),
+      onHoverFn: (name, el) => { if (FNDOC[name]) this.hoverAt(name, el); },
+      onLeaveFn: () => this.setState({ hover: null }) };
+  }
+
+  renderVals() {
+    const S = this.state, R = this.R, E = this.E;
+    const clearSel = () => this.setState({ sel: null, hover: null });
+    const toggleTheme = () => {
+      const t = (this.state.theme === 'light') ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('lemma.theme', t); } catch (e) {}
+      this.setState({ theme: t });
+    };
+    const base = {
+      menus: MENUS, clearSel, toggleTheme,
+      themeGlyph: (S.theme === 'light') ? '\u25D1 Light' : '\u25D0 Dark',
+      scrollRef: (el) => {
+        if (el && el !== this.scroller) { el.addEventListener('scroll', () => { if (this.state.comp) this.setState({ comp: null }); }); }
+        this.scroller = el;
+      },
+      leaveHover: () => this.setState({ hover: null }),
+      blurCell: () => this.setState({ mode: 'Command' }),
+      runActive: (e) => { e.stopPropagation(); this.evalCell(S.active); },
+      runAll: (e) => { e.stopPropagation(); this.runAll(); },
+      clearOutputs: (e) => { e.stopPropagation(); this.setState(s => ({ cells: s.cells.map(c => ({ ...c, res: null, err: null, ms: null })), sel: null })); },
+      addCell: (e) => { e.stopPropagation(); this.setState(s => ({ cells: [...s.cells, { n: s.cells.length + 1, src: '', work: true, res: null, err: null, ms: null }], active: s.cells.length })); },
+      togglePanel: () => this.setState(s => ({ panelOpen: !s.panelOpen })),
+      panelToggleLabel: S.panelOpen ? '▾ Collapse' : '▴ Expand',
+      showCollapse: !S.panelExpanded,
+      toggleExpand: () => this.setState(s => ({ panelExpanded: !s.panelExpanded, panelOpen: true })),
+      expandLabel: S.panelExpanded ? '⤡ Restore' : '⤢ Maximize',
+      toolbarHint: 'Type to autocomplete · Enter runs the cell',
+      kernelState: 'idle', kernelDot: 'var(--ok)',
+      rails: [{ label: 'Outline', glyph: '≡', key: 'outline' }, { label: 'Commands', glyph: 'ƒ', key: 'palette' }].map(r => ({
+        ...r, color: S.rail === r.key ? 'var(--on-acc)' : 'var(--ink-mut)',
+        bg: S.rail === r.key ? 'linear-gradient(180deg,var(--pri),var(--pri-2))' : 'linear-gradient(180deg,var(--btn-a),var(--btn-c))',
+        shadow: S.rail === r.key ? '0 1px 0 var(--pill-bg) inset, 0 2px 5px var(--sh-a)' : '0 1px 0 var(--hl-a) inset, 0 2px 6px var(--sh-c)',
+        onClick: () => this.setState({ rail: r.key }) })),
+      sidebarTitle: S.rail === 'outline' ? 'Notebook outline' : 'Engine commands',
+      showOutline: S.rail === 'outline', showPalette: S.rail === 'palette',
+      ...STUDIO_EMPTY,
+      tabs: [{ key: 'notebook', label: 'lesson-04.lemma' }, { key: 'studio', label: 'manim studio' }, { key: 'reference', label: 'reference' }].map(t => ({
+        label: t.label, weight: S.mainTab === t.key ? 600 : 400,
+        color: S.mainTab === t.key ? 'var(--ink)' : 'var(--ink-mut)',
+        bg: S.mainTab === t.key ? 'var(--panel-2)' : 'var(--panel)',
+        border: S.mainTab === t.key ? 'var(--border)' : 'var(--border)',
+        shadow: S.mainTab === t.key ? '0 1px 0 var(--chip-bg) inset, 0 -3px 8px var(--sh-d)' : 'none',
+        onClick: () => this.setState({ mainTab: t.key, panelExpanded: false }) })),
+      showToolbar: S.mainTab !== 'studio' && !S.panelExpanded,
+      showNotebook: S.mainTab === 'notebook' && !S.panelExpanded,
+      showReference: S.mainTab === 'reference' && !S.panelExpanded,
+      showPanel: S.mainTab !== 'studio',
+      panelFlex: S.panelExpanded ? '1 1 auto' : '0 0 auto',
+      panelBodyFlex: S.panelExpanded ? '1 1 auto' : '0 0 auto',
+      panelH: S.panelExpanded ? 'auto' : (S.panelOpen ? '224px' : '0px'),
+      log: S.log,
+      statusMode: 'Mode: ' + S.mode, statusCell: 'Cell ' + (S.active + 1), statusCells: S.cells.length + ' cells',
+      showCompletions: !!S.comp,
+      compX: S.comp ? S.comp.x : 0,
+      compY: S.comp ? S.comp.y : 0,
+      completions: (S.comp ? S.comp.items : []).map((it, k) => ({
+        name: it.name, hint: it.hint,
+        bg: k === S.comp.index ? 'var(--acc-soft-bg3)' : 'transparent',
+        nameColor: k === S.comp.index ? 'var(--acc-hi)' : 'var(--ink-2)',
+        sep: k === 0 ? 'transparent' : 'var(--panel)',
+        onHover: () => this.setState(s => (s.comp ? { comp: { ...s.comp, index: k } } : {})),
+        onPick: (e) => { e.preventDefault(); this.acceptCompletion(S.comp.cellIdx, it); },
+      })),
+    };
+    if (!S.ready || !R) return { ...base, cells: [], outline: [], palette: [], reference: [], panelTabs: [], showHint: true, statusRules: '0 rules applied', hoverDoc: null, hoverX: 0, hoverY: 0 };
+
+    const totalRules = S.cells.reduce((n, c) => n + (c.res ? c.res.steps.length : 0), 0);
+
+    const cells = S.cells.map((c, i) => {
+      const key = 'c' + i; const isActive = S.active === i;
+      let spec = c.res, inputEl = null, kindLabel = null;
+      if (!spec && c.src.trim()) { try { spec = E.interpret(c.src); } catch (e) { spec = null; } }
+      if (spec) { kindLabel = spec.fnName; try { inputEl = R.render(spec.input || spec.body, this.mkOpts(key + 'in', i, -1, null), key + 'in'); } catch (e) { inputEl = null; } }
+      const steps = c.res ? c.res.steps.map((st, k) => {
+        const sk = key + 's' + k; const selHere = S.sel && S.sel.key === sk;
+        return { no: k + 1, rule: st.rule, el: R.render(st.expr, this.mkOpts(sk, i, k, st), sk),
+          bg: selHere ? 'var(--p-acc-bg2)' : 'var(--p-row-bg)',
+          shadow: selHere ? 'none' : 'none',
+          noColor: selHere ? 'var(--p-btn-a)' : 'var(--p-mut)', noBg: selHere ? 'var(--p-acc-2)' : 'var(--p-no-bg)',
+          ruleColor: selHere ? 'var(--p-acc-ink)' : 'var(--p-mut)',
+          onSelectRow: (e) => { e.stopPropagation(); this.setState({ sel: { key: sk, mid: sk, node: st.expr, cellIdx: i, stepIdx: k, meta: st }, panelTab: 'explain', panelOpen: true, active: i }); } };
+      }) : [];
+      return { i, label: c.res ? String(c.n) : ' ', src: c.src, work: !!c.work, err: c.err,
+        placeholder: i === S.cells.length - 1 ? 'integrate x exp(x) dx' : '',
+        hasOut: !!c.res, kindLabel, inputEl, steps,
+        metaOpacity: (isActive || S.hoverCell === i) ? 1 : 0,
+        metaPointer: (isActive || S.hoverCell === i) ? 'auto' : 'none',
+        bg: isActive ? 'var(--p-cell-active)' : (S.hoverCell === i ? 'var(--p-cell-hover)' : 'transparent'),
+        bracket: isActive ? 'var(--p-acc-2)' : (S.hoverCell === i ? 'var(--p-br-hov)' : 'var(--p-br-idle)'),
+        outBracket: isActive ? 'var(--p-acc-2)' : 'var(--p-br-out)',
+        promptColor: c.res ? 'var(--p-acc)' : 'var(--p-mut3)',
+        inputBg: isActive ? 'var(--p-input-bg)' : 'transparent',
+        inputShadow: isActive ? 'inset 0 0 0 1px var(--p-input-br)' : 'none',
+        onEnter: () => this.setState({ hoverCell: i }),
+        onLeave: () => this.setState(s => (s.hoverCell === i ? { hoverCell: null } : {})),
+        timing: c.ms ? c.res.steps.length + ' rules · ' + c.ms + ' ms' : '',
+        resultEl: c.res ? R.render(c.res.result, this.mkOpts(key + 'out', i, c.res.steps.length - 1, c.res.steps[c.res.steps.length - 1]), key + 'out') : null,
+        workLabel: c.work ? '▾ Hide work' : '▸ Work (' + steps.length + ')',
+        inputRef: (el) => { if (el) this.inputs[i] = el; else delete this.inputs[i]; },
+        onChange: (e) => { const v = e.target.value, caret = e.target.selectionStart; this.setSrc(i, v); this.updateCompletions(i, v, caret); },
+        onBlur: () => this.setState({ mode: 'Command', comp: null }),
+        onKey: (e) => {
+          const c = this.state.comp;
+          const open = c && c.cellIdx === i;
+          if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault();
+            const d = e.key === 'ArrowDown' ? 1 : -1;
+            this.setState(s => ({ comp: { ...s.comp, index: (s.comp.index + d + s.comp.items.length) % s.comp.items.length } }));
+            return;
+          }
+          if (open && (e.key === 'Tab' || e.key === 'Enter')) { e.preventDefault(); this.acceptCompletion(i, c.items[c.index]); return; }
+          if (e.key === 'Escape') { this.setState({ comp: null }); return; }
+          if (e.key === 'Enter') { e.preventDefault(); this.evalCell(i); }
+        },
+        onFocus: () => this.setState({ active: i, mode: 'Edit' }),
+        onActivate: () => this.setState({ active: i }),
+        onRun: (e) => { e.stopPropagation(); this.evalCell(i); },
+        onHoverKind: (e) => { if (kindLabel && E.docFor(kindLabel)) this.hoverAt(kindLabel, e.currentTarget); },
+        onOpenDoc: (e) => { e.stopPropagation(); this.setState({ mainTab: 'reference', docFocus: kindLabel, hover: null, sel: null, panelExpanded: false }); },
+        sceneLabel: '→ Scene',
+        onSendScene: (e) => { e.stopPropagation(); this.sendToScene(i); },
+        toggleWork: (e) => { e.stopPropagation(); this.setState(s => ({ cells: s.cells.map((x, j) => j === i ? { ...x, work: !x.work } : x) })); } };
+    });
+
+    const outline = S.cells.map((c, i) => {
+      let kind = 'Empty cell';
+      if (c.res) kind = c.res.fnName; else if (c.err) kind = 'Error';
+      else if (c.src.trim()) { try { kind = E.interpret(c.src).fnName + ' (unrun)'; } catch (e) { kind = 'Unparsed'; } }
+      const on = S.active === i;
+      return { num: c.res ? '[' + c.n + ']' : '[ ]', kind, src: c.src || '—',
+        bg: on ? 'var(--panel-2)' : 'transparent',
+        shadow: on ? RAISED : 'none',
+        numColor: c.err ? 'var(--danger)' : c.res ? 'var(--acc-hi)' : 'var(--ink-mut)',
+        kindColor: c.err ? 'var(--danger)' : 'var(--ink)',
+        onClick: () => { this.setState({ active: i, mainTab: 'notebook', panelExpanded: false }); setTimeout(() => this.scrollToCell(i), 30); } };
+    });
+
+    const docs = REF_NAMES.map(n => E.docFor(n)).filter(Boolean);
+    const palette = docs.map(d => ({ name: d.name, sig: d.sig, onClick: () => this.insert(d.also[0]) }));
+    const reference = docs.map(d => ({ name: d.name, sig: d.sig, blurb: d.blurb, ref: d.ref,
+      border: S.docFocus === d.name ? 'var(--acc)' : 'var(--border)',
+      nameColor: S.docFocus === d.name ? 'var(--acc-hi)' : 'var(--ink)',
+      examples: d.also.map(s => ({ label: s, onClick: () => this.insert(s) })) }));
+
+    let hoverDoc = null;
+    if (S.hover) { const d = E.docFor(S.hover.name) || (FNDOC[S.hover.name] && { name: S.hover.name, ...FNDOC[S.hover.name] }); if (d) hoverDoc = { name: d.name, sig: d.sig, blurb: d.blurb }; }
+
+    const panelTabs = [{ key: 'explain', label: 'Explanation' }, { key: 'log', label: 'Kernel log', badge: String(S.log.length) }].map(t => ({
+      label: t.label, badge: t.badge || null,
+      color: S.panelTab === t.key ? 'var(--on-acc)' : 'var(--ink-2)',
+      bg: S.panelTab === t.key ? 'linear-gradient(180deg,var(--pri),var(--pri-2))' : 'linear-gradient(180deg,var(--btn-a),var(--btn-c))',
+      shadow: S.panelTab === t.key ? '0 1px 0 var(--pill-bg) inset, 0 2px 5px var(--sh-a)' : '0 1px 0 var(--hl-a) inset, 0 2px 6px var(--sh-c)',
+      onClick: () => this.setState({ panelTab: t.key, panelOpen: true }) }));
+
+    const studio = S.mainTab === 'studio' ? this.studioVals() : {};
+    const out = { ...base, ...studio, cells, outline, palette, reference, panelTabs, hoverDoc,
+      hoverX: S.hover ? S.hover.x : 0, hoverY: S.hover ? S.hover.y : 0,
+      statusRules: totalRules + ' rules applied', showExplain: false, showLog: S.panelTab === 'log', showHint: false };
+
+    if (S.panelTab === 'log') return out;
+    const sel = S.sel;
+    if (!sel) return { ...out, showHint: true };
+
+    const cell = S.cells[sel.cellIdx]; const v = (cell && cell.res && cell.res.v) || 'x';
+    const desc = E.describe(sel.node, v) || {}; const res = cell && cell.res;
+    const trail = res ? res.steps.slice(0, Math.max(0, sel.stepIdx + 1)).map((st, k) => {
+      const on = k === sel.stepIdx;
+      return { no: k + 1, rule: st.rule, color: on ? 'var(--ink)' : 'var(--ink-mut)',
+        bg: on ? 'var(--acc-soft-bg)' : 'transparent',
+        noColor: on ? 'var(--on-acc)' : 'var(--ink-mut)', noBg: on ? 'var(--acc)' : 'var(--hov)' };
+    }) : [];
+    const chk = res && res.check;
+    let plotEl = null, plotCaption = '';
+    if (this.props.plots === false) { /* off */ }
+    else if (E.hasVar(sel.node, v)) { try { plotEl = R.plot({ f: sel.node, v }, 230, 72); } catch (e) {} plotCaption = 'selection · ' + v + ' ∈ [−3, 3]'; }
+    else if (chk && chk.plot) { try { plotEl = R.plot({ f: chk.plot.fp || chk.plot.f, v }, 230, 72); } catch (e) {} plotCaption = 'result · ' + v + ' ∈ [−3, 3]'; }
+    let selNote = desc.note || '';
+    if (!E.hasVar(sel.node, v)) { const val = E.evalAt(sel.node, {}); if (isFinite(val) && sel.node.t !== 'num') selNote += ' Numerically it is ' + val + '.'; }
+    return { ...out, showExplain: true,
+      selEl: R.render(sel.node, { selected: null }, 'sel'),
+      selKind: desc.kind || 'Expression', selNote, selRef: desc.ref || null,
+      trail, hasTrail: (this.props.showTrail ?? true) && trail.length > 0,
+      stepNote: sel.meta ? sel.meta.note : 'This is the input line as the engine parsed it.',
+      checkLabel: chk ? chk.label : 'Sanity check',
+      checkText: chk ? chk.text : 'No numeric check applies to this result.',
+      checkBadge: chk && chk.ok !== undefined ? (chk.ok ? 'verified' : 'mismatch') : null,
+      checkBadgeBg: chk && chk.ok ? 'var(--ok-2)' : 'var(--warn)',
+      plotEl, plotCaption };
+  }
+}
+</script>
+</body>
+</html>

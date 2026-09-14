@@ -41,6 +41,8 @@ export interface Step {
   path: Path;
   before: WireExpr;
   after: WireExpr;
+  /** `after`, rendered (no path annotations). Optional; used by the notebook's Manim Studio to animate steps. */
+  afterRendered?: Rendered;
   /** Nested derivation (e.g. simplification that ran inside a differentiation step). */
   sub?: Derivation;
 }

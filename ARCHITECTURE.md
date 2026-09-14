@@ -84,16 +84,26 @@ rule in one sentence has the rule at the wrong granularity.
 
 ## 4a. The notebook shell
 
-`apps/notebook` implements the "Notebook - GitHub" artboard's structure and typography with the
-"Notebook - Cloud9" artboard's colour palette; both are checked in under `design/`, exported from
-the Claude Design canvas. Every colour is a token in `index.html`'s `:root`, annotated with the
-GitHub value it replaces, so re-skinning to another artboard is a change to that one block.
+`apps/notebook` implements the second export of the "Notebook - GitHub" artboard, checked in under
+`design/v2/` (the first export, and the Cloud9 palette the shell briefly used, remain under
+`design/`). Two palettes — warm dark and paper light — are token sets on `html[data-theme]` in
+`index.html`; the toggle in the title bar persists the choice in `localStorage`. The cells sit on a
+"paper" whose grain and mottle are inline SVG turbulence filters, and are set in Literata; the
+chrome around them stays in the system sans. Re-skinning is a change to the token blocks.
 
 The page owns no mathematics. It does not parse, print, or simplify: every expression on screen is
 LaTeX the engine produced, every rule name and explanation is the engine's, and the proof status
 beside each step comes from `engine.capabilities.ruleStatus` rather than a list in the frontend
 that could drift from `proofs/`. The one thing the page derives from source text is a cell's *kind*
 label, which is presentation only.
+
+**Manim Studio** is the third tab. "→ Scene" on an evaluated cell turns its derivation into shots:
+the statement, then each step's `afterRendered` term (an optional field on `Step`, per protocol
+rule 5). The page adds what a storyboard needs and nothing more — order, on/off, an animation name,
+a duration — previews a shot by matching KaTeX glyphs between consecutive terms (longest common
+subsequence, then interpolated position and opacity, a browser-side stand-in for
+`TransformMatchingTex`), and prints the Python a Manim user would run. Rendering the video is
+Manim's job, outside the browser.
 
 ## 5. Visuals
 

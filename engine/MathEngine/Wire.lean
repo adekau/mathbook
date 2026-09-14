@@ -1,6 +1,7 @@
 import MathEngine.Expr
 import MathEngine.Json
 import MathEngine.Rewrite
+import MathEngine.Print
 /-! # Wire format — must match `WireExpr` in `packages/protocol/src/index.ts`. -/
 namespace MathEngine
 
@@ -18,7 +19,9 @@ def Path.toJson (p : Path) : Json := .arr (p.toArray.map fun i => .num (toString
 mutual
   partial def Step.toJson (s : Step) : Json :=
     let base := #[("rule", .str s.rule), ("explanation", .str s.explanation), ("path", Path.toJson s.path),
-                  ("before", s.before.toJson), ("after", s.after.toJson)]
+                  ("before", s.before.toJson), ("after", s.after.toJson),
+                  -- optional per protocol rule 5: the whole term after the step, rendered, for animation
+                  ("afterRendered", .obj #[("text", .str s.after.toText), ("latex", .str (s.after.toLatex false))])]
     .obj (match s.sub with | some d => base.push ("sub", d.toJson) | none => base)
   partial def Derivation.toJson (d : Derivation) : Json :=
     .obj #[("input", d.input.toJson), ("steps", .arr (d.steps.map Step.toJson)), ("output", d.output.toJson)]

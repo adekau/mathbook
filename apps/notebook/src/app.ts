@@ -2,16 +2,19 @@ import { createClient, type EngineClient, type Step, type Path, type RuleStatus 
 import { workerTransport, httpTransport } from "@mathbook/engine-host";
 
 /**
- * The notebook shell. Structure and type follow `design/Notebook - GitHub.dc.html`; the colour
- * tokens in `index.html` come from `design/Notebook - Cloud9.dc.html`.
+ * The notebook shell. Structure, type and colour follow the second export of the
+ * "Notebook - GitHub" artboard (`design/v2/Notebook - GitHub.dc.html`): warm dark and paper light
+ * palettes switched by `html[data-theme]`, a textured paper for the cells, and a Manim Studio tab
+ * that turns a derivation into a storyboard of shots with a browser-side preview of Manim's
+ * TransformMatchingTex and the generated Python.
  *
  * The page owns no mathematics. It never parses, prints, or simplifies: every expression on screen
  * is LaTeX the engine produced, every rule name and explanation is the engine's, and the proof
- * status beside each step is the engine's `ruleStatus`. The one thing the page does own is which
- * *kind* of command a cell holds, which it reads off the source text purely to label the cell.
+ * status beside each step is the engine's `ruleStatus`. The studio's shots are the engine's steps
+ * with their rendered terms; what the page adds is timing, glyph matching, and Python text.
  */
 
-declare const katex: { renderToString(tex: string, opts?: object): string };
+declare const katex: { renderToString(tex: string, opts?: object): string; render(tex: string, el: HTMLElement, opts?: object): void };
 const tex = (s: string, paths = false) =>
   katex.renderToString(s, { throwOnError: false, trust: paths, strict: false, displayMode: false });
 
@@ -92,11 +95,17 @@ interface Cell {
 interface Selection { cellId: string; path: Path; latex: string; text: string; steps: Step[] }
 interface LogLine { time: string; level: "rpc" | "ok" | "err"; text: string }
 
+/** One shot of a scene: a rendered term, the animation into it, and its duration. */
+interface Shot { id: number; label: string; tex: string; anim: string; dur: number; note: string; on: boolean; cell: number | null }
+interface Scene { id: number; name: string; shots: Shot[] }
+
+type Tab = "notebook" | "studio" | "reference";
+
 const S = {
   cells: [] as Cell[],
   active: 0,
   rail: "outline" as "outline" | "palette",
-  tab: "notebook" as "notebook" | "reference",
+  tab: "notebook" as Tab,
   panelTab: "explain" as "explain" | "log",
   panelOpen: true,
   sel: null as Selection | null,
@@ -107,13 +116,15 @@ const S = {
   httpUrl: "http://localhost:8787",
   busy: false,
   comp: null as { cell: Cell; items: Doc[]; index: number; x: number; y: number } | null,
-  hover: null as { doc: Doc; x: number; y: number } | null,
+  theme: "dark" as "dark" | "light",
+  studio: { scenes: [] as Scene[], active: 0, playing: false, t: 0, speed: 1, codeOpen: true, copied: false },
 };
 
 let client: EngineClient | null = null;
 const sessionId = crypto.randomUUID();
 let nextLabel = 1;
 let cellSeq = 0;
+let shotSeq = 0;
 
 const now = () => new Date().toTimeString().slice(0, 8);
 function log(level: LogLine["level"], text: string) {
@@ -121,6 +132,21 @@ function log(level: LogLine["level"], text: string) {
   if (S.log.length > 200) S.log.shift();
   if (S.panelTab === "log") renderPanel();
   renderPanelHead();
+}
+
+// ---------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------
+
+function applyTheme(t: "dark" | "light") {
+  S.theme = t;
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem("lemma.theme", t); } catch { /* private mode */ }
+}
+function initTheme() {
+  let t: string | null = null;
+  try { t = localStorage.getItem("lemma.theme"); } catch { /* private mode */ }
+  applyTheme(t === "light" ? "light" : "dark");
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +254,13 @@ function clearOutputs() {
   log("ok", "outputs cleared");
 }
 
+function switchTab(t: Tab) {
+  S.tab = t;
+  hideHover(); hideCompletions();
+  if (t !== "studio") stopPlayback();
+  renderChrome(); renderView();
+}
+
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
@@ -264,7 +297,7 @@ function shell() {
       const body = h("div", "body");
       body.append(h("div", "rail"), h("aside", "sidebar"), (() => {
         const main = h("div", "main");
-        main.append(h("div", "toolbar"), h("div", "cells"), h("div", "reference"), h("div", "panel"));
+        main.append(h("div", "toolbar"), h("div", "cells"), h("div", "reference"), h("div", "studio"), h("div", "panel"));
         return main;
       })());
       return body;
@@ -282,10 +315,13 @@ function renderChrome() {
   brand.append(h("span", "mark"), h("span", "name", "Lemma"));
   const menus = h("div", "menus");
   for (const m of ["File", "Edit", "View", "Run", "Kernel", "Help"]) menus.append(h("span", undefined, m));
+  const theme = h("span", "themebtn", S.theme === "light" ? "◑ Light" : "◐ Dark");
+  theme.title = "Toggle light and dark";
+  theme.addEventListener("click", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); if (S.tab === "studio") renderStage(); });
   const kernel = h("div", "kernel");
   const dot = h("span", "dot");
   const state = S.busy ? "running" : S.caps ? "idle" : "offline";
-  dot.style.background = S.busy ? "var(--accent)" : S.caps ? "var(--ok)" : "var(--danger)";
+  dot.style.background = S.busy ? "var(--acc)" : S.caps ? "var(--ok)" : "var(--danger)";
   const sel = document.createElement("select");
   for (const [v, label] of [["lean-worker", "lemma-engine · wasm"], ["http", "lemma-engine · http"]] as const) {
     const o = document.createElement("option"); o.value = v; o.textContent = label; o.selected = S.engineMode === v; sel.append(o);
@@ -295,17 +331,17 @@ function renderChrome() {
   url.id = "kurl"; url.value = S.httpUrl; url.hidden = S.engineMode !== "http";
   url.addEventListener("change", () => { S.httpUrl = url.value; void connect(); });
   kernel.append(dot, sel, url, h("span", "sep", "·"), h("span", undefined, state));
-  tb.append(brand, menus, h("div", "spacer"), kernel);
+  tb.append(brand, menus, h("div", "spacer"), theme, kernel);
 
   // tab bar
   const tabs = $(".tabbar"); tabs.innerHTML = "";
-  for (const [key, label] of [["notebook", "lesson-04.lemma"], ["reference", "reference"]] as const) {
+  for (const [key, label] of [["notebook", "lesson-04.lemma"], ["studio", "manim studio"], ["reference", "reference"]] as const) {
     const t = h("div", `tab${S.tab === key ? " on" : ""}`);
     t.append(h("span", "label", label), h("span", "x", "×"));
-    t.addEventListener("click", () => { S.tab = key; renderChrome(); renderView(); });
+    t.addEventListener("click", () => switchTab(key));
     tabs.append(t);
   }
-  tabs.append((() => { const a = h("div", "tabadd", "+"); a.addEventListener("click", () => focusCell(addCell().label ?? S.cells.length - 1)); return a; })());
+  tabs.append((() => { const a = h("div", "tabadd", "+"); a.addEventListener("click", () => { switchTab("notebook"); const c = addCell(); focusCell(S.cells.indexOf(c)); }); return a; })());
 
   // rail
   const rail = $(".rail"); rail.innerHTML = "";
@@ -354,9 +390,12 @@ function renderChrome() {
 
 function renderView() {
   $(".cells").hidden = S.tab !== "notebook";
-  $(".toolbar").hidden = S.tab !== "notebook";
+  $(".toolbar").hidden = S.tab === "studio";
   $(".reference").hidden = S.tab !== "reference";
+  $(".studio").hidden = S.tab !== "studio";
+  $(".panel").hidden = S.tab === "studio";
   if (S.tab === "reference") renderReference();
+  if (S.tab === "studio") renderStudio();
 }
 
 function renderSidebar() {
@@ -370,7 +409,7 @@ function renderSidebar() {
       const wrap = h("span");
       wrap.append(h("span", "kind", cellKind(c.src) ?? "empty"), h("span", "src", c.src || "…"));
       row.append(wrap);
-      row.addEventListener("click", () => focusCell(i));
+      row.addEventListener("click", () => { if (S.tab !== "notebook") switchTab("notebook"); focusCell(i); });
       list.append(row);
     });
   } else {
@@ -378,6 +417,7 @@ function renderSidebar() {
       const row = h("div", "plrow");
       row.append(h("span", "name", d.name), h("span", "sig", d.sig));
       row.addEventListener("click", () => {
+        if (S.tab !== "notebook") switchTab("notebook");
         const c = S.cells[S.active];
         if (c?.input) { c.input.value = d.examples[0] ?? `${d.name}(`; c.src = c.input.value; c.input.focus(); renderCellBody(c); renderSidebar(); }
       });
@@ -390,10 +430,11 @@ function renderSidebar() {
 }
 
 function renderCells() {
+  hideHover();
   const host = $(".cells");
   host.innerHTML = "";
   S.cells.forEach((cell, i) => {
-    const el = h("div", `cell${i === S.active ? " active" : ""}`);
+    const el = h("div", `cell${i === S.active ? " active" : ""}${cell.label ? " done" : ""}`);
     cell.el = el;
     el.append(h("div", "prompt", `In[${cell.label ?? " "}]:=`));
 
@@ -418,12 +459,6 @@ function renderCells() {
     run.addEventListener("mousedown", (e) => e.preventDefault());
     run.addEventListener("click", () => void runCell(cell));
     acts.append(run);
-    if (cell.steps?.length) {
-      const tw = h("span", undefined, cell.showWork ? "Hide work" : "Show work");
-      tw.addEventListener("mousedown", (e) => e.preventDefault());
-      tw.addEventListener("click", () => { cell.showWork = !cell.showWork; renderCellBody(cell); });
-      acts.append(tw);
-    }
     el.append(acts, h("div", "brk"));
     host.append(el);
     renderCellBody(cell);
@@ -438,6 +473,8 @@ function markActive() {
 /** Re-render everything below a cell's input, leaving the input element untouched. */
 function renderCellBody(cell: Cell) {
   const el = cell.el; if (!el) return;
+  el.classList.toggle("done", !!cell.label);
+  el.querySelector(".prompt")!.textContent = `In[${cell.label ?? " "}]:=`;
   const mid = el.querySelector(".mid")!;
   const body = mid.querySelector(".cellbody") as HTMLElement;
   body.innerHTML = "";
@@ -461,7 +498,7 @@ function renderCellBody(cell: Cell) {
     }
     meta.append(badge);
   }
-  if (cell.ms !== undefined) meta.append(h("span", "timing", `${cell.ms.toFixed(1)} ms`));
+  if (cell.ms !== undefined) meta.append(h("span", "timing", `${cell.steps?.length ?? 0} rules · ${cell.ms.toFixed(1)} ms`));
   body.append(meta);
 
   if (cell.error) {
@@ -508,15 +545,20 @@ function renderCellBody(cell: Cell) {
     el.append(out);
   }
 
-  // the Show/Hide work button only exists once there are steps
+  // per-cell actions beyond Run exist only once there is output
   const acts = el.querySelector(".cellacts")!;
-  if (cell.steps?.length && acts.childElementCount === 1) {
-    const tw = h("span", undefined, cell.showWork ? "Hide work" : "Show work");
+  while (acts.childElementCount > 1) acts.lastElementChild!.remove();
+  if (cell.steps?.length) {
+    const tw = h("span", undefined, cell.showWork ? "▾ Hide work" : `▸ Work (${cell.steps.length})`);
     tw.addEventListener("mousedown", (e) => e.preventDefault());
     tw.addEventListener("click", () => { cell.showWork = !cell.showWork; renderCellBody(cell); });
     acts.append(tw);
-  } else if (acts.childElementCount === 2) {
-    acts.lastElementChild!.textContent = cell.showWork ? "Hide work" : "Show work";
+  }
+  if (cell.outLatex && cell.echoLatex) {
+    const sc = h("span", "scene", "→ Scene"); sc.title = "Send this derivation to Manim Studio";
+    sc.addEventListener("mousedown", (e) => e.preventDefault());
+    sc.addEventListener("click", () => sendToScene(cell));
+    acts.append(sc);
   }
 }
 
@@ -533,7 +575,7 @@ function renderReference() {
     for (const e of d.examples) {
       const b = document.createElement("button"); b.textContent = e;
       b.addEventListener("click", () => {
-        S.tab = "notebook"; renderChrome(); renderView();
+        switchTab("notebook");
         const c = S.cells[S.cells.length - 1] ?? addCell();
         if (c.input) { c.input.value = e; c.src = e; }
         focusCell(S.cells.indexOf(c)); void runCell(c);
@@ -566,7 +608,7 @@ function renderPanelHead() {
     head.append(t);
   }
   head.append(h("div", "spacer"));
-  const toggle = h("div", "pbtn", S.panelOpen ? "Collapse ▾" : "Expand ▴");
+  const toggle = h("div", "pbtn", S.panelOpen ? "▾ Collapse" : "▴ Expand");
   toggle.addEventListener("click", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); });
   head.append(toggle);
 }
@@ -645,6 +687,468 @@ function renderPanel() {
   }
   grid.append(c3);
   body.append(grid);
+}
+
+// ---------------------------------------------------------------------------
+// Manim Studio: glyph-level TeX morphing
+// ---------------------------------------------------------------------------
+// Renders TeX offscreen with KaTeX, measures every glyph box, matches glyphs between two
+// expressions by longest common subsequence, and interpolates position and opacity — the
+// browser-side approximation of Manim's TransformMatchingTex. Ported from the design's
+// glyphmorph.js; the only difference is that it emits DOM nodes rather than React elements.
+
+interface Glyph { ch: string; rule?: boolean; x: number; y: number; w: number; h: number; font?: string; size?: string; style?: string; weight?: string }
+interface Measured { glyphs: Glyph[]; w: number; h: number }
+
+const measureCache = new Map<string, Measured>();
+let morphHost: HTMLElement | null = null;
+
+function ensureHost(): HTMLElement {
+  if (morphHost?.isConnected) return morphHost;
+  morphHost = document.createElement("div");
+  morphHost.style.cssText = "position:fixed; left:-99999px; top:0; visibility:hidden; pointer-events:none; z-index:-1";
+  document.body.appendChild(morphHost);
+  return morphHost;
+}
+
+function measure(texSrc: string, fontSize: number): Measured {
+  const key = `${fontSize}|${texSrc}`;
+  const hit = measureCache.get(key);
+  if (hit) return hit;
+  const empty: Measured = { glyphs: [], w: 0, h: 0 };
+  if (!texSrc) return empty;
+  const host = ensureHost();
+  host.innerHTML = "";
+  const el = document.createElement("div");
+  el.style.cssText = `font-size:${fontSize}px; display:inline-block; white-space:nowrap`;
+  host.appendChild(el);
+  try { katex.render(texSrc, el, { throwOnError: false, displayMode: false, strict: false }); } catch { return empty; }
+  const root = el.querySelector(".katex-html") as HTMLElement | null;
+  if (!root) return empty;
+  el.querySelector(".katex-mathml")?.remove();
+  const base = root.getBoundingClientRect();
+  const glyphs: Glyph[] = [];
+  const range = document.createRange();
+  const walk = (node: Node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) {
+        const txt = child.textContent ?? "";
+        if (!txt.trim()) continue;
+        const cs = getComputedStyle(child.parentElement!);
+        for (let i = 0; i < txt.length; i++) {
+          if (!txt[i]!.trim()) continue;
+          range.setStart(child, i); range.setEnd(child, i + 1);
+          const r = range.getBoundingClientRect();
+          if (r.width < 0.05 && r.height < 0.05) continue;
+          glyphs.push({ ch: txt[i]!, x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height,
+            font: cs.fontFamily, size: cs.fontSize, style: cs.fontStyle, weight: cs.fontWeight });
+        }
+      } else if (child.nodeType === 1) {
+        const elc = child as HTMLElement;
+        const cs = getComputedStyle(elc);
+        const bw = parseFloat(cs.borderBottomWidth) || 0;
+        if (bw > 0 && elc.clientWidth > 0) {
+          const r = elc.getBoundingClientRect();
+          glyphs.push({ ch: "─", rule: true, x: r.left - base.left, y: r.bottom - base.top - bw, w: r.width, h: Math.max(1, bw) });
+        }
+        walk(child);
+      }
+    }
+  };
+  walk(root);
+  const out = { glyphs, w: base.width, h: base.height };
+  measureCache.set(key, out);
+  return out;
+}
+
+function lcsPairs(A: Glyph[], B: Glyph[]) {
+  const n = A.length, m = B.length;
+  const pairs: [number, number][] = [], usedA = new Set<number>(), usedB = new Set<number>();
+  if (!n || !m) return { pairs, usedA, usedB };
+  const dp: Int32Array[] = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      dp[i]![j] = A[i]!.ch === B[j]!.ch ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (A[i]!.ch === B[j]!.ch) { pairs.push([i, j]); usedA.add(i); usedB.add(j); i++; j++; }
+    else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) i++;
+    else j++;
+  }
+  return { pairs, usedA, usedB };
+}
+
+const clamp01 = (x: number) => x < 0 ? 0 : x > 1 ? 1 : x;
+const easeIO = (p: number) => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+
+function glyphEl(g: Glyph, style: Partial<CSSStyleDeclaration> & { color: string }): HTMLElement {
+  if (g.rule) {
+    const d = document.createElement("div");
+    Object.assign(d.style, { position: "absolute", width: `${g.w}px`, height: `${Math.max(1, g.h)}px`, background: style.color }, style);
+    return d;
+  }
+  const s = document.createElement("span");
+  Object.assign(s.style, { position: "absolute", whiteSpace: "pre", lineHeight: "normal",
+    fontFamily: g.font ?? "", fontSize: g.size ?? "", fontStyle: g.style ?? "", fontWeight: g.weight ?? "" }, style);
+  s.textContent = g.ch;
+  return s;
+}
+
+/** One frame of the transition from `prevTex` into `curTex` at progress `p` (0..1). */
+function morphFrame(prevTex: string | null, curTex: string, p: number, fontSize: number): { el: HTMLElement; gone: string; added: string } | null {
+  const ink = "var(--ink)", gone = "var(--danger-2)", added = "var(--ok)";
+  const B = measure(curTex, fontSize);
+  if (!B.glyphs.length) return null;
+  const A = prevTex ? measure(prevTex, fontSize) : { glyphs: [], w: 0, h: 0 };
+  const e = easeIO(clamp01(p));
+  const W = A.w ? A.w + (B.w - A.w) * e : B.w;
+  const H = Math.max(A.h, B.h);
+  const box = document.createElement("div");
+  box.style.cssText = `position:relative; width:${W}px; height:${H}px; margin:0 auto`;
+
+  if (!A.glyphs.length) {
+    // no previous expression: write the glyphs on, left to right
+    const n = B.glyphs.length, span = Math.max(1, n * 0.55);
+    B.glyphs.forEach((g, i) => {
+      const o = clamp01((clamp01(p) * (n + span) - i) / span);
+      if (o <= 0.001) return;
+      box.append(glyphEl(g, { left: `${g.x.toFixed(2)}px`, top: `${g.y.toFixed(2)}px`, opacity: String(o), color: ink }));
+    });
+    return { el: box, gone: "", added: "" };
+  }
+
+  const { pairs, usedA, usedB } = lcsPairs(A.glyphs, B.glyphs);
+  const offA = (W - A.w) / 2, offB = (W - B.w) / 2;
+  for (const [ai, bi] of pairs) {
+    const a = A.glyphs[ai]!, b = B.glyphs[bi]!;
+    const st: Partial<CSSStyleDeclaration> & { color: string } = {
+      left: `${((a.x + offA) + ((b.x + offB) - (a.x + offA)) * e).toFixed(2)}px`,
+      top: `${(a.y + (b.y - a.y) * e).toFixed(2)}px`, opacity: "1", color: ink,
+    };
+    if (b.rule) st.width = `${a.w + (b.w - a.w) * e}px`;
+    box.append(glyphEl(b, st));
+  }
+  const goneChars: string[] = [], addedChars: string[] = [];
+  A.glyphs.forEach((g, i) => {
+    if (usedA.has(i)) return;
+    if (!g.rule) goneChars.push(g.ch);
+    const o = clamp01(1 - p * 1.9);
+    if (o <= 0.001) return;
+    box.append(glyphEl(g, { left: `${(g.x + offA).toFixed(2)}px`, top: `${g.y.toFixed(2)}px`, opacity: String(o), color: gone,
+      transform: `scale(${(1 - 0.25 * clamp01(p * 1.9)).toFixed(3)})` }));
+  });
+  B.glyphs.forEach((g, i) => {
+    if (usedB.has(i)) return;
+    if (!g.rule) addedChars.push(g.ch);
+    const o = clamp01((p - 0.38) / 0.5);
+    if (o <= 0.001) return;
+    box.append(glyphEl(g, { left: `${(g.x + offB).toFixed(2)}px`, top: `${g.y.toFixed(2)}px`, opacity: String(o), color: o > 0.94 ? ink : added }));
+  });
+  return { el: box, gone: goneChars.join(""), added: addedChars.join("") };
+}
+
+// ---------------------------------------------------------------------------
+// Manim Studio: scenes, shots, playback, code
+// ---------------------------------------------------------------------------
+
+const ANIMS = ["TransformMatchingTex", "TransformMatchingShapes", "FadeTransform", "Write", "Create"];
+
+function defaultAnim(rule: string): string {
+  const r = rule.toLowerCase();
+  if (r.startsWith("la.") || r.startsWith("cmd.")) return "TransformMatchingShapes";
+  if (r === "simp.sort" || r === "simp.flatten") return "FadeTransform";
+  return "TransformMatchingTex";
+}
+const pyName = (s: string) => (s.replace(/[^A-Za-z0-9]+/g, " ").trim().split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("").slice(0, 30)) || "LemmaScene";
+const fmtT = (x: number) => `${x.toFixed(1)}s`;
+const ST = S.studio;
+
+function activeScene(): Scene | null { return ST.scenes[ST.active] ?? null; }
+
+function newScene() {
+  const n = ST.scenes.length + 1;
+  ST.scenes.push({ id: Date.now(), name: `Scene ${n}`, shots: [] });
+  ST.active = ST.scenes.length - 1; ST.t = 0; stopPlayback();
+  renderStudio();
+}
+
+function deleteScene(idx: number) {
+  stopPlayback();
+  ST.scenes.splice(idx, 1);
+  ST.active = Math.max(0, Math.min(ST.active > idx ? ST.active - 1 : ST.active, ST.scenes.length - 1));
+  ST.t = 0;
+  renderStudio();
+}
+
+/** Turn a cell's derivation into shots: the statement, then every step's result. */
+function sendToScene(cell: Cell) {
+  if (!cell.outLatex || !cell.echoLatex) return;
+  const mk = (label: string, texSrc: string, anim: string, dur: number, note: string): Shot =>
+    ({ id: ++shotSeq, label, tex: texSrc, anim, dur, note, on: true, cell: cell.label });
+  const shots: Shot[] = [mk("Statement", cell.echoLatex, "Write", 1.2, "Write the problem exactly as the engine parsed it.")];
+  for (const st of cell.steps ?? []) {
+    if (!st.afterRendered) continue;
+    shots.push(mk(st.rule, st.afterRendered.latex, defaultAnim(st.rule), 1.4, st.explanation));
+  }
+  if (!ST.scenes.length) ST.scenes.push({ id: Date.now(), name: "Scene 1", shots: [] });
+  if (ST.active >= ST.scenes.length) ST.active = ST.scenes.length - 1;
+  ST.scenes[ST.active]!.shots.push(...shots);
+  ST.t = 0; stopPlayback();
+  log("ok", `${shots.length} shots sent to ${ST.scenes[ST.active]!.name}`);
+  switchTab("studio");
+}
+
+interface Live extends Shot { start: number; end: number }
+function timeline(shots: Shot[]): { on: Live[]; total: number } {
+  let at = 0;
+  const on = shots.filter((s) => s.on).map((s) => { const e = { ...s, start: at, end: at + s.dur }; at += s.dur; return e; });
+  return { on, total: at || 0.001 };
+}
+
+let raf = 0, last = 0;
+function stopPlayback() { if (raf) cancelAnimationFrame(raf); raf = 0; ST.playing = false; }
+function tick() {
+  if (!ST.playing) return;
+  const t = performance.now();
+  const dt = Math.min(0.1, (t - (last || t)) / 1000) * ST.speed;
+  last = t;
+  const sc = activeScene();
+  const { total } = timeline(sc ? sc.shots : []);
+  ST.t += dt;
+  if (ST.t >= total) { ST.t = total; stopPlayback(); renderStage(); renderTransport(); return; }
+  renderStage(); renderTransport();
+  raf = requestAnimationFrame(tick);
+}
+function playPause() {
+  if (ST.playing) { stopPlayback(); renderTransport(); return; }
+  const sc = activeScene();
+  const { total } = timeline(sc ? sc.shots : []);
+  if (ST.t >= total - 0.01) ST.t = 0;
+  last = performance.now(); ST.playing = true;
+  renderTransport();
+  raf = requestAnimationFrame(tick);
+}
+
+/** The Python a Manim user would run for this scene. */
+function manimSceneCode(scene: Scene | null): string {
+  if (!scene) return "# Create a scene, then send a cell to it.";
+  const on = scene.shots.filter((s) => s.on);
+  if (!on.length) return '# This scene has no shots yet.\n# Open the notebook and press "→ Scene" on an evaluated cell.';
+  const cls = pyName(scene.name);
+  const q = (s: string) => s.replace(/"/g, "'");
+  const L = ["from manim import *", "", "", `class ${cls}(Scene):`, `    """${q(scene.name)} — storyboard generated by Lemma Manim Studio."""`, "", "    def construct(self):"];
+  let first = true;
+  for (const s of on) {
+    L.push(`        # ${q(s.label)}`);
+    if (first) {
+      L.push(`        expr = MathTex(r"${s.tex}", font_size=54)`);
+      L.push(`        self.play(Write(expr), run_time=${s.dur.toFixed(1)})`);
+      L.push("        self.wait(0.3)");
+      first = false;
+    } else {
+      L.push(`        caption = Text("${q(s.label)}", font_size=24, color=GREY_B).to_edge(DOWN, buff=0.7)`);
+      L.push("        self.play(FadeIn(caption, shift=UP * 0.2), run_time=0.3)");
+      L.push(`        nxt = MathTex(r"${s.tex}", font_size=54)`);
+      if (s.anim === "Write" || s.anim === "Create") {
+        L.push("        self.play(FadeOut(expr), run_time=0.2)");
+        L.push(`        self.play(${s.anim}(nxt), run_time=${s.dur.toFixed(1)})`);
+      } else {
+        L.push(`        self.play(${s.anim}(expr, nxt), run_time=${s.dur.toFixed(1)})`);
+      }
+      L.push("        expr = nxt");
+      L.push("        self.play(FadeOut(caption), run_time=0.25)");
+    }
+    L.push("");
+  }
+  L.push("        self.wait(1)");
+  return L.join("\n");
+}
+
+/** Build the studio's structure. Playback only touches the stage, the transport and shot highlights. */
+function renderStudio() {
+  const host = $(".studio"); host.innerHTML = "";
+  const scene = activeScene();
+  const shots = scene ? scene.shots : [];
+  const { on, total } = timeline(shots);
+
+  const top = h("div", "studio-top");
+  const col = h("div", "stagecol");
+
+  const bar = h("div", "scenebar");
+  ST.scenes.forEach((sc, i) => {
+    const t = h("span", `scenetab${i === ST.active ? " on" : ""}`, sc.name);
+    t.addEventListener("click", () => { stopPlayback(); ST.active = i; ST.t = 0; renderStudio(); });
+    const x = h("span", "x", "×"); x.title = "Delete scene";
+    x.addEventListener("click", (ev) => { ev.stopPropagation(); deleteScene(i); });
+    t.append(x);
+    bar.append(t);
+  });
+  const add = h("span", "smallbtn", "+ New scene"); add.title = "New scene";
+  add.addEventListener("click", newScene);
+  bar.append(add, h("div", "spacer"), h("span", "info", scene ? `${on.length} shots · ${fmtT(total)} · 60 fps` : "No scene yet"));
+  col.append(bar);
+
+  const stage = h("div", "stage");
+  stage.append(h("div", "grid"), h("div", "label"), h("div", "center"), h("div", "foot"));
+  col.append(stage);
+
+  const tr = h("div", "transport");
+  const group = h("div", "bgroup");
+  const mk = (label: string, title: string, fn: () => void, cls = "") => {
+    const b = document.createElement("button"); b.className = cls; b.textContent = label; b.title = title;
+    b.addEventListener("click", fn); return b;
+  };
+  group.append(
+    mk("⏮", "Back to start", () => { stopPlayback(); ST.t = 0; renderStage(); renderTransport(); }),
+    mk("▶ Play", "Play or pause", playPause, "primary play"),
+    mk("⏭", "Next shot", () => {
+      let ci = 0;
+      for (let k = 0; k < on.length; k++) if (ST.t >= on[k]!.start - 1e-6) ci = k;
+      const nx = on[Math.min(on.length - 1, ci + 1)];
+      stopPlayback(); ST.t = nx ? nx.start : total; renderStage(); renderTransport();
+    }),
+  );
+  const range = document.createElement("input");
+  range.type = "range"; range.min = "0"; range.max = String(total); range.step = "0.01"; range.value = String(Math.min(ST.t, total));
+  range.addEventListener("input", () => { stopPlayback(); ST.t = parseFloat(range.value) || 0; renderStage(); renderTransport(); });
+  const speeds = h("div", "bgroup");
+  for (const x of [0.5, 1, 2]) {
+    const b = mk(`${x}×`, "Playback speed", () => { ST.speed = x; renderTransport(); }, `speed${ST.speed === x ? " on" : ""}`);
+    b.dataset["speed"] = String(x);
+    speeds.append(b);
+  }
+  tr.append(group, range, h("span", "time"), speeds);
+  col.append(tr);
+  top.append(col);
+
+  // shots
+  const side = h("div", "shots");
+  const head = h("div", "shotshead");
+  head.append(h("span", undefined, "Shots"), h("div", "spacer"), h("span", "n", shots.length ? `${on.length} of ${shots.length} on` : "empty"));
+  side.append(head);
+  const list = h("div", "shotlist");
+  shots.forEach((s, i) => {
+    const row = h("div", `shot${s.on ? "" : " off"}`);
+    row.dataset["shot"] = String(s.id);
+    const r1 = h("div", "r1");
+    const no = h("span", "no", String(i + 1)); no.title = "Jump to this shot";
+    no.addEventListener("click", () => { const live = on.find((x) => x.id === s.id); if (live) { stopPlayback(); ST.t = live.start; renderStage(); renderTransport(); } });
+    const lbl = document.createElement("input"); lbl.className = "lbl"; lbl.value = s.label;
+    lbl.addEventListener("change", () => { s.label = lbl.value; renderCode(); });
+    const tog = h("span", `tog${s.on ? " on" : ""}`, s.on ? "◉" : "○"); tog.title = "Include in render";
+    tog.addEventListener("click", () => { s.on = !s.on; ST.t = 0; stopPlayback(); renderStudio(); });
+    const up = h("span", "mv", "▲"); up.title = "Move up";
+    up.addEventListener("click", () => { if (i > 0) { [shots[i - 1], shots[i]] = [shots[i]!, shots[i - 1]!]; renderStudio(); } });
+    const dn = h("span", "mv", "▼"); dn.title = "Move down";
+    dn.addEventListener("click", () => { if (i < shots.length - 1) { [shots[i + 1], shots[i]] = [shots[i]!, shots[i + 1]!]; renderStudio(); } });
+    const del = h("span", "del", "×"); del.title = "Delete shot";
+    del.addEventListener("click", () => { shots.splice(i, 1); ST.t = 0; stopPlayback(); renderStudio(); });
+    r1.append(no, lbl, tog, up, dn, del);
+    const r2 = h("div", "r2");
+    const sel = document.createElement("select");
+    for (const a of ANIMS) { const o = document.createElement("option"); o.value = a; o.textContent = a; o.selected = s.anim === a; sel.append(o); }
+    sel.addEventListener("change", () => { s.anim = sel.value; renderStage(); renderCode(); });
+    const dur = document.createElement("input"); dur.type = "number"; dur.min = "0.2"; dur.max = "8"; dur.step = "0.1"; dur.value = String(s.dur);
+    dur.addEventListener("change", () => { const d = parseFloat(dur.value); if (isFinite(d) && d > 0) { s.dur = d; renderStudio(); } });
+    r2.append(sel, dur, h("span", "s", "s"));
+    row.append(r1, r2);
+    list.append(row);
+  });
+  side.append(list);
+  top.append(side);
+  host.append(top);
+
+  // code
+  const code = h("div", "code");
+  const ch = h("div", "codehead");
+  const title = h("span", "title", ST.codeOpen ? "▾ Manim scene" : "▸ Manim scene");
+  title.addEventListener("click", () => { ST.codeOpen = !ST.codeOpen; renderStudio(); });
+  const file = h("span", "file", scene ? `${pyName(scene.name).toLowerCase()}.py` : "lemma_scene.py");
+  const cmd = h("span", "cmd", scene ? `manim -pqh ${pyName(scene.name).toLowerCase()}.py` : "");
+  const copy = h("span", "pbtn", ST.copied ? "Copied" : "Copy");
+  copy.addEventListener("click", () => {
+    void navigator.clipboard?.writeText(manimSceneCode(activeScene()));
+    ST.copied = true; copy.textContent = "Copied";
+    setTimeout(() => { ST.copied = false; copy.textContent = "Copy"; }, 1400);
+  });
+  ch.append(title, file, h("div", "spacer"), cmd, copy);
+  code.append(ch);
+  const pre = document.createElement("pre");
+  pre.hidden = !ST.codeOpen;
+  code.style.height = ST.codeOpen ? "200px" : "32px";
+  code.append(pre);
+  host.append(code);
+
+  renderCode(); renderStage(); renderTransport();
+}
+
+function renderCode() {
+  const pre = $(".studio .code pre"); if (pre) pre.textContent = manimSceneCode(activeScene());
+}
+
+function renderTransport() {
+  const tr = $(".studio .transport"); if (!tr) return;
+  const sc = activeScene();
+  const { total } = timeline(sc ? sc.shots : []);
+  const t = Math.min(ST.t, total);
+  (tr.querySelector("input[type=range]") as HTMLInputElement).value = String(t);
+  tr.querySelector(".time")!.textContent = `${fmtT(t)} / ${fmtT(total)}`;
+  tr.querySelector(".play")!.textContent = ST.playing ? "❚❚ Pause" : "▶ Play";
+  tr.querySelectorAll<HTMLElement>(".speed").forEach((b) => b.classList.toggle("on", parseFloat(b.dataset["speed"]!) === ST.speed));
+}
+
+/** The frame at the current time: which shot, how far into it, and the morph from the previous one. */
+function renderStage() {
+  const stage = $(".studio .stage"); if (!stage) return;
+  const sc = activeScene();
+  const shots = sc ? sc.shots : [];
+  const { on, total } = timeline(shots);
+  const center = stage.querySelector(".center") as HTMLElement;
+  const foot = stage.querySelector(".foot") as HTMLElement;
+  const label = stage.querySelector(".label") as HTMLElement;
+  center.innerHTML = ""; foot.innerHTML = "";
+
+  if (!on.length) {
+    label.textContent = "1920×1080 · —";
+    const empty = h("div", "empty");
+    empty.append(h("div", "t", "This scene is empty"));
+    const s = h("div", "s");
+    s.append(document.createTextNode("Open the notebook and press "), h("code", undefined, "→ Scene"), document.createTextNode(" on any evaluated cell to send its derivation here as shots."));
+    empty.append(s);
+    center.append(empty);
+    $(".studio .shotlist")?.querySelectorAll(".shot.on").forEach((r) => r.classList.remove("on"));
+    return;
+  }
+
+  const t = Math.min(ST.t, total);
+  let cur = on[0]!, ci = 0;
+  for (let k = 0; k < on.length; k++) if (t >= on[k]!.start - 1e-6) { cur = on[k]!; ci = k; }
+  const p = Math.max(0, Math.min(1, (t - cur.start) / Math.max(0.001, cur.dur)));
+  const writeOn = ci === 0 || cur.anim === "Write" || cur.anim === "Create";
+  const prev = !writeOn && ci > 0 ? on[ci - 1]! : null;
+  label.textContent = `1920×1080 · shot ${ci + 1} of ${on.length}`;
+
+  const fontSize = 34;
+  const morph = morphFrame(prev ? prev.tex : null, cur.tex, p, fontSize);
+  const box = h("div", "morph");
+  if (morph) box.append(morph.el);
+  else { box.innerHTML = tex(cur.tex); box.style.fontSize = "30px"; box.style.opacity = String(Math.min(1, 0.25 + p * 1.6)); }
+  const avail = Math.max(180, stage.clientWidth - 52);
+  const need = measure(cur.tex, fontSize).w;
+  box.style.transform = `scale(${need > avail ? Math.max(0.42, avail / need) : 1})`;
+  center.append(box);
+
+  const capOpacity = String(Math.min(1, p * 3));
+  if (ci > 0) { const c = h("span", "caption", cur.label); c.style.opacity = capOpacity; foot.append(c); }
+  if (morph?.gone) { const m = h("span", "mark gone", `− ${morph.gone}`); m.style.opacity = capOpacity; foot.append(m); }
+  if (morph?.added) { const m = h("span", "mark added", `+ ${morph.added}`); m.style.opacity = capOpacity; foot.append(m); }
+
+  const done = t >= total - 1e-6;
+  $(".studio .shotlist")?.querySelectorAll<HTMLElement>(".shot").forEach((r) => {
+    const live = on.find((x) => String(x.id) === r.dataset["shot"]);
+    const active = !!live && ((t >= live.start - 1e-6 && t < live.end - 1e-6) || (done && live.end >= total - 1e-6));
+    r.classList.toggle("on", active);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -732,6 +1236,7 @@ function onKey(ev: KeyboardEvent, cell: Cell, i: number) {
 // Boot
 // ---------------------------------------------------------------------------
 
+initTheme();
 shell();
 renderChrome();
 renderSidebar();
