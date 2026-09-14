@@ -126,15 +126,21 @@ mutual
       | some q => pure (.num q)
       | none => fail s!"bad number '{t.s}'" t
     | .id =>
-      if isOp (← peek) "(" && (← isFn t.s) then
+      let st ← get
+      let at_ (k : Nat) : Tok := st.toks.getD (st.i + k) ⟨.eof, "", 0, 0⟩
+      -- `sin^2(y)` is `sin(y)^2`: the textbook's power of a function, for the unary builtins
+      let powFn := ["sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs"].contains t.s &&
+        isOp (at_ 0) "^" && (at_ 1).kind == .num && isOp (at_ 2) "("
+      if powFn then
         discard next
-        let mut args : List Expr := []
-        if !isOp (← peek) ")" then
-          args := [← expr]
-          while isOp (← peek) "," do
-            discard next
-            args := args ++ [← expr]
-        expectOp ")"
+        let n ← next
+        let q ← match Q.parse n.s with | some q => pure q | none => fail s!"bad number '{n.s}'" n
+        discard next
+        let args ← callArgs
+        pure (.pow (.fn t.s args) (.num q))
+      else if isOp (← peek) "(" && (← isFn t.s) then
+        discard next
+        let args ← callArgs
         pure (.fn t.s args)
       else if t.s == "pi" then pure (.var "π")
       else pure (.var t.s)
@@ -169,6 +175,16 @@ mutual
         pure (.matrix rows)
       else fail s!"unexpected '{t.s}'" t
     | .eof => fail "unexpected end of input" t
+  /-- The arguments of a call, after its `(`; consumes the `)`. -/
+  partial def callArgs : PM (List Expr) := do
+    let mut args : List Expr := []
+    if !isOp (← peek) ")" then
+      args := [← expr]
+      while isOp (← peek) "," do
+        discard next
+        args := args ++ [← expr]
+    expectOp ")"
+    pure args
 end
 
 /-- Parse a statement. `known` lists session-defined function names that may be called. -/

@@ -194,6 +194,12 @@ def semR : Sem where
   ev_num := fun _ _ => rfl
   ev_pow := fun _ _ _ => rfl
 
+/-- Splicing sums into a sum does not change its value. -/
+theorem sumR_flatAdd (ρ : EnvR) (es : List Expr) : sumR ρ (Expand.flatAdd es) = sumR ρ es := by
+  induction es with
+  | nil => rfl
+  | cons e es ih => cases e <;> simp only [Expand.flatAdd, sumR_cons, sumR_append, evalR_add, ih]
+
 theorem evalR_distMul (ρ : EnvR) (fs : List Expr) : evalR ρ (distMul fs) = prodR ρ fs := by
   have := ev_distMul semR ρ fs; simp only [semR] at this; rw [this, prodR_eq_prod]
 
@@ -205,7 +211,7 @@ mutual
   theorem dist_sound (ρ : EnvR) : ∀ e : Expr, evalR ρ (Expand.dist e) = evalR ρ e
     | .num _ => rfl
     | .var _ => rfl
-    | .add es => by simp only [Expand.dist, evalR_add]; exact (distList_sound ρ es).1
+    | .add es => by simp only [Expand.dist, evalR_add]; rw [sumR_flatAdd]; exact (distList_sound ρ es).1
     | .mul es => by simp only [Expand.dist]; rw [evalR_distMul, evalR_mul]; exact (distList_sound ρ es).2
     | .pow b e => by simp only [Expand.dist]; rw [evalR_powCopies, evalR_pow, evalR_pow, dist_sound ρ b, dist_sound ρ e]
     | .fn f es => by

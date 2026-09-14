@@ -97,12 +97,19 @@ def powCopies (b e : Expr) : Expr :=
     else .pow b e
   | _, _ => .pow b e
 
+/-- Splice sums into a sum, so that a summand is never itself a sum — otherwise a product with such
+a sum among its factors would treat the inner sum as one monomial and stop distributing early. -/
+def flatAdd : List Expr → List Expr
+  | [] => []
+  | .add ts :: es => ts ++ flatAdd es
+  | e :: es => e :: flatAdd es
+
 mutual
   /-- Fully distributed form: children first, then this node. -/
   def dist : Expr → Expr
     | .num q => .num q
     | .var x => .var x
-    | .add es => .add (distList es)
+    | .add es => .add (flatAdd (distList es))
     | .mul es => distMul (distList es)
     | .pow b e => powCopies (dist b) (dist e)
     | .fn f es => .fn f (distList es)

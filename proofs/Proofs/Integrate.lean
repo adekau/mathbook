@@ -49,12 +49,17 @@ theorem evalD_powCopies (ρ : EnvR) (b e : Expr) : evalD ρ (powCopies b e) = ev
 theorem dist_var_iff (v : Expr) (y : String) : Expand.dist v = .var y ↔ v = .var y := by
   cases v <;> simp only [Expand.dist, distMul, powCopies, ofPoly] <;> (repeat' split) <;> simp
 
+theorem sumD_flatAdd (ρ : EnvR) (es : List Expr) : sumD ρ (Expand.flatAdd es) = sumD ρ es := by
+  induction es with
+  | nil => rfl
+  | cons e es ih => cases e <;> simp only [Expand.flatAdd, sumD_cons, sumD_append, evalD_add, ih]
+
 mutual
   /-- **`dist` is sound for `evalD`**, hence under a `diff`. -/
   theorem dist_soundD : ∀ (e : Expr) (ρ : EnvR), evalD ρ (Expand.dist e) = evalD ρ e
     | .num _, _ => rfl
     | .var _, _ => rfl
-    | .add es, ρ => by simp only [Expand.dist, evalD_add]; exact (distList_soundD es ρ).1
+    | .add es, ρ => by simp only [Expand.dist, evalD_add]; rw [sumD_flatAdd]; exact (distList_soundD es ρ).1
     | .mul es, ρ => by simp only [Expand.dist]; rw [evalD_distMul, evalD_mul]; exact (distList_soundD es ρ).2
     | .pow b e, ρ => by simp only [Expand.dist]; rw [evalD_powCopies, evalD_pow, evalD_pow, dist_soundD b ρ, dist_soundD e ρ]
     | .fn f es, ρ => by

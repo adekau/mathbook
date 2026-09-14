@@ -254,3 +254,10 @@ Notebook cleanup (2026-09-14, Alex's seven items): nested steps (1.1, 1.1.1) now
    Follow-ups the same day: View › Math size (small / normal / large; CSS variables on the root, remembered) and every
    step row shows its explanation under the rule name ("Scale R₂ by −1/3 so the pivot becomes 1."), clamped to two
    lines, with the full text as the row's tooltip and in the panel.
+Bug found by Alex's `integrate(5y sin(y) sin^2(y), y)` (2026-09-14): two causes. (1) The parser read `sin^2(y)` as a
+   variable `sin` squared times `y`; `f^n(x)` is now `f(x)^n` for the unary builtins. (2) The real one: `Expand.dist`
+   did not splice a sum nested inside a sum, so `a·(−(−y²sin y + 2y cos y) + 2y cos y)` kept the inner sum as one
+   monomial and never collapsed — the integral checker refused a correct by-parts candidate whenever the integrand
+   had a constant factor and two rounds of by-parts (`integrate(5 y^2 sin(y), y)`). `flatAdd` fixes it; `dist_sound`
+   and `dist_soundD` gained `sumR_flatAdd`/`sumD_flatAdd`. With the parse fixed the original input is refused
+   honestly: `∫ 5y sin³y` needs a trig-power reduction (`sin² = 1 − cos²` then u-substitution) the finder lacks.

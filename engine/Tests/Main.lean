@@ -272,6 +272,10 @@ def tests : TestM Unit := do
   let (st3, _) := sessionEval {} "x + 0"
   let (_, raw) := handleS st3 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"engine.evaluate\",\"params\":{\"sessionId\":\"t\",\"cellId\":\"c\",\"source\":\"%1 + %\"}}"
   checkTrue "the reply carries the evaluation number" ((raw.splitOn "\"label\":2").length == 2) raw
+  -- a power of a function, and expansion through a nested sum (the integral check needs both)
+  (st, r) := ev st "sin^2(y)"; check "sin^2(y) is sin(y)^2" r "sin(y)^2"
+  (st, r) := ev st "expand(a*(-(-y^2*sin(y) + 2*y*cos(y)) + 2*y*cos(y)))"; check "expand flattens nested sums" r "a*y^2*sin(y)"
+  (st, r) := ev st "integrate(5 y^2 sin(y), y)"; check "integrate with a constant factor and two by-parts rounds" r "5*(-y^2*cos(y) + 2*(y*sin(y) + cos(y)))"
   -- user functions with parameters
   (st, r) := ev st "let sq(x) = x^2 + 1"; check "let with parameters" r "x^2 + 1"
   (st, r) := ev st "sq(3)"; check "call a session function" r "10"
