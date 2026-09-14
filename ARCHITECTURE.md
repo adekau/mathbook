@@ -40,7 +40,7 @@ differential test with zero mismatches.
 - **Termination is a proof obligation, not a budget.** A rule bundles a proof that it strictly
   decreases a measure; `normalize` is well-founded on that measure and never `partial`. The
   verified `simplify` uses one additive measure (`Rewrite.lean`). The whole notebook pipeline —
-  commands, `diff.*`, `la.*`, `simp.*`, the two parity rules — uses the five-tier ordering of
+  commands, `diff.*`, `la.*`, `simp.*`, the two parity rules, the radical rules — uses the six-tier ordering of
   `Order.lean` and the innermost rewriter `normalizeT` (`Terminate.lean`), whose obligation is
   conditional: a rule must decrease the ordering *on a node whose children are already normal*.
   That hypothesis is what lets the product rule duplicate its body. The theorem is
@@ -55,6 +55,11 @@ differential test with zero mismatches.
   command replays those operations into its steps when every entry is a numeral; symbolic entries
   fall back to the simplifier-driven algorithm, whose steps are named `la.row-*.symbolic` and
   reported unverified. Echelon form itself is checked at run time (`isRref`), not proved.
+- **Radicals take the form the ordering can afford.** `2√2` as a term is `2 · 2^(1/2)`, heavier
+  than `8^(1/2)` under any bounded numeral weight, so the engine's normal form is the single power
+  `2^(3/2)` (a sixth tier, the magnitudes of integer numerals, orders that step), radicals with the
+  same square-free part collect in sums and same-index radicals multiply in products (both decrease
+  `M`), and the printer displays the single-power form the textbook way. `RadicalRules.lean`.
 - **Integration is checked, not found.** `Antiderivative.lean` guesses an antiderivative with a
   few textbook rules and proves nothing; `cmdIntegrate` differentiates the guess with the pipeline
   and accepts it only if the normal form is the integrand itself. `cmdIntegrate_spec` states that;

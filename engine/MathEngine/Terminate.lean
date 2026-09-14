@@ -110,6 +110,14 @@ theorem sizeList_le_of_rel : ∀ {cs' cs : List Expr}, RelList (fun a b => size 
   | [], [], _ => Nat.le_refl _
   | _ :: _, _ :: _, ⟨h, hs⟩ => by simp only [sizeList]; have := sizeList_le_of_rel hs; omega
 
+theorem sizeList_eq_of_rel : ∀ {cs' cs : List Expr}, RelList (fun a b => size a ≤ size b) cs' cs →
+    sizeList cs' = sizeList cs → RelList (fun a b => size a = size b) cs' cs
+  | [], [], _, _ => trivial
+  | _ :: _, _ :: _, ⟨h, hs⟩, he => by
+    simp only [sizeList] at he
+    have := sizeList_le_of_rel hs
+    exact ⟨by omega, sizeList_eq_of_rel hs (by omega)⟩
+
 /-- `M` of a rebuilt node, monotone in the children. -/
 theorem M.withChildren_le (e : Expr) {cs' cs : List Expr} (hlen : cs.length = (children e).length)
     (h : RelList (fun a b => M a ≤ M b) cs' cs) :
@@ -245,13 +253,14 @@ theorem μ_withChildren_le (e : Expr) {cs' cs : List Expr} (hlen : cs.length = (
           have hc : 0 < count litOwn a := by rw [count_eq]; simp only [litOwn, hl, ↓reduceIte]; omega
           exact Nat.lt_of_lt_of_le hc hab
     · exact Nat.zero_le _
-  simp only [μ, cmdCount, d3Count, litCount, count_withChildren cmdOwn_head e _ hlen,
+  simp only [μ, cmdCount, d3Count, litCount, numCount, count_withChildren cmdOwn_head e _ hlen,
     count_withChildren cmdOwn_head e _ hlen'', count_withChildren d3Own_head e _ hlen,
-    count_withChildren d3Own_head e _ hlen'',
+    count_withChildren d3Own_head e _ hlen'', count_withChildren numOwn_head e _ hlen,
+    count_withChildren numOwn_head e _ hlen'',
     count_eq (e := withChildren e cs), count_eq (e := withChildren e cs'),
     children_withChildren e cs hlen, children_withChildren e cs' hlen'',
     size_withChildren e _ hlen, size_withChildren e _ hlen'']
-  refine muLe_of (Nat.add_le_add_left (countList_le_of_rel _ t1) _) ?_ ?_ ?_ ?_
+  refine muLe_of (Nat.add_le_add_left (countList_le_of_rel _ t1) _) ?_ ?_ ?_ ?_ ?_
   · intro e1
     have e1' := countList_eq_of_rel _ t1 (by omega)
     have t2 : RelList (fun a b => d3Count a ≤ d3Count b) cs' cs :=
@@ -289,8 +298,27 @@ theorem μ_withChildren_le (e : Expr) {cs' cs : List Expr} (hlen : cs.length = (
     have e4' := M.withChildren_eq e hlen t4 e4
     have t5 : RelList (fun a b => size a ≤ size b) cs' cs :=
       ((((h.and e1').and e2').and e3').and e4').imp fun a b ⟨⟨⟨⟨hab, hc⟩, hd⟩, hl⟩, hm⟩ =>
-        (hE a b hab).2.2.2.2 hc hd hl hm
+        (hE a b hab).2.2.2.2.1 hc hd hl hm
     exact Nat.add_le_add_left (sizeList_le_of_rel t5) _
+  · intro e1 e2 e3 e4 e5
+    have e1' := countList_eq_of_rel _ t1 (by omega)
+    have t2 : RelList (fun a b => d3Count a ≤ d3Count b) cs' cs :=
+      (h.and e1').imp fun a b ⟨hab, hc⟩ => (hE a b hab).2.1 hc
+    have e2' := countList_eq_of_rel _ t2 (by omega)
+    have t3 : RelList (fun a b => litCount a ≤ litCount b) cs' cs :=
+      ((h.and e1').and e2').imp fun a b ⟨⟨hab, hc⟩, hd⟩ => (hE a b hab).2.2.1 hc hd
+    have e3' := countList_eq_of_rel _ t3 (by have := lit3 t3; have := countList_le_of_rel _ t3; omega)
+    have t4 : RelList (fun a b => M a ≤ M b) cs' cs :=
+      (((h.and e1').and e2').and e3').imp fun a b ⟨⟨⟨hab, hc⟩, hd⟩, hl⟩ => (hE a b hab).2.2.2.1 hc hd hl
+    have e4' := M.withChildren_eq e hlen t4 e4
+    have t5 : RelList (fun a b => size a ≤ size b) cs' cs :=
+      ((((h.and e1').and e2').and e3').and e4').imp fun a b ⟨⟨⟨⟨hab, hc⟩, hd⟩, hl⟩, hm⟩ =>
+        (hE a b hab).2.2.2.2.1 hc hd hl hm
+    have e5' := sizeList_eq_of_rel t5 (by omega)
+    have t6 : RelList (fun a b => numCount a ≤ numCount b) cs' cs :=
+      (((((h.and e1').and e2').and e3').and e4').and e5').imp fun a b ⟨⟨⟨⟨⟨hab, hc⟩, hd⟩, hl⟩, hm⟩, hs⟩ =>
+        (hE a b hab).2.2.2.2.2 hc hd hl hm hs
+    exact Nat.add_le_add_left (countList_le_of_rel _ t6) _
 
 theorem children_canon_perm (e : Expr) : (children (canon e)).Perm (children e) := by
   cases e with

@@ -8,7 +8,7 @@ ordered that way: the product and chain rules duplicate subterms, `expand`-style
 terms, and `(ab)^n → a^n b^n` duplicates `n`. This file defines the ordering the pipeline *does*
 terminate under: five tiers compared lexicographically,
 
-  `μ e = (cmdCount e, d3Count e, litCount e, M e, size e)`
+  `μ e = (cmdCount e, d3Count e, litCount e, M e, size e, numCount e)`
 
 * `cmdCount` — command nodes. A command is eliminated by its rule and never re-created.
 * `d3Count` — `diff` nodes of the wrong arity (`diff(f, x, n)`), eliminated by `diff.higher-order`;
@@ -22,6 +22,7 @@ terminate under: five tiers compared lexicographically,
   decrease, and a non-integer numeral weighs 4 so that an irreducible root like `2^(1/2)` is heavy
   enough for `√2 + √2 → 2√2`; `M (diff f x) = 3 ^ (M f + 3)` dominates any sum of products of pieces of `f`.
 * `size` — the tiebreaker for rules that only reassociate.
+* `numCount` — the magnitudes of the integer numerals, for the radical rules that shrink a base.
 
 Every rule of the pipeline decreases `μ` **when its children are already normal** (`Normal`). That
 hypothesis is what the innermost strategy of the rewriter provides (`Terminate.lean`), and it is
@@ -219,9 +220,21 @@ theorem hasLit_of_count_pos_aux : ∀ n, ∀ e : Expr, size e ≤ n → 0 < coun
 theorem hasLit_of_count_pos {e : Expr} (h : 0 < count litOwn e) : hasLit e = true :=
   hasLit_of_count_pos_aux (size e) e (Nat.le_refl _) h
 
+/-- Tier 6: the magnitude of every integer numeral. Non-integers weigh nothing here, so a rule
+that shrinks a radical's base (`8^(1/2) → 2^(3/2)`) decreases it while `M` and `size` stay put. -/
+def numOwn : Expr → Nat
+  | .num q => if q.isInt then q.val.num.natAbs else 0
+  | _ => 0
+
+theorem numOwn_head : HeadOnly numOwn := by
+  intro e cs hlen; cases e with
+  | pow b x => simp only [children, List.length_cons, List.length_nil] at hlen; match cs, hlen with | [_, _], _ => rfl
+  | _ => rfl
+
 abbrev cmdCount := count cmdOwn
 abbrev d3Count := count d3Own
 abbrev litCount := count litOwn
+abbrev numCount := count numOwn
 
 -- ---------------------------------------------------------------------------
 -- Tier 4: the bespoke measure M
@@ -351,24 +364,27 @@ theorem M.child_le {e c : Expr} (h : c ∈ children e) : M c ≤ M e := by
 -- The tuple and its order
 -- ---------------------------------------------------------------------------
 
-/-- The five tiers. -/
-def μ (e : Expr) : Nat × Nat × Nat × Nat × Nat := (cmdCount e, d3Count e, litCount e, M e, size e)
+/-- The six tiers. -/
+abbrev Mu := Nat × Nat × Nat × Nat × Nat × Nat
+def μ (e : Expr) : Mu := (cmdCount e, d3Count e, litCount e, M e, size e, numCount e)
 
 /-- Lexicographic order on the tiers. -/
-def MuLt (a b : Nat × Nat × Nat × Nat × Nat) : Prop :=
-  Prod.Lex (· < ·) (Prod.Lex (· < ·) (Prod.Lex (· < ·) (Prod.Lex (· < ·) (· < ·)))) a b
+def MuLt (a b : Mu) : Prop :=
+  Prod.Lex (· < ·) (Prod.Lex (· < ·) (Prod.Lex (· < ·) (Prod.Lex (· < ·) (Prod.Lex (· < ·) (· < ·))))) a b
 
-def MuLe (a b : Nat × Nat × Nat × Nat × Nat) : Prop := MuLt a b ∨ a = b
+def MuLe (a b : Mu) : Prop := MuLt a b ∨ a = b
 
 theorem MuLt_wf : WellFounded MuLt :=
-  (Prod.lex Nat.lt_wfRel (Prod.lex Nat.lt_wfRel (Prod.lex Nat.lt_wfRel (Prod.lex Nat.lt_wfRel Nat.lt_wfRel)))).wf
+  (Prod.lex Nat.lt_wfRel (Prod.lex Nat.lt_wfRel (Prod.lex Nat.lt_wfRel (Prod.lex Nat.lt_wfRel
+    (Prod.lex Nat.lt_wfRel Nat.lt_wfRel))))).wf
 
 /-- Build a lexicographic decrease tier by tier: each tier is `≤`, and the first strict one wins. -/
-theorem muLt_of {a₁ b₁ c₁ d₁ s₁ a₂ b₂ c₂ d₂ s₂ : Nat}
+theorem muLt_of {a₁ b₁ c₁ d₁ s₁ n₁ a₂ b₂ c₂ d₂ s₂ n₂ : Nat}
     (ha : a₁ ≤ a₂) (hb : a₁ = a₂ → b₁ ≤ b₂) (hc : a₁ = a₂ → b₁ = b₂ → c₁ ≤ c₂)
     (hd : a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ ≤ d₂)
-    (hs : a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ < s₂) :
-    MuLt (a₁, b₁, c₁, d₁, s₁) (a₂, b₂, c₂, d₂, s₂) := by
+    (hs : a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ ≤ s₂)
+    (hn : a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ = s₂ → n₁ < n₂) :
+    MuLt (a₁, b₁, c₁, d₁, s₁, n₁) (a₂, b₂, c₂, d₂, s₂, n₂) := by
   unfold MuLt
   rcases Nat.lt_or_eq_of_le ha with h | rfl
   · exact Prod.Lex.left _ _ h
@@ -381,67 +397,78 @@ theorem muLt_of {a₁ b₁ c₁ d₁ s₁ a₂ b₂ c₂ d₂ s₂ : Nat}
   apply Prod.Lex.right
   rcases Nat.lt_or_eq_of_le (hd rfl rfl rfl) with h | rfl
   · exact Prod.Lex.left _ _ h
-  exact Prod.Lex.right _ (hs rfl rfl rfl rfl)
+  apply Prod.Lex.right
+  rcases Nat.lt_or_eq_of_le (hs rfl rfl rfl rfl) with h | rfl
+  · exact Prod.Lex.left _ _ h
+  exact Prod.Lex.right _ (hn rfl rfl rfl rfl rfl)
 
-theorem muLe_of {a₁ b₁ c₁ d₁ s₁ a₂ b₂ c₂ d₂ s₂ : Nat}
+theorem muLe_of {a₁ b₁ c₁ d₁ s₁ n₁ a₂ b₂ c₂ d₂ s₂ n₂ : Nat}
     (ha : a₁ ≤ a₂) (hb : a₁ = a₂ → b₁ ≤ b₂) (hc : a₁ = a₂ → b₁ = b₂ → c₁ ≤ c₂)
     (hd : a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ ≤ d₂)
-    (hs : a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ ≤ s₂) :
-    MuLe (a₁, b₁, c₁, d₁, s₁) (a₂, b₂, c₂, d₂, s₂) := by
-  by_cases h : a₁ = a₂ ∧ b₁ = b₂ ∧ c₁ = c₂ ∧ d₁ = d₂ ∧ s₁ = s₂
-  · right; obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := h; rfl
+    (hs : a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ ≤ s₂)
+    (hn : a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ = s₂ → n₁ ≤ n₂) :
+    MuLe (a₁, b₁, c₁, d₁, s₁, n₁) (a₂, b₂, c₂, d₂, s₂, n₂) := by
+  by_cases h : a₁ = a₂ ∧ b₁ = b₂ ∧ c₁ = c₂ ∧ d₁ = d₂ ∧ s₁ = s₂ ∧ n₁ = n₂
+  · right; obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := h; rfl
   · left
-    apply muLt_of ha hb hc hd
-    intro h1 h2 h3 h4
-    have := hs h1 h2 h3 h4
+    apply muLt_of ha hb hc hd hs
+    intro h1 h2 h3 h4 h5
+    have := hn h1 h2 h3 h4 h5
     rcases Nat.lt_or_eq_of_le this with h' | h'
     · exact h'
-    · exact absurd ⟨h1, h2, h3, h4, h'⟩ h
+    · exact absurd ⟨h1, h2, h3, h4, h5, h'⟩ h
 
 /-- Reading a lexicographic decrease back, tier by tier. -/
-theorem MuLt.elim {a₁ b₁ c₁ d₁ s₁ a₂ b₂ c₂ d₂ s₂ : Nat}
-    (h : MuLt (a₁, b₁, c₁, d₁, s₁) (a₂, b₂, c₂, d₂, s₂)) :
+theorem MuLt.elim {a₁ b₁ c₁ d₁ s₁ n₁ a₂ b₂ c₂ d₂ s₂ n₂ : Nat}
+    (h : MuLt (a₁, b₁, c₁, d₁, s₁, n₁) (a₂, b₂, c₂, d₂, s₂, n₂)) :
     a₁ ≤ a₂ ∧ (a₁ = a₂ → b₁ ≤ b₂) ∧ (a₁ = a₂ → b₁ = b₂ → c₁ ≤ c₂) ∧
-    (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ ≤ d₂) ∧ (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ < s₂) := by
+    (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ ≤ d₂) ∧ (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ ≤ s₂) ∧
+    (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ = s₂ → n₁ < n₂) := by
   unfold MuLt at h
   cases h with
   | left _ _ h =>
     exact ⟨Nat.le_of_lt h, fun e => absurd e (Nat.ne_of_lt h), fun e => absurd e (Nat.ne_of_lt h),
-      fun e => absurd e (Nat.ne_of_lt h), fun e => absurd e (Nat.ne_of_lt h)⟩
+      fun e => absurd e (Nat.ne_of_lt h), fun e => absurd e (Nat.ne_of_lt h), fun e => absurd e (Nat.ne_of_lt h)⟩
   | right _ h =>
     cases h with
     | left _ _ h =>
       exact ⟨Nat.le_refl _, fun _ => Nat.le_of_lt h, fun _ e => absurd e (Nat.ne_of_lt h),
-        fun _ e => absurd e (Nat.ne_of_lt h), fun _ e => absurd e (Nat.ne_of_lt h)⟩
+        fun _ e => absurd e (Nat.ne_of_lt h), fun _ e => absurd e (Nat.ne_of_lt h), fun _ e => absurd e (Nat.ne_of_lt h)⟩
     | right _ h =>
       cases h with
       | left _ _ h =>
         exact ⟨Nat.le_refl _, fun _ => Nat.le_refl _, fun _ _ => Nat.le_of_lt h,
-          fun _ _ e => absurd e (Nat.ne_of_lt h), fun _ _ e => absurd e (Nat.ne_of_lt h)⟩
+          fun _ _ e => absurd e (Nat.ne_of_lt h), fun _ _ e => absurd e (Nat.ne_of_lt h), fun _ _ e => absurd e (Nat.ne_of_lt h)⟩
       | right _ h =>
         cases h with
         | left _ _ h =>
           exact ⟨Nat.le_refl _, fun _ => Nat.le_refl _, fun _ _ => Nat.le_refl _, fun _ _ _ => Nat.le_of_lt h,
-            fun _ _ _ e => absurd e (Nat.ne_of_lt h)⟩
+            fun _ _ _ e => absurd e (Nat.ne_of_lt h), fun _ _ _ e => absurd e (Nat.ne_of_lt h)⟩
         | right _ h =>
-          exact ⟨Nat.le_refl _, fun _ => Nat.le_refl _, fun _ _ => Nat.le_refl _, fun _ _ _ => Nat.le_refl _,
-            fun _ _ _ _ => h⟩
+          cases h with
+          | left _ _ h =>
+            exact ⟨Nat.le_refl _, fun _ => Nat.le_refl _, fun _ _ => Nat.le_refl _, fun _ _ _ => Nat.le_refl _,
+              fun _ _ _ _ => Nat.le_of_lt h, fun _ _ _ _ e => absurd e (Nat.ne_of_lt h)⟩
+          | right _ h =>
+            exact ⟨Nat.le_refl _, fun _ => Nat.le_refl _, fun _ _ => Nat.le_refl _, fun _ _ _ => Nat.le_refl _,
+              fun _ _ _ _ => Nat.le_refl _, fun _ _ _ _ _ => h⟩
 
-theorem MuLe.elim {a₁ b₁ c₁ d₁ s₁ a₂ b₂ c₂ d₂ s₂ : Nat}
-    (h : MuLe (a₁, b₁, c₁, d₁, s₁) (a₂, b₂, c₂, d₂, s₂)) :
+theorem MuLe.elim {a₁ b₁ c₁ d₁ s₁ n₁ a₂ b₂ c₂ d₂ s₂ n₂ : Nat}
+    (h : MuLe (a₁, b₁, c₁, d₁, s₁, n₁) (a₂, b₂, c₂, d₂, s₂, n₂)) :
     a₁ ≤ a₂ ∧ (a₁ = a₂ → b₁ ≤ b₂) ∧ (a₁ = a₂ → b₁ = b₂ → c₁ ≤ c₂) ∧
-    (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ ≤ d₂) ∧ (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ ≤ s₂) := by
+    (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ ≤ d₂) ∧ (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ ≤ s₂) ∧
+    (a₁ = a₂ → b₁ = b₂ → c₁ = c₂ → d₁ = d₂ → s₁ = s₂ → n₁ ≤ n₂) := by
   rcases h with h | h
-  · obtain ⟨h1, h2, h3, h4, h5⟩ := h.elim
-    exact ⟨h1, h2, h3, h4, fun a b c d => Nat.le_of_lt (h5 a b c d)⟩
-  · simp only [Prod.mk.injEq] at h; obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := h
+  · obtain ⟨h1, h2, h3, h4, h5, h6⟩ := h.elim
+    exact ⟨h1, h2, h3, h4, h5, fun a b c d e => Nat.le_of_lt (h6 a b c d e)⟩
+  · simp only [Prod.mk.injEq] at h; obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := h
     exact ⟨Nat.le_refl _, fun _ => Nat.le_refl _, fun _ _ => Nat.le_refl _, fun _ _ _ => Nat.le_refl _,
-      fun _ _ _ _ => Nat.le_refl _⟩
+      fun _ _ _ _ => Nat.le_refl _, fun _ _ _ _ _ => Nat.le_refl _⟩
 
 theorem MuLt.trans_le {a b c} (h₁ : MuLt a b) (h₂ : MuLe b c) : MuLt a c := by
   rcases h₂ with h₂ | rfl
-  · obtain ⟨a1, a2, a3, a4, a5⟩ := a; obtain ⟨b1, b2, b3, b4, b5⟩ := b; obtain ⟨c1, c2, c3, c4, c5⟩ := c
-    obtain ⟨p1, p2, p3, p4, p5⟩ := h₁.elim; obtain ⟨q1, q2, q3, q4, q5⟩ := h₂.elim
+  · obtain ⟨a1, a2, a3, a4, a5, a6⟩ := a; obtain ⟨b1, b2, b3, b4, b5, b6⟩ := b; obtain ⟨c1, c2, c3, c4, c5, c6⟩ := c
+    obtain ⟨p1, p2, p3, p4, p5, p6⟩ := h₁.elim; obtain ⟨q1, q2, q3, q4, q5, q6⟩ := h₂.elim
     apply muLt_of (Nat.le_trans p1 q1)
     · intro e; have : a1 = b1 := by omega
       have : b1 = c1 := by omega
@@ -466,7 +493,18 @@ theorem MuLt.trans_le {a b c} (h₁ : MuLt a b) (h₂ : MuLe b c) : MuLt a c := 
       have h3' : b3 = c3 := by omega
       have h4 : a4 = b4 := by have := p4 h1 h2 h3; have := q4 h1' h2' h3'; omega
       have h4' : b4 = c4 := by omega
-      exact Nat.lt_trans (p5 h1 h2 h3 h4) (q5 h1' h2' h3' h4')
+      exact Nat.le_trans (p5 h1 h2 h3 h4) (q5 h1' h2' h3' h4')
+    · intro e1 e2 e3 e4 e5; have h1 : a1 = b1 := by omega
+      have h1' : b1 = c1 := by omega
+      have h2 : a2 = b2 := by have := p2 h1; have := q2 h1'; omega
+      have h2' : b2 = c2 := by omega
+      have h3 : a3 = b3 := by have := p3 h1 h2; have := q3 h1' h2'; omega
+      have h3' : b3 = c3 := by omega
+      have h4 : a4 = b4 := by have := p4 h1 h2 h3; have := q4 h1' h2' h3'; omega
+      have h4' : b4 = c4 := by omega
+      have h5 : a5 = b5 := by have := p5 h1 h2 h3 h4; have := q5 h1' h2' h3' h4'; omega
+      have h5' : b5 = c5 := by omega
+      exact Nat.lt_trans (p6 h1 h2 h3 h4 h5) (q6 h1' h2' h3' h4' h5')
   · exact h₁
 
 theorem MuLe.trans {a b c} (h₁ : MuLe a b) (h₂ : MuLe b c) : MuLe a c := by
@@ -482,7 +520,8 @@ theorem MuLe.refl (a) : MuLe a a := Or.inr rfl
 
 theorem μ_child_lt {e c : Expr} (h : c ∈ children e) : MuLt (μ c) (μ e) :=
   muLt_of (count_child_le _ h) (fun _ => count_child_le _ h) (fun _ _ => count_child_le _ h)
-    (fun _ _ _ => M.child_le h) (fun _ _ _ _ => size_child_lt h)
+    (fun _ _ _ => M.child_le h) (fun _ _ _ _ => Nat.le_of_lt (size_child_lt h))
+    (fun _ _ _ _ h5 => absurd h5 (Nat.ne_of_lt (size_child_lt h)))
 
 theorem count_canon (own : Expr → Nat) (h : HeadOnly own) (e : Expr) : count own (canon e) = count own e := by
   cases e with
@@ -558,8 +597,8 @@ theorem size_canon (e : Expr) : size (canon e) = size e := by
   | _ => rfl
 
 theorem μ_canon (e : Expr) : μ (canon e) = μ e := by
-  simp only [μ, cmdCount, d3Count, litCount, count_canon _ cmdOwn_head, count_canon _ d3Own_head,
-    count_canon_lit, M.canon_eq, size_canon]
+  simp only [μ, cmdCount, d3Count, litCount, numCount, count_canon _ cmdOwn_head, count_canon _ d3Own_head,
+    count_canon_lit, count_canon _ numOwn_head, M.canon_eq, size_canon]
 
 /-- For rules that consume a matrix literal (`la.*`, `diff.matrix`): the output is checked to contain
 no command or malformed `diff` and strictly fewer nodes on paths to literals — tier 3 of `μ`. The

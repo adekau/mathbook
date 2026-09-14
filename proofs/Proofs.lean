@@ -5,6 +5,7 @@ import Proofs.SimpReal
 import Proofs.Deriv
 import Proofs.Integrate
 import Proofs.Expand
+import Proofs.Radical
 /-!
 # Proofs about the engine (skeleton)
 

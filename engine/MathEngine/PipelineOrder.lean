@@ -32,8 +32,10 @@ theorem mem_pipeline_iff (r : PlainRule) : r ∈ (pipelineRulesWith norm) ↔
     r = laAdd ∨ r = laScalarMul ∨ r = laMul ∨ r = laTranspose ∨ r = laDet ∨ r = laPow ∨
     r = scalarOnly flatten.toPlain ∨ r = scalarOnly identity.toPlain ∨ r = scalarOnly foldConstants.toPlain ∨
     r = scalarOnly functionRules.toPlain ∨ r = scalarOnly powerRules.toPlain ∨ r = scalarOnly collectPowers.toPlain ∨
-    r = scalarOnly collectTerms.toPlain ∨ r = scalarOnly parityPowMul ∨ r = scalarOnly parityPowPow ∨ r = laContext := by
-  simp [pipelineRulesWith, commandRulesWith, diffRules, matrixRules, simpPlain, simpRules, parityPlain, parityRules, contextRules]
+    r = scalarOnly collectTerms.toPlain ∨ r = scalarOnly parityPowMul ∨ r = scalarOnly parityPowPow ∨
+    r = scalarOnly radicalBase ∨ r = scalarOnly collectRadicals ∨ r = scalarOnly mulRadicals ∨ r = laContext := by
+  simp [pipelineRulesWith, commandRulesWith, diffRules, matrixRules, simpPlain, simpRules, parityPlain, parityRules,
+    radicalPlain, radicalRules, contextRules]
 
 -- ---------------------------------------------------------------------------
 -- Clean terms: nothing the first three tiers count
@@ -152,16 +154,28 @@ theorem Clean.mulN {es : List Expr} (h : ∀ c ∈ es, Clean c) : Clean (mulN es
   | [] => exact Clean.mul h
   | _ :: _ :: _ => exact Clean.mul h
 
-theorem μ_of_clean {e : Expr} (h : Clean e) : μ e = (0, 0, 0, M e, size e) := by
+theorem μ_of_clean {e : Expr} (h : Clean e) : μ e = (0, 0, 0, M e, size e, numCount e) := by
   simp only [μ, cmdCount, d3Count, litCount, h.cmd, h.d3, h.litCount]
 
-/-- Between clean terms only `M` and `size` matter. -/
+/-- Between clean terms only `M`, `size` and the numeral tier matter; almost every rule is settled
+by the first two. -/
 theorem muLt_of_clean {r e : Expr} (hr : Clean r) (he : Clean e)
     (h : M r < M e ∨ (M r = M e ∧ size r < size e)) : MuLt (μ r) (μ e) := by
   rw [μ_of_clean hr, μ_of_clean he]
   apply muLt_of (Nat.le_refl _) (fun _ => Nat.le_refl _) (fun _ _ => Nat.le_refl _)
   · intro _ _ _; rcases h with h | ⟨h, _⟩; exact Nat.le_of_lt h; exact Nat.le_of_eq h
-  · intro _ _ _ h4; rcases h with h | ⟨_, h⟩; exact absurd h4 (Nat.ne_of_lt h); exact h
+  · intro _ _ _ h4; rcases h with h | ⟨_, h⟩; exact absurd h4 (Nat.ne_of_lt h); exact Nat.le_of_lt h
+  · intro _ _ _ h4 h5; rcases h with h | ⟨_, h⟩; exact absurd h4 (Nat.ne_of_lt h); exact absurd h5 (Nat.ne_of_lt h)
+
+/-- The radical rules: `M` and `size` unchanged, an integer numeral shrank. -/
+theorem muLt_of_clean' {r e : Expr} (hr : Clean r) (he : Clean e)
+    (h : M r = M e ∧ size r = size e ∧ numCount r < numCount e) : MuLt (μ r) (μ e) := by
+  rw [μ_of_clean hr, μ_of_clean he]
+  obtain ⟨h1, h2, h3⟩ := h
+  apply muLt_of (Nat.le_refl _) (fun _ => Nat.le_refl _) (fun _ _ => Nat.le_refl _)
+  · intro _ _ _; exact Nat.le_of_eq h1
+  · intro _ _ _ _; exact Nat.le_of_eq h2
+  · intro _ _ _ _ _; exact h3
 
 -- ---------------------------------------------------------------------------
 -- Normal forms of the pipeline
@@ -406,7 +420,7 @@ theorem dec_diffHigherOrder : Dec norm diffHigherOrder := by
       simp only [μ, cmdCount, d3Count]
       rw [hr1, hr2, hb, hb2, hc, hd]
       exact muLt_of (Nat.le_refl _) (fun _ => Nat.zero_le _) (fun _ h => absurd h (by decide))
-        (fun _ h => absurd h (by decide)) (fun _ h => absurd h (by decide))
+        (fun _ h => absurd h (by decide)) (fun _ h => absurd h (by decide)) (fun _ h => absurd h (by decide))
     · simp only [Option.some.injEq] at happ; subst happ; simp at herr
   · simp at happ
   · simp only [Option.some.injEq] at happ; subst happ; simp at herr
@@ -440,6 +454,7 @@ theorem dec_lit {r : PlainRule} (hshape : ∀ e res, r.apply e = some res → cm
   simp only [μ, cmdCount, d3Count, litCount]
   exact muLt_of (by rw [c1, e1]; exact Nat.le_refl _) (fun _ => by rw [c2, e2]; exact Nat.le_refl _)
     (fun _ _ => Nat.le_of_lt c3) (fun _ _ h => absurd h (Nat.ne_of_lt c3)) (fun _ _ h => absurd h (Nat.ne_of_lt c3))
+    (fun _ _ h => absurd h (Nat.ne_of_lt c3))
 
 /-- `Option.map (checkedLit e)` applied to a rule body: the shape of every matrix rule. -/
 theorem lit_apply {e : Expr} {res : RuleResult} {body : Option RuleResult}
@@ -621,7 +636,7 @@ theorem dec_diffConstant : Dec norm diffConstant := by
       simp only [μ, cmdCount, d3Count, litCount]
       rw [hc1, hc2, hz.cmd, hz.d3, hz.litCount]
       exact muLt_of (Nat.le_refl _) (fun _ => Nat.le_refl _) (fun _ _ => Nat.zero_le _)
-        (fun _ _ h => absurd h (by omega)) (fun _ _ h => absurd h (by omega))
+        (fun _ _ h => absurd h (by omega)) (fun _ _ h => absurd h (by omega)) (fun _ _ h => absurd h (by omega))
     | _ =>
       obtain ⟨hb, he⟩ := diff_clean hcn rfl
       apply muLt_of_clean (Clean.num _) he
@@ -2289,6 +2304,99 @@ theorem dec_parityPowPow : Dec norm (scalarOnly parityPowPow) := dec_scalar fun 
     · simp at happ
   · simp at happ
 
+-- simp.radical / simp.collect-radicals ---------------------------------------
+
+theorem mergeRadicals_clean {s t m : Expr} (h : mergeRadicals s t = some m) : Clean m := by
+  unfold mergeRadicals at h
+  dsimp only at h
+  split at h
+  · split at h
+    · simp only [Option.some.injEq] at h; subst h
+      split
+      · exact Clean.num _
+      · split
+        · exact Clean.num _
+        · split
+          · exact Clean.pow (Clean.num _) (Clean.num _)
+          · exact Clean.mul fun c hc => by
+              simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+              rcases hc with rfl | rfl
+              · exact Clean.num _
+              · exact Clean.pow (Clean.num _) (Clean.num _)
+    · simp at h
+  · simp at h
+
+theorem mulRadicalPair_clean {s t m : Expr} (h : mulRadicalPair s t = some m) : Clean m := by
+  unfold mulRadicalPair at h
+  split at h
+  · split at h
+    · simp only [Option.some.injEq] at h; subst h
+      exact Clean.pow (Clean.num _) (Clean.num _)
+    · simp at h
+  · simp at h
+
+theorem dec_radicalBase : Dec norm (scalarOnly radicalBase) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [radicalBase] at happ
+  split at happ
+  · rename_i a q
+    split at happ
+    · split at happ
+      · rename_i r k hpp
+        split at happ
+        · rename_i hg
+          simp only [Option.some.injEq] at happ; subst happ; (try dsimp only)
+          simp only [Bool.and_eq_true, decide_eq_true_eq] at hg
+          obtain ⟨hM, hN⟩ := hg
+          have he : Clean (.pow (.num a) (.num q)) := Clean.pow (Clean.num _) (Clean.num _)
+          have hr : Clean (.pow (.num (Q.ofInt r)) (.num (q * Q.ofInt k))) := Clean.pow (Clean.num _) (Clean.num _)
+          rcases Nat.lt_or_eq_of_le hM with hlt | heq
+          · exact muLt_of_clean hr he (Or.inl hlt)
+          · exact muLt_of_clean' hr he ⟨heq, rfl, hN⟩
+        · simp at happ
+      · simp at happ
+    · simp at happ
+  · simp at happ
+
+theorem dec_collectRadicals : Dec norm (scalarOnly collectRadicals) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [collectRadicals] at happ
+  split at happ
+  · rename_i es
+    split at happ
+    · rename_i m others hfp
+      split at happ
+      · rename_i hg
+        simp only [Option.some.injEq] at happ; subst happ; (try dsimp only)
+        obtain ⟨he, hcs⟩ := clean_of_scalar hcn hm rfl rfl rfl
+        obtain ⟨s, t, hst, hperm⟩ := findPair_perm _ es hfp
+        have hres : Clean (addN (m :: others)) := Clean.addN fun c hc => by
+          simp only [List.mem_cons] at hc; rcases hc with rfl | hc
+          · exact mergeRadicals_clean hst
+          · exact hcs c (by simp only [children]; exact hperm.mem_iff.2 (by simp [hc]))
+        exact muLt_of_clean hres he (Or.inl hg)
+      · simp at happ
+    · simp at happ
+  · simp at happ
+
+theorem dec_mulRadicals : Dec norm (scalarOnly mulRadicals) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [mulRadicals] at happ
+  split at happ
+  · rename_i es
+    split at happ
+    · rename_i m others hfp
+      split at happ
+      · rename_i hg
+        simp only [Option.some.injEq] at happ; subst happ; (try dsimp only)
+        obtain ⟨he, hcs⟩ := clean_of_scalar hcn hm rfl rfl rfl
+        obtain ⟨s, t, hst, hperm⟩ := findPair_perm _ es hfp
+        have hres : Clean (mulN (m :: others)) := Clean.mulN fun c hc => by
+          simp only [List.mem_cons] at hc; rcases hc with rfl | hc
+          · exact mulRadicalPair_clean hst
+          · exact hcs c (by simp only [children]; exact hperm.mem_iff.2 (by simp [hc]))
+        exact muLt_of_clean hres he (Or.inl hg)
+      · simp at happ
+    · simp at happ
+  · simp at happ
+
 -- ---------------------------------------------------------------------------
 -- The theorem
 -- ---------------------------------------------------------------------------
@@ -2298,7 +2406,7 @@ With `normalizeT`'s innermost strategy this is exactly what makes cell evaluatio
 theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := ⟨fun r hr => by
   rw [mem_pipeline_iff] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact dec_cmdSimplify
   · exact dec_cmdExpand
   · exact dec_cmdRref
@@ -2329,6 +2437,9 @@ theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := 
   · exact dec_collectTerms
   · exact dec_parityPowMul
   · exact dec_parityPowPow
+  · exact dec_radicalBase
+  · exact dec_collectRadicals
+  · exact dec_mulRadicals
   · exact dec_laContext⟩
 
 end MathEngine

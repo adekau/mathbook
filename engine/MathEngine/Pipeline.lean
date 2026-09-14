@@ -4,6 +4,7 @@ import MathEngine.LinAlg
 import MathEngine.ExpandRules
 import MathEngine.Numeric
 import MathEngine.Antiderivative
+import MathEngine.RadicalRules
 import MathEngine.Terminate
 /-!
 # The notebook pipeline: commands as rules, and the combined rule set
@@ -41,6 +42,7 @@ def scalarOnly (r : PlainRule) : PlainRule :=
 
 def simpPlain : List PlainRule := simpRules.map fun r => scalarOnly r.toPlain
 def parityPlain : List PlainRule := parityRules.map scalarOnly
+def radicalPlain : List PlainRule := radicalRules.map scalarOnly
 
 /-- Notebook commands: `simplify`, `expand`, `rref`, `N`, `subst`, `integrate`. -/
 def cmdSimplify : PlainRule :=
@@ -129,7 +131,7 @@ def commandRulesWith (norm : Norm) : List PlainRule := [cmdSimplify, cmdExpand, 
 
 /-- The matrix rules precede `simp` as in the reference (so `A·A` is a product, not `A^2`); the
 catch-all `la.context` must come after every rule that handles a literal, so it is last. -/
-def pipelineRulesWith (norm : Norm) : List PlainRule := commandRulesWith norm ++ diffRules ++ matrixRules ++ simpPlain ++ parityPlain ++ contextRules
+def pipelineRulesWith (norm : Norm) : List PlainRule := commandRulesWith norm ++ diffRules ++ matrixRules ++ simpPlain ++ parityPlain ++ radicalPlain ++ contextRules
 
 
 end MathEngine

@@ -235,6 +235,14 @@ def tests : TestM Unit := do
   (st, r) := sessionEval st "rref([a,1;1,a])" ",\"showWork\":true"
   check "rref symbolic path" r "[1, 0; 0, 1]"
   checkTrue "rref symbolic path: .symbolic rule names" ((subRules "rref([a,1;1,a])").all (·.endsWith ".symbolic")) (subRules "rref([a,1;1,a])").toString
+  -- radicals: the single-power normal form, collected and multiplied; displayed the textbook way
+  (st, r) := ev st "sqrt(8)+sqrt(2)"; check "radicals collect (same base)" r "3*sqrt(2)"
+  (st, r) := ev st "sqrt(50)-sqrt(18)"; check "radicals collect (square-free part)" r "2*sqrt(2)"
+  (st, r) := ev st "sqrt(8)*sqrt(2)"; check "radicals multiply" r "4"
+  (st, r) := ev st "sqrt(12)*sqrt(3)"; check "radicals multiply under one root" r "6"
+  (st, r) := ev st "32^(1/2)"; check "perfect-power base reduced" r "2^(5/2)"
+  check "radical display" (match parseStmt "sqrt(8)/2" with | .ok st => (match (normalizeT pipelineRules pipelineOrdered st.value).run' #[] with | .ok e => e.toLatex | .error m => m) | .error _ => "parse") "\\sqrt{2}"
+  check "radical display, square-free part" (match parseStmt "5*sqrt(12)" with | .ok st => (match (normalizeT pipelineRules pipelineOrdered st.value).run' #[] with | .ok e => e.toLatex | .error m => m) | .error _ => "parse") "10\\sqrt{3}"
   -- M8: integrate is a checked guess
   (st, r) := ev st "integrate(x^2 + sin(x), x)"; check "integrate sum" r "1/3*x^3 - cos(x)"
   (st, r) := ev st "integrate(exp(2*x), x)"; check "integrate linear substitution" r "1/2*exp(2*x)"

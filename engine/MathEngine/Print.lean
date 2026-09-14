@@ -84,6 +84,44 @@ private def splitCoeff : Expr → Q × Option Expr × Option Nat
   | .mul (.num q :: rest@(_ :: _)) => (q, some (match rest with | [r] => r | rs => .mul rs), some 1)
   | e => (Q.one, some e, none)
 
+/-- `a^(p/q)` for an integer `a ≥ 2` and `0 < p/q` not an integer, the way a textbook writes it:
+the `q`-th-power part of `a` and the integer part of `p/q` come out as a coefficient
+(`2^(3/2)` is `2√2`, `12^(1/2)` is `2√3`). Display only — the term is unchanged. -/
+def radicalParts (a q : Q) : Option (Nat × String) :=
+  if !(a.isInt && a.val.num ≥ 2 && !q.isInt && !q.isNeg && !q.isZero) then none else
+  let n := a.val.num.toNat
+  let p := q.val.num.toNat
+  let d := q.val.den
+  let i := p / d
+  let f := p % d
+  let hi := 2 ^ (Nat.log2 n / d + 1)
+  let m := ((List.range (hi + 1)).reverse.find? fun m => m ≥ 1 && n % (m ^ d) == 0).getD 1
+  let s := n / (m ^ d)
+  let coef := m ^ p * s ^ i
+  let inner := if f == 1 then toString s else s!"{s}^\{{f}}"
+  let rad := if s == 1 then "" else if d == 2 then s!"\\sqrt\{{inner}}" else s!"\\sqrt[{d}]\{{inner}}"
+  some (coef, rad)
+
+private def radicalLatex (b x : Expr) : Option (String × Nat) :=
+  match b, x with
+  | .num a, .num q =>
+    (radicalParts a q).map fun (coef, rad) =>
+      if rad.isEmpty then (toString coef, P_ATOM)
+      else if coef == 1 then (rad, P_ATOM) else (s!"{coef}{rad}", P_MUL)
+  | _, _ => none
+
+/-- `c · a^(p/q)` with a positive coefficient folds into the displayed coefficient: `5√12` is
+`10√3` and `½ · 2√2` is `√2`. -/
+private def mulRadicalLatex (numStr : Q → String) : List Expr → Option (String × Nat)
+  | [.num c, .pow (.num a) (.num q)] =>
+    if !c.isNeg && !c.isZero then
+      (radicalParts a q).map fun (coef, rad) =>
+        let k := c * Q.ofInt coef
+        if rad.isEmpty then (numStr k, P_ATOM)
+        else if k.isOne then (rad, P_ATOM) else (s!"{numStr k}{rad}", P_MUL)
+    else none
+  | _ => none
+
 mutual
   /-- Print `e` at `path` in a context demanding precedence `ctx`. -/
   partial def print (e : Expr) (path : Path) (T : Target) (ctx : Nat) : String :=
@@ -109,6 +147,9 @@ mutual
         if T.times != "*" then (s!"\\int {a} \\, d{x}", P_MUL) else (T.fn name as, P_ATOM)
       | _, _, _ => (T.fn name as, P_ATOM)
     | .pow b x =>
+      match (if T.times != "*" then radicalLatex b x else none) with
+      | some r => r
+      | none =>
       if x.isNumEq (Q.ofRat (mkRat 1 2)) then (T.sqrt (child b 0 P_ADD), P_ATOM)
       else match x with
       | .num q =>
@@ -116,7 +157,10 @@ mutual
           -- standalone x^(-n) → 1/x^n
           let n := q.neg
           let base := child b 0 (if n.isOne then T.denomPrec else P_POW + 1)
-          (T.frac (T.num Q.one) (if n.isOne then base else T.pow base (T.wrap (path ++ [1]) (T.num n))), P_MUL)
+          let den := match (if T.times != "*" then radicalLatex b (.num n) else none) with
+            | some (r, _) => r
+            | none => if n.isOne then base else T.pow base (T.wrap (path ++ [1]) (T.num n))
+          (T.frac (T.num Q.one) den, P_MUL)
         else powRaw b x
       | _ => powRaw b x
     | .add args =>
@@ -142,6 +186,9 @@ mutual
           acc ++ (if i == 0 then sign.trimAscii.copy else sign) ++ termStr
       (s, P_ADD)
     | .mul args =>
+      match (if T.times != "*" then mulRadicalLatex T.num args else none) with
+      | some r => r
+      | none =>
       -- Partition into numerator / denominator factors; a leading -1 becomes a unary minus.
       let (sign, numer, denom) := (enum args).foldl (init := (("" : String), ([] : List String), ([] : List String)))
           fun ((sign, numer, denom) : String × List String × List String) ((i, a) : Nat × Expr) =>
@@ -153,7 +200,10 @@ mutual
           if q.isNeg then
             let n := q.neg
             let base := print b (p ++ [0]) T (if n.isOne then T.denomPrec else P_POW + 1)
-            (sign, numer, denom ++ [T.wrap p (if n.isOne then base else T.pow base (T.wrap (p ++ [1]) (T.num n)))])
+            let den := match (if T.times != "*" then radicalLatex b (.num n) else none) with
+              | some (r, _) => r
+              | none => if n.isOne then base else T.pow base (T.wrap (p ++ [1]) (T.num n))
+            (sign, numer, denom ++ [T.wrap p den])
           else (sign, numer ++ [print a p T P_MUL], denom)
         | _, _ => (sign, numer ++ [print a p T (P_MUL + (if i > 0 && a.isNum then 1 else 0))], denom)
       let n := if numer.isEmpty then T.num Q.one else T.times.intercalate numer
@@ -165,6 +215,8 @@ mutual
     powRaw (b x : Expr) : String × Nat :=
       let bs := print b (path ++ [0]) T (P_POW + 1)  -- left of ^ needs parens for anything non-atomic incl. -3 and 2^3
       let xs := print x (path ++ [1]) T P_POW        -- right-assoc: 2^3^4 is 2^(3^4)
+      -- in text a fractional exponent needs its parentheses: 2^(3/2), not 2^3/2
+      let xs := if T.times == "*" && (match x with | .num q => !q.isInt | _ => false) then T.parens xs else xs
       (T.pow bs xs, P_POW)
 end
 

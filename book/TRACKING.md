@@ -152,7 +152,23 @@ Open items after M8 (2026-09-14, Alex: "go through the open items before the boo
   instant and cuts the recorded derivation from 49,143 steps to two; (2) a step-recording algorithm and a rewrite
   system read the same in the notebook, which is the argument for doing it this way whenever a joint ordering would
   be forced. Alex's decision (2026-09-14).
-- radical simplification (sqrt 8 → 2√2): Alex chose to retune M (2026-09-14) — pending.
+- radical simplification (sqrt 8 → 2√2): Alex chose to retune M (2026-09-14). DONE 2026-09-14, but not by retuning `M`,
+  which the analysis showed is impossible: as a term `2√2` is `2 · 2^(1/2)`, whose `M` (19) exceeds `8^(1/2)`'s (11)
+  because the result contains the input's radical *and more*; only a value-dependent numeral weight could pay for
+  that, and numeral weights must stay bounded for `fold-constants` to decrease on arbitrary sums (`1 + 7 → 8`). What
+  the ordering does allow is the single-power form: `8^(1/2) → 2^(3/2)` at equal `M` and `size`, ordered by a new
+  sixth tier — the magnitudes of the integer numerals (`numCount`, head-only, so the rewriter's monotonicity lemma
+  extends without touching its invariants). Two more rules then do what Mathematica does where it matters: same
+  square-free part radicals collect in a sum (`√50 − √18 → 2√2`; a sum of two radicals outweighs one product, so this
+  *decreases* `M`) and same-index radicals multiply under one root (`√12 · √3 → √36 → 6`). Each rule guards itself
+  with the decidable decrease its proof needs, so the ordering lemmas are a split on the guard; the guards never fail
+  in practice and are honest boundaries, not fuel. The printer shows the single-power form the textbook way:
+  `2^(3/2)` as `2√2`, `12^(1/2)` as `2√3`, `5√12` as `10√3`, `√8/2` as `√2`; text output stays faithful (`2^(3/2)`).
+  All three rules are proved sound over ℝ unconditionally (`proofs/Proofs/Radical.lean`), their bases being positive
+  integers. Findings: (1) the sixth tier had to be head-only — a tier that reads a *child's* value fails the
+  children-monotonicity lemma, since a numeral child of equal weight could be replaced by another; putting the value
+  on the numeral node itself sidesteps it; (2) `4^(2/3) → 2^(4/3)` ties every bit-length or value weight on the
+  exponent side, which is why the tier weighs integers only and non-integer exponents nothing.
 - echelon form of `LinQ.rref` proved rather than checked — pending.
 - integration: DONE 2026-09-14. `sin u · cos u⁻¹ → tan u` is a new `simp.function` case (proved in all three layers:
   additive measure, M5 ordering, ℝ soundness — unconditional, since Mathlib's `tan` is `sin/cos` everywhere), so
