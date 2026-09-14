@@ -65,11 +65,14 @@ def ruleStatus : Json :=
     entry "int.table" "checked" "A guess from the finder, verified by int.check.",
     entry "int.linear-substitution" "checked" "A guess from the finder, verified by int.check.",
     entry "int.substitution" "checked" "A guess from the finder (u-substitution), verified by int.check.",
-    entry "int.by-parts" "checked" "A guess from the finder (integration by parts), verified by int.check."]
+    entry "int.by-parts" "checked" "A guess from the finder (integration by parts), verified by int.check.",
+    entry "lambda.delta" "verified" "Unfolding a definition replaces a free name by its term; nothing to prove beyond that.",
+    entry "lambda.beta" "unverified" "β-reduction with capture-avoiding substitution; the substitution lemma is not yet proved.",
+    entry "lambda.alpha-beta" "unverified" "A binder renamed to avoid capture, then β; the renaming is not yet proved to preserve α-equivalence."]
 
 def capabilities : Json :=
   .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m8"), ("verified", .bool true),
-         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate", .str "plot"]),
+         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate", .str "plot", .str "lambda"]),
          ("ruleStatus", ruleStatus),
          ("termination", .obj #[("status", .str "proven"), ("theorem", .str "MathEngine.pipelineOrdered"),
            ("summary", .str "Cell evaluation has no step budget: every pipeline rule decreases a five-tier ordering (commands, higher-order diff, matrix literals, the weight M, size) on nodes whose children are normal.")])]
@@ -88,12 +91,37 @@ private def pathOfJson : Json → Option Path
   | .arr xs => xs.toList.mapM fun j => match j with | .num s => s.toNat? | _ => none
   | _ => none
 
+/-- A λ-cell's reply: like an ordinary one, plus the de Bruijn renderings and the reading. -/
+def evaluateLambda (st : Store) (params : Json) (sessionId cellId src : String) : Store × Json :=
+  let (s, r) := lambdaCell (st.get sessionId) cellId src
+  let st := st.set sessionId s
+  match r with
+  | .error (code, msg, span) => (st, errorJson code msg span)
+  | .ok res =>
+    let paths := params.getBool "paths"
+    let d := res.derivation
+    let steps := (d.steps.zip res.dbSteps).map fun (stp, db) =>
+      match stp.toJson paths with
+      | .obj fields => Json.obj (fields.push ("afterDeBruijn", Rendered.toJson db false))
+      | j => j
+    let dj : Json := .obj #[("input", d.input.toJson), ("steps", .arr steps), ("output", d.output.toJson)]
+    let out := Lam.toExpr res.output
+    let r := #[("ok", .bool true), ("kind", .str "lambda"), ("value", out.toJson), ("rendered", Rendered.toJson out paths),
+      ("renderedDeBruijn", Rendered.toJson (Lam.dbToExpr (Lam.toDB [] res.output)) false)]
+    let r := match res.reading with | some t => r.push ("reading", .str t) | none => r
+    let r := if params.getBool "showWork" then
+        (r.push ("derivation", dj)).push ("inputRendered", Rendered.toJson d.input paths)
+      else r
+    let r := match res.name with | some n => r.push ("bound", .arr #[.str n]) | none => r
+    (st, .obj r)
+
 def evaluate (st : Store) (params : Json) : Store × Json :=
   match params.getStr? "source" with
   | none => (st, errorJson "params" "missing source")
   | some src =>
     let sessionId := (params.getStr? "sessionId").getD ""
     let cellId := (params.getStr? "cellId").getD ""
+    if isLambdaCell (st.get sessionId) src then evaluateLambda st params sessionId cellId src else
     let (s, r) := evaluateCell (st.get sessionId) cellId src
     let st := st.set sessionId s
     match r with

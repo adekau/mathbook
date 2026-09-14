@@ -1,4 +1,5 @@
 import { createClient, type EngineClient, type Step, type Path, type RuleStatus } from "@mathbook/protocol";
+declare const __BUILD_ID__: string;
 import { workerTransport, httpTransport } from "@mathbook/engine-host";
 
 /**
@@ -27,6 +28,8 @@ interface Doc { name: string; sig: string; blurb: string; ref?: string; examples
 const DOCS: Doc[] = [
   { name: "diff", sig: "diff(f, x[, n])", blurb: "Derivative of f with respect to x; the optional n takes it n times. Implemented as rewrite rules that push d/dx inward, so the derivation reads like a textbook.", ref: "https://mathworld.wolfram.com/Derivative.html", examples: ["diff(x^2 * sin(x), x)", "diff(x^3, x, 2)"] },
   { name: "integrate", sig: "integrate(f, x)", blurb: "Antiderivative of f in x, without the constant. A small rule set guesses; the guess is accepted only if differentiating it gives f back, so the check is the proof.", ref: "https://mathworld.wolfram.com/IndefiniteIntegral.html", examples: ["integrate(x^2 + sin(x), x)", "integrate(exp(2*x), x)"] },
+  { name: "lambda", sig: "λx. e  ·  type \\lam", blurb: "A λ-cell: any cell with a λ (type \\lam, then Tab or space) or a backslash. Application is juxtaposition, λx y. e binds two, digits are Church numerals, and name := term defines. The engine reduces in normal order one β-step at a time; toggle de Bruijn indices in the View menu.", examples: ["(λx. x) y", "(λx. λy. x y) y", "add 2 3", "TWO := succ (succ zero)"] },
+  { name: "church", sig: "true false and or not if · zero succ add mul pow iszero · pair fst snd · id const K S I omega Y", blurb: "The Church library, available in every λ-cell; a normal form that is a Church numeral or boolean is read out beside the result.", examples: ["if (iszero 0) a b", "fst (pair 1 2)", "mul 2 3"] },
   { name: "plot", sig: "plot(f, x, from, to[, n])", blurb: "Graph of f over [from, to]. The engine simplifies f under the session (a derivative plots as the derivative), records the derivation, and samples it exactly where it has a finite value; the notebook draws the samples.", examples: ["plot(sin(x)/x, x, -10, 10)", "plot(diff(x^3 - 3x, x), x, -3, 3)"] },
   { name: "expand", sig: "expand(e)", blurb: "Multiplies out products and powers of sums by repeated distribution.", ref: "https://mathworld.wolfram.com/Expand.html", examples: ["expand((x+1)^3)", "expand((a+b)^4)"] },
   { name: "simplify", sig: "simplify(e)", blurb: "Explicit request for the normal form. Every cell is simplified anyway; this names the intent.", examples: ["simplify(x + x)"] },
@@ -46,6 +49,13 @@ const DOCS: Doc[] = [
 ];
 const DOC_BY_NAME = new Map(DOCS.map((d) => [d.name, d]));
 
+/** Lean-style backslash abbreviations: type `\`, see them all, filter as you type, Tab inserts the symbol. */
+interface Sym { abbr: string; aliases: string[]; sym: string; what: string }
+const SYMBOLS: Sym[] = [
+  { abbr: "lam", aliases: ["lambda", "l"], sym: "λ", what: "lambda" },
+];
+type CompItem = { kind: "doc"; doc: Doc } | { kind: "sym"; sym: Sym };
+
 /** Label for a cell, from its source. Presentation only — the engine decides what it means. */
 function cellKind(src: string): string | null {
   const s = src.trim();
@@ -57,6 +67,9 @@ function cellKind(src: string): string | null {
     case "diff": return "derivative";
     case "integrate": return "integral";
     case "plot": return "plot";
+  }
+  if (/[λ\\]|:=/.test(s)) return "λ-term";
+  switch (head) {
     case "rref": return "row reduce";
     case "det": return "determinant";
     case "transpose": return "transpose";
@@ -88,6 +101,11 @@ interface Cell {
   id: string;
   src: string;
   plot?: PlotData;
+  /** λ-cells: the result with de Bruijn indices, and what it reads as (a Church numeral or boolean). */
+  outDeBruijn?: string;
+  reading?: string;
+  /** What the engine said the cell was, once it has answered; the badge guesses from the source until then. */
+  kind?: string;
   label: number | null;
   ms?: number;
   outLatex?: string;
@@ -100,7 +118,11 @@ interface Cell {
 }
 
 type TermRef = { kind: "output" } | { kind: "input" } | { kind: "step"; index: number };
-interface Selection { cellId: string; term: TermRef; path: Path; latex: string; text: string; related: Step[]; trace: Map<number, string> }
+interface Selection {
+  cellId: string; term: TermRef; path: Path; latex: string; text: string; related: Step[]; trace: Map<number, string>;
+  /** A nested step (a row operation, a finder step): shown with its siblings, no engine trace. */
+  sub?: { steps: Step[]; index: number; label: string; top: number };
+}
 /** A step with a nested derivation (rref's row operations, integrate's finder and check) inherits
  *  the weakest status among them: a command is only as verified as the work it delegated. */
 const RANK = { verified: 0, checked: 1, conditional: 2, unverified: 3 } as const;
@@ -134,9 +156,10 @@ const S = {
   engineMode: "lean-worker" as "lean-worker" | "http",
   httpUrl: "http://localhost:8787",
   busy: false,
-  comp: null as { cell: Cell; items: Doc[]; index: number; x: number; y: number } | null,
+  comp: null as { cell: Cell; items: CompItem[]; index: number; x: number; y: number } | null,
   theme: "dark" as "dark" | "light",
   docName: "lesson-04.lemma",
+  deBruijn: false,
   menu: null as string | null,
   studio: { scenes: [] as Scene[], active: 0, playing: false, t: 0, speed: 1, codeOpen: true, copied: false },
 };
@@ -177,7 +200,7 @@ function initTheme() {
 async function connect() {
   client?.close();
   client = S.engineMode === "lean-worker"
-    ? createClient(workerTransport(new Worker("engine-lean.worker.js")))
+    ? createClient(workerTransport(new Worker(`engine-lean.worker.js?v=${typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev"}`)))
     : createClient(httpTransport(S.httpUrl));
   const t0 = performance.now();
   try {
@@ -215,8 +238,9 @@ async function runCell(cell: Cell) {
       cell.echoLatex = r.inputRendered?.latex;
       cell.steps = r.derivation?.steps ?? [];
       delete cell.error;
-      delete cell.plot;
+      delete cell.plot; delete cell.outDeBruijn; delete cell.reading; delete cell.kind;
       if ("kind" in r && r.kind === "plot") cell.plot = { var: r.var, from: r.from, to: r.to, points: r.points, text: r.rendered.text };
+      if ("kind" in r && r.kind === "lambda") { cell.outDeBruijn = r.renderedDeBruijn?.latex; cell.reading = r.reading; cell.kind = "λ-term"; }
       log("ok", `Out[${cell.label}] ${r.rendered.text}  (${cell.ms.toFixed(1)} ms, ${cell.steps.length} steps)`);
       if ("bound" in r && r.bound?.length) log("ok", `bound ${r.bound.join(", ")}`);
     } else {
@@ -463,7 +487,7 @@ function renderChrome() {
   const MENUS: Record<string, [string, () => void][]> = {
     File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs]],
     Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
-    View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }]],
+    View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }]],
     Run: [["Run all", () => void runAll()], ["Run cell", () => { const c = S.cells[S.active]; if (c) void runCell(c); }]],
     Kernel: [["Restart kernel", () => void restartKernel()], ["Restart and run all", async () => { await restartKernel(); await runAll(); }]],
     Help: [["Reference", () => switchTab("reference")], ["Manim Studio", () => switchTab("studio")]],
@@ -574,7 +598,7 @@ function renderSidebar() {
       const row = h("div", `olrow${i === S.active ? " on" : ""}`);
       row.append(h("span", "num", c.label ? `[${c.label}]` : "—"));
       const wrap = h("span");
-      wrap.append(h("span", "kind", cellKind(c.src) ?? "empty"), h("span", "src", c.src || "…"));
+      wrap.append(h("span", "kind", c.kind ?? cellKind(c.src) ?? "empty"), h("span", "src", c.src || "…"));
       row.append(wrap);
       row.addEventListener("click", () => { if (S.tab !== "notebook") switchTab("notebook"); focusCell(i); });
       list.append(row);
@@ -714,7 +738,7 @@ function renderCellBody(cell: Cell) {
   }
 
   const meta = h("div", "cellmeta");
-  const kind = cellKind(cell.src);
+  const kind = cell.kind ?? cellKind(cell.src);
   if (kind) {
     const badge = h("span", "kindbadge");
     badge.append(document.createTextNode(kind), h("span", "i", "i"));
@@ -749,7 +773,8 @@ function renderCellBody(cell: Cell) {
       rule.append(mark, document.createTextNode(st.rule));
       row.append(rule);
       const el = h("span", "el");
-      if (st.afterRendered) { el.innerHTML = tex(st.afterRendered.latex, true); if (term) wireTerm(el, cell, term); }
+      const shown = S.deBruijn && st.afterDeBruijn ? st.afterDeBruijn : st.afterRendered;
+      if (shown) { el.innerHTML = tex(shown.latex, true); if (term && shown === st.afterRendered) wireTerm(el, cell, term); }
       else el.append(inlineMath(st.explanation));
       row.append(el);
       return row;
@@ -763,7 +788,7 @@ function renderCellBody(cell: Cell) {
         srow.classList.add("sub");
         srow.style.marginLeft = `${26 * depth}px`;
         srow.title = sub.explanation.replace(/\$/g, "");
-        srow.addEventListener("click", () => void explain(cell, { kind: "step", index: top }, []));
+        srow.addEventListener("click", (ev) => { ev.stopPropagation(); selectSubStep(cell, st.sub!.steps, k, l, top); });
         work.append(srow);
         renderSub(sub, l, top, depth + 1);
       });
@@ -790,10 +815,13 @@ function renderCellBody(cell: Cell) {
       wireTerm(cap, cell, { kind: "output" });
       val.classList.add("isplot");
       val.append(box, cap);
+    } else if (S.deBruijn && cell.outDeBruijn) {
+      val.innerHTML = tex(cell.outDeBruijn, true);
     } else {
       val.innerHTML = tex(cell.outLatex, true);
       wireTerm(val, cell, { kind: "output" });
     }
+    if (cell.reading) { const rd = h("span", "reading", `≡ ${cell.reading}`); rd.title = "What the normal form encodes"; val.append(rd); }
     out.append(val, h("div", "brk"));
     el.append(out);
   }
@@ -867,6 +895,53 @@ function renderPanelHead() {
   head.append(toggle);
 }
 
+/** Select a nested step: the panel shows its result, its explanation, its siblings and its status. */
+function selectSubStep(cell: Cell, steps: Step[], index: number, label: string, top: number) {
+  const st = steps[index]!;
+  S.sel = { cellId: cell.id, term: { kind: "step", index: top }, path: [], latex: st.afterRendered?.latex ?? "", text: st.afterRendered?.text ?? st.rule,
+    related: [st], trace: new Map(), sub: { steps, index, label, top } };
+  S.panelTab = "explain"; S.panelOpen = true;
+  document.querySelectorAll(".step.on").forEach((x) => x.classList.remove("on"));
+  renderPanelHead(); renderPanel();
+}
+
+function renderSubPanel(body: HTMLElement, sel: Selection & { sub: NonNullable<Selection["sub"]> }) {
+  const cell = S.cells.find((c) => c.id === sel.cellId);
+  const { steps, index, label, top } = sel.sub;
+  const st = steps[index]!;
+  const grid = h("div", "explain");
+  const c1 = h("div", "col");
+  c1.append(h("h3", undefined, "Selection"));
+  const selEl = h("div", "sel"); selEl.innerHTML = tex(stripPaths(sel.latex));
+  c1.append(selEl);
+  c1.append(h("div", "kindname", `step ${label} · ${st.rule}`));
+  const p = h("p"); p.append(inlineMath(st.explanation)); c1.append(p);
+  grid.append(c1);
+  const c2 = h("div", "col");
+  c2.append(h("h3", undefined, `Inside step ${top + 1}`));
+  const trail = h("div", "trail");
+  steps.forEach((s, i) => {
+    const row = h("div", `trailrow${i === index ? " on" : ""}`);
+    row.append(h("span", "n", `${label.split(".").slice(0, -1).join(".")}.${i + 1}`), h("span", "rule", s.rule));
+    row.style.cursor = "pointer";
+    row.addEventListener("click", () => { if (cell) selectSubStep(cell, steps, i, `${label.split(".").slice(0, -1).join(".")}.${i + 1}`, top); });
+    trail.append(row);
+  });
+  c2.append(trail);
+  grid.append(c2);
+  const c3 = h("div", "col");
+  const status = statusOf(st);
+  const head3 = h("div"); head3.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:10px";
+  head3.append(h("h3", undefined, "Proof status"), h("span", `checkbadge ${status}`, status));
+  (head3.firstElementChild as HTMLElement).style.margin = "0";
+  c3.append(head3);
+  const rs = h("div", "rulestat");
+  rs.append(h("span", `vmark ${status}`), h("span", "n", st.rule), h("span", "note", S.ruleStatus.get(st.rule)?.note ?? "No soundness theorem yet."));
+  c3.append(rs);
+  grid.append(c3);
+  body.append(grid);
+}
+
 function renderPanel() {
   const panel = $(".panel");
   panel.style.flex = S.panelOpen ? "0 0 250px" : "0 0 38px";
@@ -893,6 +968,7 @@ function renderPanel() {
     return;
   }
 
+  if (S.sel.sub) { renderSubPanel(body, S.sel as Selection & { sub: NonNullable<Selection["sub"]> }); return; }
   const grid = h("div", "explain");
   const sel = S.sel;
   const cell = S.cells.find((c) => c.id === sel.cellId);
@@ -1546,7 +1622,8 @@ function renderStage() {
 function currentWord(input: HTMLInputElement): { word: string; start: number } {
   const caret = input.selectionStart ?? input.value.length;
   const before = input.value.slice(0, caret);
-  const m = /[A-Za-z_][A-Za-z0-9_]*$/.exec(before);
+  // a word, or a backslash abbreviation (possibly still empty: a bare `\` lists every symbol)
+  const m = /(\\[A-Za-z_]*|[A-Za-z_][A-Za-z0-9_]*)$/.exec(before);
   return { word: m?.[0] ?? "", start: m ? caret - m[0].length : caret };
 }
 
@@ -1554,10 +1631,16 @@ function updateCompletions(cell: Cell) {
   const input = cell.input!;
   const { word } = currentWord(input);
   if (word.length < 1) return hideCompletions();
-  const items = DOCS.filter((d) => d.name.toLowerCase().startsWith(word.toLowerCase()) && d.name !== word);
+  let items: CompItem[];
+  if (word.startsWith("\\")) {
+    const q = word.slice(1).toLowerCase();
+    items = SYMBOLS.filter((s) => [s.abbr, ...s.aliases].some((a) => a.startsWith(q))).map((sym) => ({ kind: "sym", sym }));
+  } else {
+    items = DOCS.filter((d) => d.name.toLowerCase().startsWith(word.toLowerCase()) && d.name !== word).map((doc) => ({ kind: "doc", doc }));
+  }
   if (!items.length) return hideCompletions();
   const r = input.getBoundingClientRect();
-  S.comp = { cell, items: items.slice(0, 7), index: 0, x: r.left + 8, y: r.bottom + 4 };
+  S.comp = { cell, items: items.slice(0, 9), index: 0, x: r.left + 8, y: r.bottom + 4 };
   renderCompletions();
 }
 
@@ -1568,10 +1651,12 @@ function acceptCompletion() {
   const { cell, items, index } = S.comp;
   const input = cell.input!;
   const { word, start } = currentWord(input);
-  const name = items[index]!.name;
+  const item = items[index]!;
   const after = input.value.slice(start + word.length);
-  input.value = input.value.slice(0, start) + name + (after.startsWith("(") ? "" : "(") + after;
-  const pos = start + name.length + 1;
+  // a symbol abbreviation becomes the symbol itself; a function name opens its parenthesis
+  const insert = item.kind === "sym" ? item.sym.sym : item.doc.name + (after.startsWith("(") ? "" : "(");
+  input.value = input.value.slice(0, start) + insert + after;
+  const pos = start + insert.length;
   input.setSelectionRange(pos, pos);
   cell.src = input.value;
   hideCompletions(); renderSidebar();
@@ -1583,9 +1668,15 @@ function renderCompletions() {
   if (!S.comp) return;
   const box = h("div", "completions");
   box.style.left = `${S.comp.x}px`; box.style.top = `${S.comp.y}px`;
-  S.comp.items.forEach((d, i) => {
-    const row = h("div", `comprow${i === S.comp!.index ? " on" : ""}`);
-    row.append(h("span", "n", d.sig), h("span", "h", d.blurb.split(".")[0]!));
+  S.comp.items.forEach((it, i) => {
+    const row = h("div", `comprow${i === S.comp!.index ? " on" : ""}${it.kind === "sym" ? " symrow" : ""}`);
+    if (it.kind === "sym") {
+      const s = it.sym;
+      row.append(h("span", "n", `\\${s.abbr}${s.aliases.length ? ` (${s.aliases.map((a) => "\\" + a).join(", ")})` : ""}`), h("span", "h", s.what), h("span", "sym", s.sym));
+    } else {
+      const d = it.doc;
+      row.append(h("span", "n", d.sig), h("span", "h", d.blurb.split(".")[0]!));
+    }
     row.addEventListener("mousedown", (e) => { e.preventDefault(); S.comp!.index = i; acceptCompletion(); });
     row.addEventListener("mouseenter", () => { S.comp!.index = i; renderCompletions(); });
     box.append(row);
@@ -1614,6 +1705,22 @@ function onKey(ev: KeyboardEvent, cell: Cell, i: number) {
     if (ev.key === "ArrowUp") { ev.preventDefault(); S.comp.index = (S.comp.index - 1 + S.comp.items.length) % S.comp.items.length; return renderCompletions(); }
     if (ev.key === "Tab" || ev.key === "Enter") { ev.preventDefault(); acceptCompletion(); return; }
     if (ev.key === "Escape") { ev.preventDefault(); return hideCompletions(); }
+  }
+  if (ev.key === " " || ev.key === ".") {
+    // Lean-style input: \lam, \lambda or \l followed by space or dot becomes λ
+    const input = cell.input!;
+    const caret = input.selectionStart ?? input.value.length;
+    const before = input.value.slice(0, caret);
+    const m = /\\(lambda|lam|l)$/.exec(before);
+    if (m) {
+      ev.preventDefault();
+      const tail = ev.key === "." ? "." : "";
+      input.value = before.slice(0, before.length - m[0].length) + "λ" + tail + input.value.slice(caret);
+      const pos = caret - m[0].length + 1 + tail.length;
+      input.setSelectionRange(pos, pos);
+      cell.src = input.value; hideCompletions(); renderSidebar();
+      return;
+    }
   }
   if (ev.key === "Enter") { ev.preventDefault(); void runCell(cell); return; }
   if (ev.key === "ArrowDown" && i < S.cells.length - 1) { ev.preventDefault(); focusCell(i + 1); }

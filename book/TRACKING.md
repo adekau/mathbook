@@ -209,4 +209,20 @@ Open items after M8 (2026-09-14, Alex: "go through the open items before the boo
   shows the saved outputs at once and re-runs every cell in order so the engine's session — and with it `explain` —
   matches what is shown. The notebook also autosaves to the browser after every run and comes back on reload the
   same way. Run, Kernel (restart the session), View and Help menus work too.
+λ-world (2026-09-14, Alex: "get some stuff in here … like beta reduction (with option for de Bruijn indices on/off)",
+   cells written standalone, Lean-style `\lam` input): DONE. `engine/MathEngine/Lambda.lean` — named terms,
+   capture-avoiding substitution by a structural renaming pass (`freshen`, so it is total; the book's `subst` had to be
+   `partial`), normal-order β one step at a time, the de Bruijn view computed alongside every step, a small parser
+   (`λx y. e`, `\x. e`, juxtaposition, digits as Church numerals, `name := term`), and the Church library preloaded. A
+   cell is a λ-cell if it has a λ or backslash, a `:=`, or starts with a λ-definition's name; the engine decides, the
+   notebook only shows the badge. Terms are *encoded* into `Expr` (`fn "λ" [var x, body]`, `fn "@" [f, a]`), so
+   selection, explanation and origin tracking work unchanged and the printer only learned two heads. Reduction runs on
+   fuel — the one budget in the engine, and the honest one: whether a term has a normal form is undecidable, so `Ω`
+   is refused after 1000 β-steps with what it had become. The notebook toggles de Bruijn indices in the View menu
+   (a rendering the engine already sent), completes `\lam` to λ with Tab, converts `\lam`/`\l` on space or dot, and
+   reads a normal form that is a Church numeral or boolean out beside the result. Proved (`LambdaProofs.lean`):
+   substitution introduces no new free variables; the Church reader is right on the engine's numerals. Not yet:
+   that the α-renaming preserves α-equivalence, that the de Bruijn view commutes with β — the β-steps are reported
+   unverified for that reason. Finding: the book's `subst` recurses on a renamed body and Lean cannot see it
+   terminate; carrying the renaming down one structural pass makes it total without changing what it computes.
 Six-month cut line: M5 — reached 2026-09-13.

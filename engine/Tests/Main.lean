@@ -236,6 +236,16 @@ def tests : TestM Unit := do
   (st, r) := sessionEval st "rref([a,1;1,a])" ",\"showWork\":true"
   check "rref symbolic path" r "[1, 0; 0, 1]"
   checkTrue "rref symbolic path: .symbolic rule names" ((subRules "rref([a,1;1,a])").all (·.endsWith ".symbolic")) (subRules "rref([a,1;1,a])").toString
+  -- the λ-calculus world
+  (st, r) := ev st "(λx. x) y"; check "λ: identity" r "y"
+  (st, r) := ev st "\\x y. x"; check "λ: backslash and multi-binder" r "λx. λy. x"
+  (st, r) := ev st "(λx. λy. x) a b"; check "λ: K a b" r "a"
+  (st, r) := ev st "(λx. λy. x y) y"; check "λ: capture avoided" r "λy'. y y'"
+  (st, r) := ev st "TWO := succ (succ zero)"; check "λ: define via the Church library" r "λf. λx. f (f x)"
+  (st, r) := ev st "add TWO 3"; check "λ: Church arithmetic" r "λf. λx. f (f (f (f (f x))))"
+  (st, r) := ev st "if true a b"; check "λ: Church booleans" r "a"
+  (st, r) := ev st "omega omega"; checkTrue "λ: Ω is refused, not looped" (r.startsWith "<error: λ: no normal form") r
+  (st, r) := ev st "x^2 + y"; check "an ordinary cell is still ordinary" r "x^2 + y"
   -- user functions with parameters
   (st, r) := ev st "let sq(x) = x^2 + 1"; check "let with parameters" r "x^2 + 1"
   (st, r) := ev st "sq(3)"; check "call a session function" r "10"

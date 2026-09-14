@@ -36,6 +36,8 @@ structure Target where
 -- precedence levels: what the *context* demands vs. what the term *provides*
 private def P_ADD := 1
 private def P_MUL := 2
+private def P_LAM := 1
+private def P_APP := 2
 private def P_NEG := 2
 private def P_POW := 3
 private def P_ATOM := 4
@@ -145,6 +147,17 @@ mutual
         if T.times != "*" then (s!"\\frac\{d}\{d{x}}\\left({a}\\right)", P_MUL) else (T.fn name as, P_ATOM)
       | "integrate", [_, .var _], [a, x] =>
         if T.times != "*" then (s!"\\int {a} \\, d{x}", P_MUL) else (T.fn name as, P_ATOM)
+      -- the λ-calculus world: λx. body binds as far right as possible; application is juxtaposition
+      | "λ", [_, body], [x, _] =>
+        let b := print body (path ++ [1]) T P_LAM
+        (if T.times != "*" then s!"\\lambda {x}.\\, {b}" else s!"λ{x}. {b}", P_LAM)
+      | "λ.", [body], _ =>
+        let b := print body (path ++ [0]) T P_LAM
+        (if T.times != "*" then s!"\\lambda.\\, {b}" else s!"λ. {b}", P_LAM)
+      | "@", [f, a], _ =>
+        let fs := print f (path ++ [0]) T P_APP
+        let as := print a (path ++ [1]) T (P_APP + 1)
+        (if T.times != "*" then s!"{fs}\\ {as}" else s!"{fs} {as}", P_APP)
       | _, _, _ => (T.fn name as, P_ATOM)
     | .pow b x =>
       match (if T.times != "*" then radicalLatex b x else none) with

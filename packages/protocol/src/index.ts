@@ -43,6 +43,8 @@ export interface Step {
   after: WireExpr;
   /** `after`, rendered (no path annotations). Optional; used by the notebook's Manim Studio to animate steps. */
   afterRendered?: Rendered;
+  /** λ-cells: the same term after the step, with de Bruijn indices. */
+  afterDeBruijn?: Rendered;
   /** Nested derivation (e.g. simplification that ran inside a differentiation step). */
   sub?: Derivation;
 }
@@ -162,9 +164,13 @@ export interface PlotResult {
   derivation?: Derivation; inputRendered?: Rendered;
 }
 
+/** M-λ: a λ-cell's reply carries the de Bruijn view of the result and of every step
+ *  (`Step.afterDeBruijn`), and a reading when the normal form is a Church numeral or boolean. */
+export interface LambdaExtras { kind?: "lambda"; renderedDeBruijn?: Rendered; reading?: string }
+
 export interface Methods {
   "engine.capabilities": { params: Record<string, never>; result: EngineCapabilities };
-  "engine.evaluate":     { params: EvaluateParams; result: EvaluateResult | EvaluateError };
+  "engine.evaluate":     { params: EvaluateParams; result: (EvaluateResult & LambdaExtras) | EvaluateError };
   "engine.explain":      { params: ExplainParams; result: ExplainResult };
   "engine.resetSession": { params: { sessionId: string }; result: { ok: true } };
   "engine.plot":         { params: PlotParams; result: PlotResult | EvaluateError };

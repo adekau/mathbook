@@ -12,10 +12,12 @@ type Module = {
   UTF8ToString(ptr: number): string;
 };
 declare const createMathEngine: (opts?: object) => Promise<Module>;
+declare const __BUILD_ID__: string;
+const stamp = typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev";
 
-importScripts("engine-lean.js");
+importScripts(`engine-lean.js?v=${stamp}`);
 
-const ready = createMathEngine().then((M) => {
+const ready = createMathEngine({ locateFile: (p: string) => `${p}?v=${stamp}` }).then((M) => {
   if (M.ccall("mathengine_init", "number", [], []) !== 0) throw new Error("Lean runtime failed to initialize");
   const call = M.cwrap("mathengine_call", "number", ["string"]) as (s: string) => number;
   const free = M.cwrap("mathengine_free", null, ["number"]) as (p: number) => void;

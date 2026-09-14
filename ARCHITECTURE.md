@@ -61,6 +61,10 @@ differential test with zero mismatches.
   `2^(3/2)` (a sixth tier, the magnitudes of integer numerals, orders that step), radicals with the
   same square-free part collect in sums and same-index radicals multiply in products (both decrease
   `M`), and the printer displays the single-power form the textbook way. `RadicalRules.lean`.
+- **The λ-calculus is a second world in the same engine.** `Lambda.lean` has its own terms, parser
+  and normal-order β-reducer; terms are encoded into `Expr` for the wire, so selection, explanation
+  and origin tracking work unchanged. The de Bruijn view is computed with every step. Reduction is
+  on fuel, the one budget in the engine, because normalization is undecidable; `Ω` is refused.
 - **Plots are sampled by the engine and drawn by the notebook.** `engine.plot` simplifies the
   function under the session, records the cell, and returns a uniform sample with `null` where the
   value is not finite; the notebook's SVG and the studio's graph shot are presentation only.

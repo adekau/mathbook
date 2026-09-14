@@ -1,6 +1,7 @@
 import MathEngine.Integrate
 import MathEngine.Origin
 import MathEngine.Parser
+import MathEngine.Lambda
 /-!
 # Sessions, commands and the evaluation pipeline
 
@@ -20,6 +21,8 @@ structure Session where
   env : List (String × Expr) := []
   /-- `let f(x, y) = …` definitions, by name. -/
   fns : List (String × FnDef) := []
+  /-- λ-cell definitions (`name := term`), by name; the Church library sits behind them. -/
+  lambdas : List (String × Lam.Term) := []
   cells : List (String × Cell) := []
 
 /-- All sessions the engine knows about, keyed by `sessionId`. Threaded through `handle` by the host. -/
@@ -50,6 +53,61 @@ def evaluateCell (s : Session) (cellId source : String) :
         | .«let» name ps _ => { s with fns := (name, (ps, output)) :: s.fns.filter (·.1 != name) }
         | _ => s
       (s, .ok (stmt, output, d))
+
+/-- What a λ-cell produced. -/
+structure LamResult where
+  name : Option String
+  input : Lam.Term
+  output : Lam.Term
+  derivation : Derivation
+  /-- The de Bruijn view of each step's result, in step order. -/
+  dbSteps : Array Expr
+  reading : Option String
+
+/-- The names a λ-cell may use: the session's definitions, then the Church library. -/
+def lambdaDefs (s : Session) : List (String × Lam.Term) := s.lambdas ++ Lam.churchDefs
+
+/-- Is the source a λ-cell for this session? -/
+def isLambdaCell (s : Session) (source : String) : Bool :=
+  Lam.isLambdaSource source ((lambdaDefs s).map (·.1))
+
+/-- Evaluate a λ-cell: unfold definitions (one δ-step), then reduce in normal order, one β-step at
+a time, every step recorded with its de Bruijn view. A term without a normal form after
+`Lam.maxSteps` steps is refused — the one budget in the engine, since the question is undecidable. -/
+def lambdaCell (s : Session) (cellId source : String) :
+    Session × Except (String × String × Option (Nat × Nat)) LamResult :=
+  match Lam.parseStmt source with
+  | .error msg => (s, .error ("syntax", msg, none))
+  | .ok (name, t) =>
+    let expanded := Lam.expandDefs (lambdaDefs s) t
+    let (out, trace, normal) := Lam.reduce expanded
+    if !normal then
+      (s, .error ("eval", s!"λ: no normal form after {Lam.maxSteps} β-steps; the term had become {(Lam.toExpr out).toText}", none))
+    else
+      let δ : Array Step := if expanded != t then
+          #[⟨"lambda.delta", "δ: unfold the definitions used (the session's, then the Church library's).", [], Lam.toExpr t, Lam.toExpr expanded, none⟩]
+        else #[]
+      let (steps, _) := trace.foldl (fun (acc, prev) (t', renamed) =>
+          let step : Step := if renamed then
+              ⟨"lambda.alpha-beta", "α then β: a binder of the body was renamed so the argument's free variables are not captured, then the leftmost-outermost redex $(\\lambda x.\\, b)\\ a$ contracted to $b[x := a]$.", [], Lam.toExpr prev, Lam.toExpr t', none⟩
+            else ⟨"lambda.beta", "β: the leftmost-outermost redex $(\\lambda x.\\, b)\\ a$ contracts to $b[x := a]$.", [], Lam.toExpr prev, Lam.toExpr t', none⟩
+          (acc.push step, t')) (δ, expanded)
+      let d : Derivation := ⟨Lam.toExpr t, steps, Lam.toExpr out⟩
+      let dbSteps := steps.map fun st => Lam.dbToExpr (Lam.toDB [] (dbOf st.after))
+      let reading := match Lam.readChurch out with
+        | some n => some s!"the Church numeral {n}"
+        | none => match Lam.readBool out with
+          | some true => some "the Church boolean true"
+          | some false => some "the Church boolean false"
+          | none => none
+      let s := { s with cells := (cellId, ⟨Lam.toExpr out, d⟩) :: s.cells.filter (·.1 != cellId) }
+      let s := match name with
+        | some n => { s with lambdas := (n, out) :: s.lambdas.filter (·.1 != n) }
+        | none => s
+      (s, .ok ⟨name, t, out, d, dbSteps, reading⟩)
+where
+  /-- The steps store the encoded term; decode it for the de Bruijn view. -/
+  dbOf (e : Expr) : Lam.Term := (Lam.ofExpr e).getD (.var "?")
 
 /-- A sampled plot: the variable, the range, and `(t, y)` pairs (`none` where `f` has no finite value). -/
 structure Plot where
