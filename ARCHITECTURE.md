@@ -54,7 +54,8 @@ differential test with zero mismatches.
   identity), and proves `sol_rref`: the reduced matrix has the input's solution set. The `rref`
   command replays those operations into its steps when every entry is a numeral; symbolic entries
   fall back to the simplifier-driven algorithm, whose steps are named `la.row-*.symbolic` and
-  reported unverified. Echelon form itself is checked at run time (`isRref`), not proved.
+  reported unverified. That the result is in reduced row echelon form is `rref_isRref`
+  (`LinAlgRref.lean`), a column-by-column invariant.
 - **Radicals take the form the ordering can afford.** `2√2` as a term is `2 · 2^(1/2)`, heavier
   than `8^(1/2)` under any bounded numeral weight, so the engine's normal form is the single power
   `2^(3/2)` (a sixth tier, the magnitudes of integer numerals, orders that step), radicals with the

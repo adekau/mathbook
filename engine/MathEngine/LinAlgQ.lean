@@ -11,8 +11,8 @@ lemma per operation: each is invertible, so it preserves `Sol` in both direction
 parameters — scaling by 0, adding a row to itself — are defined to be the identity, which is what
 makes every operation invertible *by construction*; the algorithm never emits them. The algorithm
 itself is structural recursion over the columns, so it terminates without fuel and its correctness
-is the fold `sol_run`. What is *not* proved is that the result is in reduced row echelon form; that
-is decided at run time by `isRref`, an honest boundary in the style of `checked` (Pipeline.lean).
+is the fold `sol_run`. That the result is in reduced row echelon form is `rref_isRref`
+(`LinAlgRref.lean`).
 
 Only `Init` is used: the field algebra is discharged by `grind`, whose `Rat` instances ship with core.
 -/
@@ -147,22 +147,24 @@ theorem sol_run (ops : List (Nat × Op)) (m : Mat) (x : List Rat) : Sol (run ops
 def entry (m : Mat) (i j : Nat) : Rat := ((m[i]?.getD [])[j]?).getD 0
 def ncols (m : Mat) : Nat := (m.head?.map List.length).getD 0
 
-/-- The operations that make column `col` a pivot column with the pivot in row `p`: a swap to
-bring a nonzero entry up, a scaling to make it 1, and one row addition per other nonzero entry.
-`none` when the column has no nonzero entry at or below `p`. -/
-def columnOps (m : Mat) (col p : Nat) : Option (List Op) := do
-  let nr := m.length
-  let q ← (List.range nr).find? fun i => p ≤ i && entry m i col != 0
+/-- Running untagged operations in order. -/
+def runOps (ops : List Op) (m : Mat) : Mat := ops.foldl (fun m o => o.apply m) m
+
+/-- The operations that make column `col` a pivot column with the pivot in row `p`, given a row
+`q ≥ p` with a nonzero entry there: a swap to bring it up, a scaling to make it 1, and one row
+addition per other nonzero entry in the column. -/
+def columnBody (m : Mat) (col p q : Nat) : List Op :=
   let swaps := if q = p then [] else [Op.swap q p]
-  let m1 := swaps.foldl (fun m o => o.apply m) m
+  let m1 := runOps swaps m
   let piv := entry m1 p col
   let scales := if piv = 1 then [] else [Op.scale p piv.inv]
-  let m2 := scales.foldl (fun m o => o.apply m) m1
-  let clears := (List.range nr).filterMap fun i =>
-    if i = p then none else
-    let f := entry m2 i col
-    if f = 0 then none else some (Op.addMul i p (-f))
-  return swaps ++ scales ++ clears
+  let m2 := runOps scales m1
+  let factors := ((List.range m.length).filter fun i => i ≠ p ∧ entry m2 i col ≠ 0).map fun i => (i, -(entry m2 i col))
+  swaps ++ scales ++ factors.map fun x => Op.addMul x.1 p x.2
+
+/-- `none` when the column has no nonzero entry at or below `p`. -/
+def columnOps (m : Mat) (col p : Nat) : Option (List Op) :=
+  ((List.range m.length).find? fun i => p ≤ i && entry m i col != 0).map (columnBody m col p)
 
 /-- Column by column; `k` is how many columns remain, `p` the next pivot row. -/
 def go (m : Mat) (col p : Nat) : Nat → List (Nat × Op)
@@ -183,23 +185,6 @@ def rref (m : Mat) : Mat := run (rrefOps m) m
 
 /-- **Elimination preserves the solution set.** -/
 theorem sol_rref (m : Mat) (x : List Rat) : Sol (rref m) x ↔ Sol m x := sol_run _ _ _
-
-/-- Is `m` in reduced row echelon form? Leading entries are 1, strictly to the right of the row
-above, alone in their column; zero rows last. Decided, not proved: `rref` is checked against it. -/
-def isRref (m : Mat) : Bool := Id.run do
-  let mut last : Option Nat := none   -- pivot column of the previous row
-  let mut sawZero := false
-  for r in m, i in [0:m.length] do
-    match r.findIdx? (· != 0) with
-    | none => sawZero := true
-    | some c =>
-      if sawZero then return false
-      if r[c]? != some 1 then return false
-      if let some l := last then if c ≤ l then return false
-      last := some c
-      for j in [0:m.length] do
-        if j != i && entry m j c != 0 then return false
-  return true
 
 end LinQ
 end MathEngine

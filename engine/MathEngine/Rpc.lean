@@ -41,7 +41,7 @@ def ruleStatus : Json :=
     entry "diff.chain" "conditional" "Needs the inner function differentiable; proved for sin, cos and exp, while ln and tan also need a domain condition.",
     entry "diff.matrix" "unverified" "Proved, but matrices carry no value in the ℝ semantics, so the theorem has no content yet.",
     entry "diff.higher-order" "unverified" "An abbreviation: it eliminates the three-argument form, so there is nothing to prove.",
-    entry "cmd.rref" "verified" "Over ℚ the reduced matrix has the input's solution set (LinQ.sol_rref); echelon form is checked at run time. With symbolic entries the nested row operations are the unverified .symbolic ones, and the step inherits their status.",
+    entry "cmd.rref" "verified" "Over ℚ the reduced matrix has the input's solution set (LinQ.sol_rref) and is in reduced row echelon form (LinQ.rref_isRref). With symbolic entries the nested row operations are the unverified .symbolic ones, and the step inherits their status.",
     entry "la.row-swap" "verified" "Exchanging two rows preserves the solution set (LinQ.sol_swap); elimination as a whole: LinQ.sol_rref.",
     entry "la.row-scale" "verified" "Scaling a row by a nonzero rational preserves the solution set (LinQ.sol_scale).",
     entry "la.row-add" "verified" "Adding a multiple of another row preserves the solution set (LinQ.sol_addMul).",

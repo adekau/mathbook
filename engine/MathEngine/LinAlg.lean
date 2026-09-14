@@ -2,6 +2,7 @@ import MathEngine.Order
 import MathEngine.Print
 import MathEngine.SimpRules
 import MathEngine.LinAlgQ
+import MathEngine.LinAlgRref
 /-!
 # `la.*` — matrix arithmetic as rewriting, and Gauss–Jordan elimination as a step-recording algorithm
 
@@ -10,9 +11,8 @@ reference throws. `la.context` is the catch-all that refuses a matrix literal in
 handles, which the M5 termination proof relies on.
 
 `rref` has two paths. A matrix of numerals is reduced by the verified `LinQ.rref` (LinAlgQ.lean):
-the row operations it emits are replayed here into steps, and the theorem `LinQ.sol_rref` says the
-result has the same solution set; that the result is in echelon form is checked (`LinQ.isRref`), and
-a failed check refuses the evaluation rather than returning a wrong matrix. A matrix with symbolic
+the row operations it emits are replayed here into steps; `LinQ.sol_rref` says the result has the
+same solution set and `LinQ.rref_isRref` that it is in reduced row echelon form. A matrix with symbolic
 entries goes through the older step-recording algorithm, whose arithmetic is the simplifier's and whose
 pivot choice trusts `simplify` to decide zero-ness; its steps carry the `.symbolic` suffix so the
 notebook reports them as unverified.
@@ -202,8 +202,6 @@ def rrefRat (rs : List (List Rat)) (approx : Bool) : Except String (Expr × Arra
       | .scale i c => ("la.row-scale", s!"Scale $R_\{{i + 1}}$ by ${(lit c).toText}$ so the pivot becomes 1. (`LinQ.sol_scale`: the factor is nonzero.)")
       | .addMul i j c => ("la.row-add", s!"$R_\{{i + 1}} \\leftarrow R_\{{i + 1}} - ({(lit (-c)).toText}) R_\{{j + 1}}$ to clear column {col + 1}. (`LinQ.sol_addMul`.)")
     steps := steps.push ⟨rule, text, [], before, snap m, none⟩
-  if !LinQ.isRref m then
-    return .error "internal: elimination did not reach reduced row echelon form"
   return .ok (snap m, steps)
 
 /-- `rref`: the verified ℚ path when every entry is a numeral, the symbolic path otherwise. -/

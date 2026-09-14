@@ -169,7 +169,17 @@ Open items after M8 (2026-09-14, Alex: "go through the open items before the boo
   children-monotonicity lemma, since a numeral child of equal weight could be replaced by another; putting the value
   on the numeral node itself sidesteps it; (2) `4^(2/3) → 2^(4/3)` ties every bit-length or value weight on the
   exponent side, which is why the tier weighs integers only and non-integer exponents nothing.
-- echelon form of `LinQ.rref` proved rather than checked — pending.
+- echelon form of `LinQ.rref` proved rather than checked — DONE 2026-09-14: `engine/MathEngine/LinAlgRref.lean`,
+  `rref_isRref : IsRref (rref m) (ncols m)`, Init-only, three standard axioms; the run-time `isRref` check is gone.
+  The invariant carried column by column: the first `p` rows are pivot rows whose pivot columns increase, each a 1
+  alone in its column with zeros to its left; every later row is zero in every column seen so far. A column step
+  either finds no pivot (the invariant moves one column right) or swaps, scales and clears (one more pivot row).
+  Findings: (1) the clearing step reads all its factors from the matrix *before* any clearing, so its sequential
+  application equals the simultaneous one — the lemma `entry_clears` says each row changes by its own multiple of
+  the pivot row, which itself is untouched; that is what makes the invariant proof entry-wise rather than
+  operational; (2) `ring` is Mathlib's, so in the Init-only engine the rational identities are `grind`'s; (3) the
+  statement is in the width of the input rather than of the output, which sidesteps proving that row operations
+  preserve rectangularity — for the rectangular matrices the parser admits the two coincide.
 - integration: DONE 2026-09-14. `sin u · cos u⁻¹ → tan u` is a new `simp.function` case (proved in all three layers:
   additive measure, M5 ordering, ℝ soundness — unconditional, since Mathlib's `tan` is `sin/cos` everywhere), so
   `∫ tan x` now verifies. The finder gained u-substitution (`c·g'·H'(g)`, a factor also tried as `g¹`, which gives
