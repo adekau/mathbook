@@ -555,7 +555,8 @@ function renderChrome() {
   // title bar
   const tb = $(".titlebar"); tb.innerHTML = "";
   const brand = h("div", "brand");
-  brand.append(h("span", "mark"), h("span", "name", "ChalkMath"));
+  const mark = document.createElement("img"); mark.className = "mark"; mark.src = "logo.svg"; mark.alt = ""; mark.draggable = false;
+  brand.append(mark, h("span", "name", "ChalkMath"));
   const menus = h("div", "menus");
   const MENUS: Record<string, [string, () => void][]> = {
     File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs]],
