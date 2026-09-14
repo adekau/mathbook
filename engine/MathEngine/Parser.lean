@@ -108,7 +108,13 @@ mutual
     repeat
       let t ← peek
       if isOp t "*" then discard next; lhs := .mul [lhs, ← unary]
-      else if isOp t "/" then discard next; lhs := Expr.div lhs (← unary)
+      else if isOp t "/" then
+        discard next
+        let rhs ← unary
+        -- `3/4` is the rational 3/4, not the product 3 · 4⁻¹ (whose folding would show as steps)
+        lhs := match lhs, rhs with
+          | .num p, .num q => if q.isZero then Expr.div lhs rhs else .num (p / q)
+          | _, _ => Expr.div lhs rhs
       else if startsAtom t && !(t.kind == .num && ((← prev).map (·.kind == .num)).getD false) then
         lhs := .mul [lhs, ← unary]   -- implicit multiplication
       else break

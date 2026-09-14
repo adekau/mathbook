@@ -115,7 +115,8 @@ def tests : TestM Unit := do
   check "parse -2^2" (roundtrip "-2^2") "-2^2"
   check "parse (-2)^2" (roundtrip "(-2)^2") "(-2)^2"
   check "parse 2^3^2" (roundtrip "2^3^2") "2^3^2"
-  check "parse 8/2/2" (roundtrip "8/2/2") "8/2/2"
+  check "parse x/y/z" (roundtrip "x/y/z") "x/y/z"
+  check "parse 8/2/2 is a rational" (roundtrip "8/2/2") "2"
   check "parse a - b - c" (roundtrip "a - b - c") "a - b - c"
   -- parser: implicit multiplication and calls
   check "parse 2x^2" (roundtrip "2x^2") "2*x^2"
