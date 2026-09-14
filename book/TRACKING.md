@@ -190,7 +190,12 @@ Open items after M8 (2026-09-14, Alex: "go through the open items before the boo
   sound for the derivative semantics too (`dist_soundD`) — and simplified before comparison (`int.compare`); the
   spec `cmdIntegrate_spec` and `integrate_deriv` state exactly that. Still refused: `eˣ sin x` (needs the
   "solve for the integral" trick), `sin² x` (a trig identity the simp set lacks), `1/(x²+1)` (no arctan in the engine).
-- user functions with parameters — pending.
+- user functions with parameters — DONE 2026-09-14. `let f(x, y) = e` parses a parameter list; the session keeps
+  a function table beside its variable bindings; a cell's input first expands calls (`substituteFns`: the body with
+  parameters replaced by the already-expanded arguments, one level, so a self-reference unfolds once per
+  evaluation) and then substitutes variables, with a definition's own parameters shielded from the session's
+  bindings. The parser's `known` list, which decides whether `f(x)` is a call or a product, is fed the table's names.
+  Nothing new to prove: expansion happens before the pipeline, as variable substitution always did.
 - plotting (engine samples, notebook draws; studio Graph shot) — pending.
 - notebook file open/save — pending.
 Six-month cut line: M5 — reached 2026-09-13.

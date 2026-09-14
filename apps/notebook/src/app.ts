@@ -41,7 +41,7 @@ const DOCS: Doc[] = [
   { name: "exp", sig: "exp(x)", blurb: "Its own derivative and its own antiderivative.", ref: "https://mathworld.wolfram.com/ExponentialFunction.html", examples: ["diff(exp(2x), x)", "ln(exp(x))"] },
   { name: "ln", sig: "ln(x)", blurb: "Natural logarithm. Derivative 1/x.", ref: "https://mathworld.wolfram.com/NaturalLogarithm.html", examples: ["diff(ln(x), x)"] },
   { name: "abs", sig: "abs(x)", blurb: "Absolute value; folds on numeric arguments.", examples: ["abs(-3)"] },
-  { name: "let", sig: "let name = e", blurb: "Binds a name in this session. Later cells substitute it.", examples: ["let f = x^3 - 3x"] },
+  { name: "let", sig: "let name = e · let f(x, y) = e", blurb: "Binds a name in this session, or defines a function of its parameters. Later cells substitute the value or expand the call.", examples: ["let f = x^3 - 3x", "let sq(x) = x^2 + 1", "diff(sq(x), x)"] },
 ];
 const DOC_BY_NAME = new Map(DOCS.map((d) => [d.name, d]));
 

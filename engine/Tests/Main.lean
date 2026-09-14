@@ -96,6 +96,7 @@ def unwrapP : PlainRule := { name := "test.unwrap", apply := unwrap.apply }
 def showSteps (d : Derivation) : String :=
   ", ".intercalate (d.steps.toList.map fun s => s!"{s.rule}@{s.path} {s.before.toText} -> {s.after.toText}")
 
+set_option maxRecDepth 8192 in
 def tests : TestM Unit := do
   -- rational arithmetic is exact and normalized
   check "Q 6/-4" (Q.ofRat (Rat.divInt 6 (-4))).toText "-3/2"
@@ -127,7 +128,7 @@ def tests : TestM Unit := do
   check "parse 3 4 error" (roundtrip "3 4") "<syntax error: unexpected '4' @2-3>"
   check "parse x + error" (roundtrip "x +") "<syntax error: unexpected end of input @3-3>"
   check "parse pi" (roundtrip "pi") "π"
-  check "parse let" (match parseStmt "let f = x^2 + 3x" with | .ok (.«let» n v) => s!"{n} = {v.toText}" | _ => "err") "f = x^2 + 3*x"
+  check "parse let" (match parseStmt "let f = x^2 + 3x" with | .ok (.«let» n _ v) => s!"{n} = {v.toText}" | _ => "err") "f = x^2 + 3*x"
   check "parse matrix" (roundtrip "[1,2;3,4]") "[1, 2; 3, 4]"
   check "parse ragged" (roundtrip "[1,2;3]") "<syntax error: ragged matrix rows @0-1>"
   check "parse decimal" (roundtrip "2.5x + .5") "2.5*x + 0.5"
@@ -235,6 +236,17 @@ def tests : TestM Unit := do
   (st, r) := sessionEval st "rref([a,1;1,a])" ",\"showWork\":true"
   check "rref symbolic path" r "[1, 0; 0, 1]"
   checkTrue "rref symbolic path: .symbolic rule names" ((subRules "rref([a,1;1,a])").all (·.endsWith ".symbolic")) (subRules "rref([a,1;1,a])").toString
+  -- user functions with parameters
+  (st, r) := ev st "let sq(x) = x^2 + 1"; check "let with parameters" r "x^2 + 1"
+  (st, r) := ev st "sq(3)"; check "call a session function" r "10"
+  (st, r) := ev st "sq(y)"; check "call with a symbolic argument" r "y^2 + 1"
+  (st, r) := ev st "diff(sq(x), x)"; check "differentiate a session function" r "2*x"
+  (st, r) := ev st "sq(sq(2))"; check "nested calls" r "26"
+  (st, r) := ev st "let g(a, b) = a*b - sq(a)"; check "definition using another function" r "-(a^2 + 1) + a*b"
+  (st, r) := ev st "g(2, 5)"; check "two parameters" r "5"
+  (st, r) := ev st "let sqz(zz) = zz^2 + 1"; check "let with a parameter named like a later binding" r "zz^2 + 1"
+  (st, r) := ev st "let zz = 7"; check "bind zz" r "7"
+  (st, r) := ev st "sqz(2)"; check "a parameter is not captured by a session variable" r "5"
   -- radicals: the single-power normal form, collected and multiplied; displayed the textbook way
   (st, r) := ev st "sqrt(8)+sqrt(2)"; check "radicals collect (same base)" r "3*sqrt(2)"
   (st, r) := ev st "sqrt(50)-sqrt(18)"; check "radicals collect (square-free part)" r "2*sqrt(2)"

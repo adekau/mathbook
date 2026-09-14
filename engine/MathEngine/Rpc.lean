@@ -105,7 +105,8 @@ def evaluate (st : Store) (params : Json) : Store × Json :=
           (res.push ("derivation", d.toJson paths)).push ("inputRendered", Rendered.toJson d.input paths)
         else res
       let res := match stmt with
-        | .«let» name _ => res.push ("bound", .arr #[.str name])
+        | .«let» name [] _ => res.push ("bound", .arr #[.str name])
+        | .«let» name ps _ => (res.push ("bound", .arr #[.str name])).push ("params", .arr (ps.map .str).toArray)
         | _ => res
       (st, .obj res)
 

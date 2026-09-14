@@ -18,6 +18,8 @@ structure Cell where
 
 structure Session where
   env : List (String × Expr) := []
+  /-- `let f(x, y) = …` definitions, by name. -/
+  fns : List (String × FnDef) := []
   cells : List (String × Cell) := []
 
 /-- All sessions the engine knows about, keyed by `sessionId`. Threaded through `handle` by the host. -/
@@ -31,17 +33,21 @@ def Store.reset (st : Store) (id : String) : Store := st.filter (·.1 != id)
 cell. Returns the updated session and either an error or the output with its derivation. -/
 def evaluateCell (s : Session) (cellId source : String) :
     Session × Except (String × String × Option (Nat × Nat)) (Stmt × Expr × Derivation) :=
-  match parseStmt source with
+  match parseStmt source (s.fns.map (·.1)) with
   | .error e => (s, .error ("syntax", e.message, some (e.start, e.stop)))
   | .ok stmt =>
-    let input := substitute s.env stmt.value
+    -- a function's parameters are bound by the definition, not by the session
+    let params := match stmt with | .«let» _ ps _ => ps | _ => []
+    let env := s.env.filter fun (x, _) => !params.contains x
+    let input := substitute env (substituteFns s.fns stmt.value)
     match (normalizeT pipelineRules pipelineOrdered input).run #[] with
     | (.error msg, _) => (s, .error ("eval", msg, none))
     | (.ok output, steps) =>
       let d : Derivation := ⟨input, steps, output⟩
       let s := { s with cells := (cellId, ⟨output, d⟩) :: s.cells.filter (·.1 != cellId) }
       let s := match stmt with
-        | .«let» name _ => { s with env := (name, output) :: s.env.filter (·.1 != name) }
+        | .«let» name [] _ => { s with env := (name, output) :: s.env.filter (·.1 != name) }
+        | .«let» name ps _ => { s with fns := (name, (ps, output)) :: s.fns.filter (·.1 != name) }
         | _ => s
       (s, .ok (stmt, output, d))
 

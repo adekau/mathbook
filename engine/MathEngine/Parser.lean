@@ -27,11 +27,12 @@ structure ParseError where
   deriving Repr, Inhabited
 
 inductive Stmt where
-  | «let» (name : String) (value : Expr)
+  /-- `let name = e`, or `let f(x, y) = e` with parameters. -/
+  | «let» (name : String) (params : List String) (value : Expr)
   | expr (value : Expr)
   deriving Repr, Inhabited
 
-def Stmt.value : Stmt → Expr | .«let» _ v => v | .expr v => v
+def Stmt.value : Stmt → Expr | .«let» _ _ v => v | .expr v => v
 
 inductive TokKind where | num | id | op | eof deriving Repr, BEq, Inhabited
 
@@ -167,8 +168,24 @@ def parseStmt (src : String) (known : List String := []) : Except ParseError Stm
         discard next
         let name ← next
         if name.kind != .id then fail "expected a name after 'let'" name
+        -- an optional parameter list: let f(x, y) = ...
+        let t ← peek
+        let params ← if t.kind == .op && t.s == "(" then do
+            discard next
+            let mut ps : List String := []
+            repeat
+              let x ← next
+              if x.kind != .id then fail "expected a parameter name" x
+              ps := ps ++ [x.s]
+              let sep ← next
+              if sep.kind == .op && sep.s == ")" then break
+              if !(sep.kind == .op && sep.s == ",") then fail "expected ',' or ')' in the parameter list" sep
+            pure ps
+          else pure []
         expectOp "="
-        pure (Stmt.«let» name.s (← expr))
+        -- inside the body the function may call itself or other session functions
+        modify fun st => { st with known := name.s :: st.known }
+        pure (Stmt.«let» name.s params (← expr))
       else pure (Stmt.expr (← expr))
     let t ← peek
     if t.kind != .eof then fail s!"unexpected '{t.s}'" t
