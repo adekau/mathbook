@@ -821,6 +821,11 @@ function markActive() {
   S.cells.forEach((c, i) => c.el?.classList.toggle("active", i === S.active));
 }
 
+/** A step's explanation for the row: the Lean names (in backticks, usually parenthesized) belong in the panel, not here. */
+function plainWhy(md: string): string {
+  return md.replace(/\s*\([^()]*`[^`]*`[^()]*\)/g, "").replace(/`[^`]*`/g, "").replace(/\s+([.,;:])/g, "$1").trim();
+}
+
 /** Re-render everything below a cell's input, leaving the input element untouched. */
 function renderCellBody(cell: Cell) {
   const el = cell.el; if (!el) return;
@@ -859,7 +864,7 @@ function renderCellBody(cell: Cell) {
       rule.append(mark, document.createTextNode(st.rule));
       rulecol.append(rule);
       // what the rule did, in the row itself (the panel repeats it in full)
-      if (st.explanation) { const why = inlineMath(st.explanation, "why"); why.title = st.explanation.replace(/\$/g, ""); rulecol.append(why); }
+      if (st.explanation) { const why = inlineMath(plainWhy(st.explanation), "why"); why.title = plainWhy(st.explanation).replace(/\$/g, ""); rulecol.append(why); }
       row.append(rulecol);
       const el = h("span", "el");
       const shown = S.deBruijn && st.afterDeBruijn ? st.afterDeBruijn : st.afterRendered;
