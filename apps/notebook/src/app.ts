@@ -870,18 +870,20 @@ const STAGE_FONT = 34;
  * height for the whole scene, and one Morph per shot (from the shot before it, or written on).
  * Doing this lazily at each shot boundary is what makes playback hitch there.
  */
-interface Prepared { key: string; morphs: Map<number, Morph>; H: number }
+interface Prepared { key: string; morphs: Map<number, Morph>; H: number; maxW: number }
 let prepared: Prepared | null = null;
 function prepare(on: Live[]): Prepared {
   const key = on.map((s) => `${s.id}:${s.anim}:${s.tex}`).join("|");
   if (prepared?.key === key) return prepared;
-  const H = Math.max(1, ...on.map((s) => measure(s.tex, STAGE_FONT).h));
+  const sizes = on.map((s) => measure(s.tex, STAGE_FONT));
+  const H = Math.max(1, ...sizes.map((m) => m.h));
+  const maxW = Math.max(1, ...sizes.map((m) => m.w));
   const morphs = new Map<number, Morph>();
   on.forEach((s, i) => {
     const writeOn = i === 0 || s.anim === "Write" || s.anim === "Create";
     morphs.set(s.id, new Morph(writeOn ? null : on[i - 1]!.tex, s.tex, STAGE_FONT, H));
   });
-  prepared = { key, morphs, H };
+  prepared = { key, morphs, H, maxW };
   return prepared;
 }
 let stageShot: number | null = null;
@@ -1165,16 +1167,17 @@ function renderStage() {
   const p = Math.max(0, Math.min(1, (t - cur.start) / Math.max(0.001, cur.dur)));
   label.textContent = `1920×1080 · shot ${ci + 1} of ${on.length}`;
 
-  const morph = prepare(on).morphs.get(cur.id)!;
+  const prep = prepare(on);
+  const morph = prep.morphs.get(cur.id)!;
   let box = center.querySelector(".morph") as HTMLElement | null;
   if (!box || box.firstElementChild !== morph.el) {
     center.innerHTML = "";
     box = h("div", "morph"); box.append(morph.el); center.append(box);
   }
   morph.at(p);
+  // one camera for the whole scene: scale so the widest term fits, and never change it mid-scene
   const avail = Math.max(180, stage.clientWidth - 52);
-  const need = morph.width;
-  box.style.transform = `scale(${need > avail ? Math.max(0.42, avail / need) : 1})`;
+  box.style.transform = `scale(${prep.maxW > avail ? Math.max(0.3, avail / prep.maxW) : 1})`;
 
   if (stageShot !== cur.id || !foot.childElementCount) {
     stageShot = cur.id;
