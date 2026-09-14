@@ -173,6 +173,8 @@ const S = {
   deBruijn: false,
   /** Show the engine's rendering of the parsed input under each cell (View menu). */
   showEcho: (() => { try { return localStorage.getItem("lemma.echo") !== "off"; } catch { return true; } })(),
+  /** Size of rendered mathematics in the cells (View menu): small, normal or large. */
+  outSize: (() => { try { return (localStorage.getItem("lemma.outsize") as "s" | "m" | "l" | null) ?? "m"; } catch { return "m" as const; } })() as "s" | "m" | "l",
   menu: null as string | null,
   studio: { scenes: [] as Scene[], active: 0, playing: false, t: 0, speed: 1, codeOpen: true, copied: false },
 };
@@ -537,7 +539,12 @@ function renderChrome() {
     File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs]],
     Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
     View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }],
-      [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("lemma.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }]],
+      [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("lemma.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }],
+      ...(["s", "m", "l"] as const).map((sz): [string, () => void] => [`${S.outSize === sz ? "✓ " : "   "}Math size: ${{ s: "small", m: "normal", l: "large" }[sz]}`, () => {
+        S.outSize = sz; document.documentElement.dataset["outsize"] = sz;
+        try { localStorage.setItem("lemma.outsize", sz); } catch { /* private mode */ }
+        renderChrome();
+      }])],
     Run: [["Run all", () => void runAll()], ["Run cell", () => { const c = S.cells[S.active]; if (c) void runCell(c); }]],
     Kernel: [["Restart kernel", () => void restartKernel()], ["Restart and run all", async () => { await restartKernel(); await runAll(); }]],
     Help: [["Reference", () => switchTab("reference")], ["Manim Studio", () => switchTab("studio")]],
@@ -829,11 +836,15 @@ function renderCellBody(cell: Cell) {
     const stepRow = (st: Step, label: string, status: string, term?: TermRef, sub?: { steps: Step[]; index: number; top: number }): HTMLElement => {
       const row = h("div", "step");
       row.append(h("span", "no", label));
+      const rulecol = h("span", "rulecol");
       const rule = h("span", "rule");
       const mark = h("span", `vmark ${status}`);
       mark.title = S.ruleStatus.get(st.rule)?.note ?? "No soundness theorem yet.";
       rule.append(mark, document.createTextNode(st.rule));
-      row.append(rule);
+      rulecol.append(rule);
+      // what the rule did, in the row itself (the panel repeats it in full)
+      if (st.explanation) { const why = inlineMath(st.explanation, "why"); why.title = st.explanation.replace(/\$/g, ""); rulecol.append(why); }
+      row.append(rulecol);
       const el = h("span", "el");
       const shown = S.deBruijn && st.afterDeBruijn ? st.afterDeBruijn : st.afterRendered;
       if (shown) {
@@ -1828,6 +1839,7 @@ function onKey(ev: KeyboardEvent, cell: Cell, i: number) {
 // ---------------------------------------------------------------------------
 
 initTheme();
+document.documentElement.dataset["outsize"] = S.outSize;
 shell();
 renderChrome();
 renderSidebar();

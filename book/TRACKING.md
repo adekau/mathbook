@@ -251,3 +251,6 @@ Notebook cleanup (2026-09-14, Alex's seven items): nested steps (1.1, 1.1.1) now
    the notebook shows that number as In/Out, and the session substitutes the referenced output before anything
    else, so the input interpretation shows what `%` stood for. Not done: the "Assuming a matrix | use as a list
    of lists" interpretation bar from the Mathematica screenshot, which needs the engine to report alternatives.
+   Follow-ups the same day: View › Math size (small / normal / large; CSS variables on the root, remembered) and every
+   step row shows its explanation under the rule name ("Scale R₂ by −1/3 so the pivot becomes 1."), clamped to two
+   lines, with the full text as the row's tooltip and in the panel.
