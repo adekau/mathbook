@@ -101,7 +101,7 @@ const S = {
   panelOpen: true,
   sel: null as Selection | null,
   log: [] as LogLine[],
-  caps: null as { engine: string; version: string; verified: boolean; features: string[]; ruleStatus?: RuleStatus[] } | null,
+  caps: null as { engine: string; version: string; verified: boolean; features: string[]; ruleStatus?: RuleStatus[]; termination?: { status: string; theorem?: string; summary: string } } | null,
   ruleStatus: new Map<string, RuleStatus>(),
   engineMode: "lean-worker" as "lean-worker" | "http",
   httpUrl: "http://localhost:8787",
@@ -345,6 +345,11 @@ function renderChrome() {
     h("span", "rules", `${rules.size} rules applied`), h("span", "pipe", "|"),
     h("span", undefined, S.caps?.verified ? "exact arithmetic · verified engine" : "exact arithmetic"),
   );
+  if (S.caps?.termination) {
+    const t = h("span", undefined, S.caps.termination.status === "proven" ? "· termination proven" : "· step budget");
+    t.title = S.caps.termination.summary + (S.caps.termination.theorem ? ` (${S.caps.termination.theorem})` : "");
+    sb.append(h("span", "pipe", "|"), t);
+  }
 }
 
 function renderView() {

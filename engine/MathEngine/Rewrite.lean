@@ -18,8 +18,8 @@ needs two facts about the measure, both proved below for every weight assignment
 * it is invariant under reordering arguments (`measure_canon`), so canonical ordering can happen
   silently inside the loop without being a rule.
 
-Rule sets without a proven measure yet (the combined `diff`/`la`/command pipeline, see
-`book/TRACKING.md`) use `normalizeFuel`, which is also total but stops when the fuel runs out.
+The notebook pipeline needs a different argument (rules that duplicate subterms): see `Order.lean`
+and `Terminate.lean`. `normalizeFuel` below remains only for the `expand` command's nested rule set.
 -/
 namespace MathEngine
 open Expr
@@ -176,10 +176,10 @@ def coeffRest : Expr → Q × Expr
   | .mul (.num q :: rest) => (q, mulN rest)
   | e => (Q.one, e)
 
-private def cmpRat (a b : Rat) : Ordering := if a < b then .lt else if a == b then .eq else .gt
-private def leMul (a b : Expr) : Bool := compare a b != Ordering.gt
+def cmpRat (a b : Rat) : Ordering := if a < b then .lt else if a == b then .eq else .gt
+def leMul (a b : Expr) : Bool := compare a b != Ordering.gt
 /-- Sums: highest degree first, constants last, otherwise the structural order. -/
-private def leAdd (a b : Expr) : Bool :=
+def leAdd (a b : Expr) : Bool :=
   let ra := (coeffRest a).2
   let rb := (coeffRest b).2
   let o := (cmpRat (degree rb) (degree ra)).then
@@ -320,7 +320,7 @@ def derive (rules : List (Rule W)) (e : Expr) : Derivation :=
   ⟨e, steps, out⟩
 
 -- ---------------------------------------------------------------------------
--- Fuel-based variant, for rule sets without a proven measure (see book/TRACKING.md, M5)
+-- Fuel-based variant, used only by the `expand` command's nested set (book/TRACKING.md)
 -- ---------------------------------------------------------------------------
 
 structure PlainRule where

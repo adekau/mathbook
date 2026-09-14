@@ -8,17 +8,24 @@ namespace MathEngine
 open Expr
 
 /-- `(ab)^n = a^n b^n` and `(b^m)^n = b^(mn)` for symbolic `m`: the two reference `simp.power` cases
-that no additive measure can decrease (see `SimpRules.lean`). They are parity rules for the fuel-based
-notebook pipeline and the expand set, not part of the proven `simplify`. -/
-def parityRules : List PlainRule := [
+that no additive measure can decrease (see `SimpRules.lean`); `Order.lean`'s `M` does. They are parity
+rules for the notebook pipeline and the expand set, not part of the additively-proven `simplify`.
+Exponents 0 and 1 are left to `simp.power`, which is what makes them measure-decreasing. -/
+def parityPowMul : PlainRule :=
   { name := "simp.power", apply := fun e =>
       match e with
       | .pow (.mul fs) (.num n) =>
-        if n.isInt then some ⟨.mul (fs.map fun a => .pow a (.num n)), "$(ab)^n = a^n b^n$: a power of a product is the product of the powers.", none, none⟩ else none
-      | .pow (.pow b m) (.num n) =>
-        if n.isInt && !m.isNum then some ⟨.pow b (.mul [m, .num n]), "$(b^m)^n = b^{mn}$ for integer $n$.", none, none⟩ else none
+        if n.isInt && !n.isZero && !n.isOne then some ⟨.mul (fs.map fun a => .pow a (.num n)), "$(ab)^n = a^n b^n$: a power of a product is the product of the powers.", none, none⟩ else none
       | _ => none }
-]
+
+def parityPowPow : PlainRule :=
+  { name := "simp.power", apply := fun e =>
+      match e with
+      | .pow (.pow b m) (.num n) =>
+        if n.isInt && !n.isZero && !n.isOne && !m.isNum then some ⟨.pow b (.mul [m, .num n]), "$(b^m)^n = b^{mn}$ for integer $n$.", none, none⟩ else none
+      | _ => none }
+
+def parityRules : List PlainRule := [parityPowMul, parityPowPow]
 
 def expandRules : List PlainRule := [
   { name := "expand.power", apply := fun e =>

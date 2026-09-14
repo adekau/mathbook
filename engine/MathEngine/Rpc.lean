@@ -41,9 +41,11 @@ def ruleStatus : Json :=
     entry "diff.higher-order" "unverified" "An abbreviation: it eliminates the three-argument form, so there is nothing to prove."]
 
 def capabilities : Json :=
-  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m4"), ("verified", .bool true),
+  .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m5"), ("verified", .bool true),
          ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric"]),
-         ("ruleStatus", ruleStatus)]
+         ("ruleStatus", ruleStatus),
+         ("termination", .obj #[("status", .str "proven"), ("theorem", .str "MathEngine.pipelineOrdered"),
+           ("summary", .str "Cell evaluation has no step budget: every pipeline rule decreases a five-tier ordering (commands, higher-order diff, matrix literals, the weight M, size) on nodes whose children are normal. Only the nested `expand` set still runs on fuel.")])]
 
 def Rendered.toJson (e : Expr) (paths : Bool) : Json :=
   .obj #[("text", .str e.toText), ("latex", .str (e.toLatex paths))]

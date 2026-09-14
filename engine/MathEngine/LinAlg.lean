@@ -1,33 +1,68 @@
-import MathEngine.Rewrite
+import MathEngine.Order
 import MathEngine.Print
 import MathEngine.SimpRules
 /-!
 # `la.*` — matrix arithmetic as rewriting, and Gauss–Jordan elimination as a step-recording algorithm
 
 Ported from `linalg.ts`. Dimension errors refuse the evaluation (`RuleResult.error`), as the
-reference throws. M7 verifies elimination preserves the solution set.
+reference throws. M7 verifies elimination preserves the solution set. `la.context` is the catch-all that
+refuses a matrix literal in any position no rule handles, which the M5 termination proof relies on.
 -/
 namespace MathEngine
 open Expr
 
-private def dims (rows : List (List Expr)) : Nat × Nat := (rows.length, (rows.head?.map List.length).getD 0)
-private def asMat : Expr → Option (List (List Expr)) | .matrix rows => some rows | _ => none
-private def refuse (msg : String) : RuleResult := ⟨Expr.zero, "", none, some msg⟩
-private def entry (rows : List (List Expr)) (i j : Nat) : Expr := ((rows.getD i []).getD j Expr.zero)
+def dims (rows : List (List Expr)) : Nat × Nat := (rows.length, (rows.head?.map List.length).getD 0)
+def asMat : Expr → Option (List (List Expr)) | .matrix rows => some rows | _ => none
+def refuse (msg : String) : RuleResult := ⟨Expr.zero, "", none, some msg⟩
+def entry (rows : List (List Expr)) (i j : Nat) : Expr := ((rows.getD i []).getD j Expr.zero)
 
-def matrixRules : List PlainRule := [
-  { name := "la.add", apply := fun e =>
+/-- Entry `(i, j)` of the product of two literal matrices. -/
+def mulEntry (a b : List (List Expr)) (ac i j : Nat) : Expr :=
+  .add ((List.range ac).map fun k => .mul [entry a i k, entry b k j])
+
+def matMul (a b : List (List Expr)) : List (List Expr) :=
+  let (ar, ac) := dims a
+  let bc := (dims b).2
+  (List.range ar).map fun i => (List.range bc).map fun j => mulEntry a b ac i j
+
+/-- `rows ^ (k + 1)` as one literal (the product tree is left in the entries). -/
+def matPow (rows : List (List Expr)) : Nat → List (List Expr)
+  | 0 => rows
+  | k + 1 => matMul rows (matPow rows k)
+
+def minor (others : List (List Expr)) (j : Nat) : List (List Expr) :=
+  others.map fun row => (row.zipIdx.filter (·.2 != j)).map (·.1)
+
+/-- Determinant by Laplace expansion along the first row, fully expanded; `fuel` bounds the recursion
+by the number of rows. -/
+def detExpr : Nat → List (List Expr) → Expr
+  | _, [[a]] => a
+  | _, [[a, b], [c, d]] => Expr.sub (.mul [a, d]) (.mul [b, c])
+  | fuel + 1, first :: others =>
+    .add (first.zipIdx.map fun (a1j, j) =>
+      let sign := if j % 2 == 0 then Expr.one else Expr.minusOne
+      .mul [sign, a1j, detExpr fuel (minor others j)])
+  | _, _ => Expr.zero
+
+/-- The matrix rules. Every node with a matrix literal as a child is handled here: evaluated when it
+is an operation on literals, refused otherwise (`la.context`). That is what lets the termination
+proof (`PipelineOrder.lean`) know a normal form contains no literal except possibly at the root. -/
+def laAdd : PlainRule :=
+  { name := "la.add", apply := fun e => Option.map (checkedLit e) <|
       match e with
       | .add es =>
+        if !es.any isMatrix then none else
         match es.mapM asMat with
         | some (a :: rest) =>
           let (r, c) := dims a
           if rest.any (fun m => dims m != (r, c)) then some (refuse "matrix addition: dimension mismatch")
           else some ⟨.matrix ((List.range r).map fun i => (List.range c).map fun j => .add (entry a i j :: rest.map (entry · i j))),
             "Matrices of the same shape add entrywise.", none, none⟩
-        | _ => none
-      | _ => none },
-  { name := "la.scalar-mul", apply := fun e =>
+        | _ => some (refuse "cannot add a matrix and a scalar")
+      | _ => none }
+
+def laScalarMul : PlainRule :=
+  { name := "la.scalar-mul", apply := fun e => Option.map (checkedLit e) <|
       match e with
       | .mul es =>
         let mats := es.filter isMatrix
@@ -39,52 +74,68 @@ def matrixRules : List PlainRule := [
             let s := mulN scalars
             some ⟨.matrix (rows.map (·.map fun x => .mul [s, x])), s!"Scalar multiplication: multiply every entry by ${s.toText}$.", none, none⟩
         | _ => none
-      | _ => none },
-  { name := "la.mul", apply := fun e =>
+      | _ => none }
+
+def laMul : PlainRule :=
+  { name := "la.mul", apply := fun e => Option.map (checkedLit e) <|
       match e with
-      | .mul (.matrix a :: .matrix b :: rest) =>
-        if !rest.all isMatrix then none else
-        let (ar, ac) := dims a
-        let (br, bc) := dims b
-        if ac != br then some (refuse s!"matrix product: {ar}×{ac} times {br}×{bc} is undefined (inner dimensions must match)")
-        else
-          let prod := (List.range ar).map fun i => (List.range bc).map fun j =>
-            .add ((List.range ac).map fun k => .mul [entry a i k, entry b k j])
-          some ⟨.mul (.matrix prod :: rest),
-            s!"Matrix product: entry $(i,j)$ is the dot product of row $i$ of the left factor with column $j$ of the right factor ({ar}×{ac} · {br}×{bc} → {ar}×{bc}).", none, none⟩
-      | _ => none },
-  { name := "la.transpose", apply := fun e =>
+      | .mul es =>
+        match es.zipIdx.filter (fun p => isMatrix p.1) with
+        | (.matrix a, i) :: (.matrix b, j) :: _ =>
+          let (ar, ac) := dims a
+          let (br, bc) := dims b
+          if ac != br then some (refuse s!"matrix product: {ar}×{ac} times {br}×{bc} is undefined (inner dimensions must match)")
+          else
+            let prod := matMul a b
+            let es' := (es.zipIdx.filter (·.2 != j)).map fun (x, k) => if k == i then Expr.matrix prod else x
+            some ⟨mulN es',
+              s!"Matrix product: entry $(i,j)$ is the dot product of row $i$ of the left factor with column $j$ of the right factor ({ar}×{ac} · {br}×{bc} → {ar}×{bc}).", none, none⟩
+        | _ => none
+      | _ => none }
+
+def laTranspose : PlainRule :=
+  { name := "la.transpose", apply := fun e => Option.map (checkedLit e) <|
       match e with
       | .fn "transpose" [.matrix rows] =>
         let (r, c) := dims rows
         some ⟨.matrix ((List.range c).map fun j => (List.range r).map fun i => entry rows i j), "Transpose swaps rows and columns.", none, none⟩
-      | _ => none },
-  { name := "la.det", apply := fun e =>
+      | _ => none }
+
+def laDet : PlainRule :=
+  { name := "la.det", apply := fun e => Option.map (checkedLit e) <|
       match e with
       | .fn "det" [.matrix rows] =>
         let (r, c) := dims rows
-        if r != c then some (refuse "determinant of a non-square matrix is undefined")
+        if r != c || r == 0 then some (refuse "determinant of a non-square matrix is undefined")
         else match rows with
         | [[a]] => some ⟨a, "The determinant of a 1×1 matrix is its entry.", none, none⟩
         | [[a, b], [c2, d]] => some ⟨Expr.sub (.mul [a, d]) (.mul [b, c2]), "$\\det\\begin{bmatrix}a&b\\\\c&d\\end{bmatrix} = ad - bc$.", none, none⟩
-        | first :: others =>
-          let terms := first.zipIdx.map fun (a1j, j) =>
-            let minor : Expr := .matrix (others.map fun row => (row.zipIdx.filter (·.2 != j)).map (·.1))
-            let sign := if j % 2 == 0 then Expr.one else Expr.minusOne
-            .mul [sign, a1j, .fn "det" [minor]]
-          some ⟨.add terms, "Laplace expansion along the first row: $\\det M = \\sum_j (-1)^{1+j} a_{1j} \\det M_{1j}$, where $M_{1j}$ deletes row 1 and column $j$.", none, none⟩
-        | [] => none
-      | _ => none },
-  { name := "la.pow", apply := fun e =>
+        | _ => some ⟨detExpr r rows, "Laplace expansion along the first row, $\\det M = \\sum_j (-1)^{1+j} a_{1j} \\det M_{1j}$ where $M_{1j}$ deletes row 1 and column $j$, applied recursively down to 2×2 minors.", none, none⟩
+      | _ => none }
+
+def laPow : PlainRule :=
+  { name := "la.pow", apply := fun e => Option.map (checkedLit e) <|
       match e with
       | .pow (.matrix rows) (.num n) =>
-        if n.isInt && n.val.num ≥ 1 then
+        let (r, c) := dims rows
+        if r != c then some (refuse "only a square matrix can be raised to a power")
+        else if n.isInt && n.val.num ≥ 1 then
           let k := n.val.num.toNat
           if k == 1 then some ⟨.matrix rows, "$M^1 = M$.", none, none⟩
-          else some ⟨.mul (List.replicate k (.matrix rows)), s!"$M^\{{k}}$ is $M$ multiplied by itself {k} times.", none, none⟩
-        else none
+          else some ⟨.matrix (matPow rows (k - 1)), s!"$M^\{{k}}$ is $M$ multiplied by itself {k} times; the entries are the accumulated dot products.", none, none⟩
+        else some (refuse "a matrix can only be raised to a positive integer power")
       | _ => none }
-]
+
+def matrixRules : List PlainRule := [laAdd, laScalarMul, laMul, laTranspose, laDet, laPow]
+
+/-- The catch-all: a matrix literal anywhere no rule above handles it is an error, not junk. -/
+def laContext : PlainRule :=
+  { name := "la.context", apply := fun e =>
+      match e with
+      | .matrix rows => if rows.flatten.any isMatrix then some (refuse "nested matrices are not supported") else none
+      | _ => if (children e).any isMatrix then some (refuse s!"a matrix cannot be used here: ${e.toText}$") else none }
+
+def contextRules : List PlainRule := [laContext]
 
 /-- Gauss–Jordan elimination, recorded as row-operation steps whose before/after are the whole
 matrix. Works on symbolic entries as long as `simplify` can decide zero-ness of pivots. -/

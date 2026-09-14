@@ -1,47 +1,58 @@
-import MathEngine.Rewrite
+import MathEngine.Order
 import MathEngine.Print
 /-!
 # `diff.*` — differentiation as rewriting
 
 `diff(e, x)` is an ordinary node and the calculus rules push it inward, so the trace reads like a
 textbook derivation with pending d/dx's visible at each step. Ported from `diff.ts`. These rules
-duplicate subterms (product, chain), so they run under `normalizeFuel` until M5 supplies an
-ordering (book/TRACKING.md); M4 proves each against `HasDerivAt`.
+duplicate subterms (product, chain); M5 orders them with `M (diff f x) = 3 ^ M f` (Order.lean) and
+M4 proves each against `HasDerivAt`. Malformed `diff` nodes refuse, so a normal form has none.
 -/
 namespace MathEngine
 open Expr
 
-private def D (e : Expr) (x : String) : Expr := .fn "diff" [e, .var x]
+def D (e : Expr) (x : String) : Expr := .fn "diff" [e, .var x]
 
 /-- `diff(body, x)` with a variable target, if `e` is one. -/
-private def target : Expr → Option (Expr × String)
+def target : Expr → Option (Expr × String)
   | .fn "diff" [body, .var x] => some (body, x)
   | _ => none
 
-private def rule (name : String) (f : Expr × String → Option RuleResult) : PlainRule :=
+def rule (name : String) (f : Expr × String → Option RuleResult) : PlainRule :=
   { name, apply := fun e => target e >>= f }
 
-private def rules : List PlainRule := [
+def diffHigherOrder : PlainRule :=
   { name := "diff.higher-order", apply := fun e =>
       match e with
       | .fn "diff" [body, .var x, .num n] =>
         if n.isInt && n.val.num ≥ 1 then
           let k := n.val.num.toNat
           some ⟨(List.range k).foldl (fun r _ => D r x) body, s!"The {k}th derivative is {k} successive derivatives.", none, none⟩
-        else none
-      | _ => none },
+        else some ⟨e, "", none, some "the order of a derivative must be a positive integer"⟩
+      | .fn "diff" [_, .var _] => none
+      | .fn "diff" [_, _] => some ⟨e, "", none, some "differentiate with respect to a variable: diff(f, x)"⟩
+      | .fn "diff" _ => some ⟨e, "", none, some "diff takes (f, x) or (f, x, n)"⟩
+      | _ => none }
+
+def diffConstant : PlainRule :=
   rule "diff.constant" fun (body, x) =>
     if !body.dependsOn x then
       some ⟨Expr.zero, s!"${body.toText}$ does not depend on ${x}$, so its derivative is 0: constants have zero rate of change.", none, none⟩
-    else none,
+    else none
+
+def diffVariable : PlainRule :=
   rule "diff.variable" fun (body, x) =>
     match body with
     | .var y => if y == x then some ⟨Expr.one, s!"$\\frac\{d}\{d{x}} {x} = 1$: the identity function has slope 1 everywhere.", none, none⟩ else none
-    | _ => none,
+    | _ => none
+
+def diffSum : PlainRule :=
   rule "diff.sum" fun (body, x) =>
     match body with
-    | .add es => some ⟨.add (es.map (D · x)), "Sum rule: the derivative of a sum is the sum of the derivatives (differentiation is linear).", none, none⟩
-    | _ => none,
+    | .add (a :: b :: es) => some ⟨.add ((a :: b :: es).map (D · x)), "Sum rule: the derivative of a sum is the sum of the derivatives (differentiation is linear).", none, none⟩
+    | _ => none
+
+def diffConstMul : PlainRule :=
   rule "diff.constant-multiple" fun (body, x) =>
     match body with
     | .mul es =>
@@ -50,17 +61,24 @@ private def rules : List PlainRule := [
       if consts.isEmpty || rest.isEmpty then none
       else some ⟨.mul (consts ++ [D (mulN rest) x]),
         s!"Constant multiple rule: factors independent of ${x}$ (here ${(mulN consts).toText}$) pull out of the derivative.", none, none⟩
-    | _ => none,
+    | _ => none
+
+/-- The product-rule terms: for each factor, its derivative first, then the other factors in order. -/
+def prodTerms (x : String) : List Expr → List Expr → List Expr
+  | _, [] => []
+  | acc, f :: rest => .mul (D f x :: (acc ++ rest)) :: prodTerms x (acc ++ [f]) rest
+
+def diffProduct : PlainRule :=
   rule "diff.product" fun (body, x) =>
     match body with
-    | .mul fs =>
-      let terms := (List.range fs.length).map fun i =>
-        .mul (D (fs.getD i Expr.zero) x :: (fs.zipIdx.filter (·.2 != i)).map (·.1))
+    | .mul (f :: g :: fs) =>
       let expl := match fs with
-        | [f, g] => s!"Product rule: $(fg)' = f'g + fg'$ with $f = {f.toText}$ and $g = {g.toText}$."
-        | _ => s!"Product rule for {fs.length} factors: differentiate each factor in turn, holding the others fixed, and add."
-      some ⟨.add terms, expl, none, none⟩
-    | _ => none,
+        | [] => s!"Product rule: $(fg)' = f'g + fg'$ with $f = {f.toText}$ and $g = {g.toText}$."
+        | _ => s!"Product rule for {fs.length + 2} factors: differentiate each factor in turn, holding the others fixed, and add."
+      some ⟨.add (prodTerms x [] (f :: g :: fs)), expl, none, none⟩
+    | _ => none
+
+def diffPower : PlainRule :=
   rule "diff.power" fun (body, x) =>
     match body with
     | .pow base exp =>
@@ -79,30 +97,40 @@ private def rules : List PlainRule := [
         some ⟨.mul [body, .add [.mul [D exp x, .fn "ln" [base]], .mul [exp, Expr.div (D base x) base]]],
           s!"Both base and exponent depend on ${x}$: write $f^g = e^\{g \\ln f}$ and differentiate, giving $f^g\\left(g' \\ln f + g \\frac\{f'}\{f}\\right)$.", none, none⟩
       else none
-    | _ => none,
+    | _ => none
+
+/-- The derivative of the outer function and the law it follows. -/
+def outerOf (f : String) (u : Expr) : Option (Expr × String) :=
+  match f with
+  | "sin" => some (.fn "cos" [u], "\\sin' = \\cos")
+  | "cos" => some (Expr.neg (.fn "sin" [u]), "\\cos' = -\\sin")
+  | "tan" => some (.pow (.fn "cos" [u]) (Expr.ofInt (-2)), "\\tan' = \\sec^2 = 1/\\cos^2")
+  | "exp" => some (.fn "exp" [u], "\\exp' = \\exp")
+  | "ln" => some (.pow u Expr.minusOne, "\\ln' u = 1/u")
+  | _ => none
+
+/-- The chain factor `u'`, omitted when `u` is the variable itself. -/
+def innerOf (u : Expr) (x : String) : List Expr :=
+  match u with | .var y => if y == x then [] else [D u x] | _ => [D u x]
+
+def diffChain : PlainRule :=
   rule "diff.chain" fun (body, x) =>
     match body with
     | .fn f [u] =>
-      let outer : Option (Expr × String) := match f with
-        | "sin" => some (.fn "cos" [u], "\\sin' = \\cos")
-        | "cos" => some (Expr.neg (.fn "sin" [u]), "\\cos' = -\\sin")
-        | "tan" => some (.pow (.fn "cos" [u]) (Expr.ofInt (-2)), "\\tan' = \\sec^2 = 1/\\cos^2")
-        | "exp" => some (.fn "exp" [u], "\\exp' = \\exp")
-        | "ln" => some (.pow u Expr.minusOne, "\\ln' u = 1/u")
-        | _ => none
-      match outer with
+      match outerOf f u with
       | some (fprime, law) =>
-        let inner := match u with | .var y => if y == x then [] else [D u x] | _ => [D u x]
+        let inner := innerOf u x
         some ⟨.mul (fprime :: inner),
           if inner.isEmpty then s!"${law}$." else s!"Chain rule: $(f(u))' = f'(u)\\,u'$ with ${law}$ and $u = {u.toText}$.", none, none⟩
       | none => none
-    | _ => none,
-  rule "diff.matrix" fun (body, x) =>
+    | _ => none
+
+def diffMatrix : PlainRule :=
+  { name := "diff.matrix", apply := fun e => Option.map (checkedLit e) <| target e >>= fun (body, x) =>
     match body with
     | .matrix rows => some ⟨.matrix (rows.map (·.map (D · x))), "Differentiate a matrix entrywise.", none, none⟩
-    | _ => none
-]
+    | _ => none }
 
-def diffRules : List PlainRule := rules
+def diffRules : List PlainRule := [diffHigherOrder, diffConstant, diffVariable, diffSum, diffConstMul, diffProduct, diffPower, diffChain, diffMatrix]
 
 end MathEngine

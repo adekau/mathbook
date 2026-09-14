@@ -126,7 +126,7 @@ diff(f, x)	2*x + 3
 subst(f, x, 2)	10
 N(pi)	3.14159265358979
 N(sqrt(2))	1.4142135623731
-N(1/3)	N(1/3)
+N(1/3)	0.333333333333333
 N(f)	<error: cannot evaluate numerically: 'x' is unbound>
 let g = 2x	2*x
 f + g	x^2 + 5*x

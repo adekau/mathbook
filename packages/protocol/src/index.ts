@@ -82,6 +82,8 @@ export interface EngineCapabilities {
   features: string[];          // "simplify", "diff", "linalg", "integrate", ...
   /** Per-rule proof status, so a frontend can mark derivation steps. Optional; absent means unknown. */
   ruleStatus?: RuleStatus[];
+  /** M5: how the engine knows evaluation terminates. */
+  termination?: { status: 'proven' | 'fuel'; theorem?: string; summary: string };
 }
 
 export interface EvaluateParams {

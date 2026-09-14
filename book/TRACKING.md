@@ -62,8 +62,38 @@ M4 DONE 2026-09-10: `proofs/Proofs/Deriv.lean`. `evalR` could not take the `diff
    The engine reports all of this through `engine.capabilities.ruleStatus`, so the notebook's proof-status panel now says
    "conditional" with the actual hypothesis instead of "no soundness theorem yet". Axioms: the three standard ones.
 M5 termination: measure-decreasing proof replaces the step budget (connects to the order-theory book).
+   DECISION 2026-09-13 (Alex, consulted per the M1 brief): option B — tiered measures with an innermost-strategy lemma,
+   not a global RPO (not in Mathlib, ~3× the work, and still cannot order collect-powers against (ab)^n) and not fuel-as-
+   a-proven-bound. The two parity rules stay in `simplify` (Mathematica distributes integer powers over products) and get
+   a bespoke ordering rather than moving to `expand`. `expand`'s nested set stays on fuel in M5 (its own chapter later).
+   DONE 2026-09-13. `Order.lean` (the ordering), `Terminate.lean` (`normalizeT`, innermost, with the conditional
+   obligation and the returned invariants `μ out ≤ μ in` and `Normal out`), `PipelineOrder.lean` (thirty lemmas and
+   `pipelineOrdered`), `Pipeline.lean` (commands and the rule list, moved out of Session). `evaluateCell` no longer takes
+   a fuel argument. Axioms: the three standard ones; `lake test` 0 failures; wasm 1,830,991 bytes.
+   Findings, in order of how much they changed the design:
+   - No single textbook ordering works. `diff.*` is the classic RPO example, but RPO needs pow > mul for
+     `(ab)^n → a^n b^n` and mul > pow for `x·x → x²`; every polynomial interpretation tried fails on `(b^m)^n → b^(mn)`
+     with symbolic `m` when `x·x → x²` is present. What works is `M (pow b e) = (M b + 1)·M e − 1` (a numeric exponent
+     *multiplies* its base), `M (mul es) = 2 + Σ (M e + 2)` (a per-factor charge), `M (num 1) = 1` (so `x · x^a → x^(a+1)`
+     decreases), non-integer numerals weighing 4 (so `√2 + √2 → 2√2` decreases: `2^(1/2)` must weigh ≥ 9), and
+     `M (diff f x) = 3^(M f + 3)`. Tuning `M` was the real work; each constant is forced by a named rule.
+   - The obligation must be conditional on normal children. `diff.product` duplicates its body; if the body could still
+     contain a command or a matrix product, no ordering of this shape survives. The rewriter's innermost strategy makes
+     the hypothesis true at every firing, and the proof carries `Normal` through the recursion in the result type.
+   - Five tiers, lexicographic: commands, malformed `diff`, nodes on a path to a matrix literal, `M`, `size`. Scalar
+     multiplication `s·A` copies `s` into every entry, so counting literals alone fails; counting nodes *above* literals
+     makes every `la.*` rule a strict decrease and `M` never sees a matrix.
+   - Honest boundaries: commands (which call the fuel-based expand set, elimination, floats) and the matrix rules
+     (unverified arithmetic until M7) have their outputs checked at run time for exactly the property the proof needs
+     (`checked`, `checkedLit`); a failure surfaces as an error, never as non-termination. Scalar rules skip nodes with a
+     matrix child (`scalarOnly`), and `la.context` refuses a literal anywhere no matrix rule handles it, so a normal term
+     is literal-free below its root — the lemma the third tier rests on.
+   - Behaviour changes, all deliberate: `det` and `M^k` on literals are one step each; `la.mul` multiplies the first two
+     literals in a product regardless of interleaved scalars; `N(1/3)` evaluates (the reference left it); `sin(A)`,
+     `A + 1`, nested matrices are errors instead of junk normal forms; parity rules leave exponents 0 and 1 to
+     `simp.power`; `diff(f, 2)` and `diff(f, x, 0)` are errors.
 M6 origin tracking for `explain` (van Deursen–Klint–Tip 1993); current path-prefix heuristic over-approximates.
 M7 linear algebra over ℚ verified (elimination preserves solution set).
 M8 integration as a verified *checker* (`deriv (integrate f) = f`), not a verified integrator.
 Open: radical simplification (sqrt 8 → 2√2), user functions with parameters, plotting, design file import.
-Six-month cut line: M5.
+Six-month cut line: M5 — reached 2026-09-13.

@@ -38,9 +38,16 @@ differential test with zero mismatches.
   `Step` with the whole term before and after and the path where it fired. The derivation *is*
   the computation, viewed as data.
 - **Termination is a proof obligation, not a budget.** A rule bundles a proof that it strictly
-  decreases a measure; `normalize` is well-founded on that measure and never `partial`. Where a
-  rule set has no proven measure yet, the fallback is explicit fuel, recorded in
-  `book/TRACKING.md` as debt to be paid in M5, never silently.
+  decreases a measure; `normalize` is well-founded on that measure and never `partial`. The
+  verified `simplify` uses one additive measure (`Rewrite.lean`). The whole notebook pipeline —
+  commands, `diff.*`, `la.*`, `simp.*`, the two parity rules — uses the five-tier ordering of
+  `Order.lean` and the innermost rewriter `normalizeT` (`Terminate.lean`), whose obligation is
+  conditional: a rule must decrease the ordering *on a node whose children are already normal*.
+  That hypothesis is what lets the product rule duplicate its body. The theorem is
+  `pipelineOrdered` (`PipelineOrder.lean`), one lemma per rule. Rules that delegate to unverified
+  code (commands, matrix arithmetic) have their outputs *checked* for the tier they must decrease
+  rather than proved. The only remaining step budget is the `expand` command's nested set,
+  recorded in `book/TRACKING.md`.
 - **Soundness is a fold, over whichever semantics you bring.** `RewriteSound.normalize_sound_for`
   is stated for an abstract `Congruence` (reflexive, transitive, a congruence under `withChildren`,
   invariant under `canon`). Supply those four facts for a new semantics and normalization's
