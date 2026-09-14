@@ -236,7 +236,17 @@ svg .curve { fill:none; stroke:var(--acc); stroke-width:2; stroke-linejoin:round
 .cellacts { position:absolute; top:6px; right:44px; display:flex; align-items:center; gap:5px; opacity:0; pointer-events:none; transition:opacity 110ms linear; }
 .cell:hover .cellacts, .cell.active .cellacts { opacity:1; pointer-events:auto; }
 .cellacts span { display:inline-flex; align-items:center; gap:4px; height:20px; font-size:9.5px; font-weight:600; font-family:var(--font); color:var(--p-btn-ink); background:linear-gradient(180deg, var(--p-btn-a), var(--p-btn-b)); border:1px solid var(--p-btn-br); border-radius:3px; padding:0 7px; cursor:pointer; box-shadow:0 1px 0 var(--p-hl) inset, 0 1px 2px var(--p-sh); }
-.cellacts span.scene { color:var(--p-acc-ink); }
+.cellacts span.more { padding:0 6px; font-size:12px; font-weight:700; }
+.cellmenu { position:absolute; z-index:30; min-width:200px; padding:5px; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; box-shadow:var(--pop); font-family:var(--font); }
+.cellmenu .item { position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 10px; border-radius:5px; font-size:12.5px; color:var(--ink); cursor:default; white-space:nowrap; }
+.cellmenu .item:hover { background:var(--hov); }
+.cellmenu .item.off { color:var(--ink-faint); }
+.cellmenu .item.off:hover { background:transparent; }
+.cellmenu .item.danger { color:var(--danger); }
+.cellmenu .item .arrow { color:var(--ink-mut); font-size:11px; }
+.cellmenu .sep { height:1px; margin:4px 6px; background:var(--border); }
+.cellmenu .submenu { display:none; position:absolute; top:-6px; right:100%; margin-right:2px; min-width:180px; padding:5px; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; box-shadow:var(--pop); }
+.cellmenu .item.hassub:hover > .submenu { display:block; }
 .cellacts span:hover { filter:brightness(1.18); }
 .cellacts span:active { transform:translateY(1px); filter:brightness(0.92); }
 .brk { justify-self:end; align-self:stretch; width:9px; min-height:26px; border-top:1.5px solid var(--p-br-idle); border-right:1.5px solid var(--p-br-idle); border-bottom:1.5px solid var(--p-br-idle); border-radius:0 2px 2px 0; }

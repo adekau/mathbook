@@ -1099,13 +1099,75 @@ function renderCellBody(cell: Cell) {
     tw.addEventListener("click", () => { cell.showWork = !cell.showWork; renderCellBody(cell); });
     acts.append(tw);
   }
-  if (cell.outLatex && cell.echoLatex) {
-    const sc = h("span", "scene", "→ Scene"); sc.title = "Send this derivation to Manim Studio";
-    sc.addEventListener("mousedown", (e) => e.preventDefault());
-    sc.addEventListener("click", () => sendToScene(cell));
-    acts.append(sc);
-  }
+  const more = h("span", "more", "⋮"); more.title = "Cell actions";
+  more.addEventListener("mousedown", (e) => e.preventDefault());
+  more.addEventListener("click", (ev) => { ev.stopPropagation(); toggleCellMenu(cell, more); });
+  acts.append(more);
 }
+
+/** The ⋮ menu of a cell: send to a scene (any scene, or a new one), duplicate, delete, move, copy. */
+function toggleCellMenu(cell: Cell, anchor: HTMLElement) {
+  const open = document.querySelector(".cellmenu");
+  const wasThis = open?.getAttribute("data-cell") === cell.id;
+  closeCellMenu();
+  if (wasThis) return;
+  const i = S.cells.indexOf(cell);
+  const menu = h("div", "cellmenu"); menu.setAttribute("data-cell", cell.id);
+  const item = (label: string, act: (() => void) | null, opts: { danger?: boolean; sub?: HTMLElement } = {}) => {
+    const it = h("div", `item${act || opts.sub ? "" : " off"}${opts.danger ? " danger" : ""}`);
+    it.append(document.createTextNode(label));
+    if (opts.sub) { it.append(h("span", "arrow", "▸")); it.append(opts.sub); it.classList.add("hassub"); }
+    else if (act) it.addEventListener("click", (ev) => { ev.stopPropagation(); closeCellMenu(); act(); });
+    else it.addEventListener("click", (ev) => ev.stopPropagation());
+    menu.append(it);
+    return it;
+  };
+  const copy = (text: string | undefined, what: string) => () => {
+    if (text === undefined) return;
+    void navigator.clipboard?.writeText(text).then(() => log("ok", `copied ${what}`), () => log("err", "the clipboard is not available"));
+  };
+  // Send to scene ▸ — every scene, then a new one
+  const canSend = !!(cell.outLatex && cell.echoLatex);
+  if (canSend) {
+    const sub = h("div", "submenu");
+    ST.scenes.forEach((sc, k) => {
+      const it = h("div", "item", `${sc.name} · ${sc.shots.length} shots`);
+      it.addEventListener("click", (ev) => { ev.stopPropagation(); closeCellMenu(); sendToScene(cell, k); });
+      sub.append(it);
+    });
+    if (ST.scenes.length) sub.append(h("div", "sep"));
+    const nw = h("div", "item", "New scene");
+    nw.addEventListener("click", (ev) => { ev.stopPropagation(); closeCellMenu(); sendToScene(cell, "new"); });
+    sub.append(nw);
+    item("Send to scene", null, { sub });
+  } else item("Send to scene", null);
+  menu.append(h("div", "sep"));
+  item("Duplicate cell", () => {
+    const c = freshCell(cell.input?.value ?? cell.src);
+    S.cells.splice(i + 1, 0, c); renderCells(); renderSidebar(); focusCell(i + 1); autosave();
+  });
+  item("Move up", i > 0 ? () => { [S.cells[i - 1], S.cells[i]] = [S.cells[i]!, S.cells[i - 1]!]; renderCells(); renderSidebar(); focusCell(i - 1); autosave(); } : null);
+  item("Move down", i < S.cells.length - 1 ? () => { [S.cells[i + 1], S.cells[i]] = [S.cells[i]!, S.cells[i + 1]!]; renderCells(); renderSidebar(); focusCell(i + 1); autosave(); } : null);
+  menu.append(h("div", "sep"));
+  item("Copy input", copy(cell.input?.value ?? cell.src, "the input"));
+  item("Copy output", cell.outText !== undefined ? copy(cell.outText, "the output") : null);
+  item("Copy output as LaTeX", cell.outLatex ? copy(stripPaths(cell.outLatex), "the output as LaTeX") : null);
+  menu.append(h("div", "sep"));
+  item("Clear output", cell.outLatex || cell.error ? () => {
+    delete cell.outLatex; delete cell.outText; delete cell.echoLatex; delete cell.error; delete cell.plot; delete cell.hasse; cell.steps = []; cell.label = null;
+    renderCellBody(cell); renderChrome(); renderSidebar(); autosave();
+  } : null);
+  item("Delete cell", () => {
+    if (S.cells.length === 1) { const c = S.cells[0]!; c.src = ""; if (c.input) c.input.value = ""; delete c.outLatex; delete c.outText; delete c.echoLatex; delete c.error; c.steps = []; c.label = null; }
+    else S.cells.splice(i, 1);
+    S.active = Math.min(S.active, S.cells.length - 1);
+    renderCells(); renderSidebar(); renderChrome(); autosave();
+  }, { danger: true });
+  anchor.closest(".cell")!.append(menu);
+  const r = anchor.getBoundingClientRect(), c = anchor.closest(".cell")!.getBoundingClientRect();
+  menu.style.top = `${r.bottom - c.top + 4}px`; menu.style.right = `${c.right - r.right}px`;
+}
+function closeCellMenu() { document.querySelectorAll(".cellmenu").forEach((m) => m.remove()); }
 
 function renderReference() {
   const host = $(".reference"); host.innerHTML = "";
@@ -1569,8 +1631,10 @@ function stripPaths(src: string): string {
 }
 
 /** Turn a cell's derivation into shots: the statement, then every step's result. */
-function sendToScene(cell: Cell) {
+function sendToScene(cell: Cell, target?: number | "new") {
   if (!cell.outLatex || !cell.echoLatex) return;
+  if (target === "new") { ST.scenes.push({ id: Date.now(), name: `Scene ${ST.scenes.length + 1}`, shots: [] }); ST.active = ST.scenes.length - 1; }
+  else if (typeof target === "number" && ST.scenes[target]) ST.active = target;
   const mk = (label: string, texSrc: string, anim: string, dur: number, note: string): Shot =>
     ({ id: ++shotSeq, label, tex: stripPaths(texSrc), anim, dur, note, on: true, cell: cell.label });
   const shots: Shot[] = [mk("Statement", cell.echoLatex, "Write", 1.2, "Write the problem exactly as the engine parsed it.")];
@@ -2005,7 +2069,7 @@ renderSidebar();
 renderPanelHead();
 renderPanel();
 renderView();
-document.addEventListener("click", () => { if (S.menu) { S.menu = null; renderChrome(); } });
+document.addEventListener("click", () => { if (S.menu) { S.menu = null; renderChrome(); } closeCellMenu(); });
 const saved = restoreAutosave();
 let restoredActive = 0;
 if (saved) {
