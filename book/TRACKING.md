@@ -204,5 +204,9 @@ Open items after M8 (2026-09-14, Alex: "go through the open items before the boo
   the gaps, the tails of the range trimmed so an asymptote does not flatten the rest) under the formula; the studio
   gets a Graph shot that draws the curve over the shot's duration and emits `Axes`/`axes.plot` Manim code with the
   function as a NumPy lambda. One engine, as decided: nothing in the notebook evaluates.
-- notebook file open/save — pending.
+- notebook file open/save — DONE 2026-09-14. The File menu (the menu bar was decorative) opens, saves and names
+  `.lemma` files: JSON with the cells' sources, their saved outputs and derivations, and the studio's scenes. Opening
+  shows the saved outputs at once and re-runs every cell in order so the engine's session — and with it `explain` —
+  matches what is shown. The notebook also autosaves to the browser after every run and comes back on reload the
+  same way. Run, Kernel (restart the session), View and Help menus work too.
 Six-month cut line: M5 — reached 2026-09-13.

@@ -105,7 +105,11 @@ button { font-family: var(--font); }
 .brand .name { font-weight:700; font-size:13px; }
 .menus { display:flex; align-items:center; gap:2px; }
 .menus span { font-size:12px; color:var(--ink-mut); padding:5px 10px; border-radius:6px; cursor:default; }
-.menus span:hover { background:var(--hov); }
+.menus span:hover, .menus span.open { background:var(--hov); }
+.menus span { position:relative; }
+.menus .dropdown { position:absolute; top:100%; left:0; z-index:40; min-width:190px; padding:5px; margin-top:2px; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.18); }
+.menus .dropdown .item { display:block; padding:6px 10px; border-radius:5px; font-size:12.5px; color:var(--ink); cursor:default; white-space:nowrap; }
+.menus .dropdown .item:hover { background:var(--hov); }
 .spacer { flex:1; }
 .themebtn { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:var(--btn-ink); background:var(--btn); border:1px solid var(--btn-edge); border-radius:999px; padding:4px 11px; cursor:pointer; box-shadow:0 1px 0 var(--hl-a) inset; }
 .themebtn:hover { filter:brightness(1.15); }

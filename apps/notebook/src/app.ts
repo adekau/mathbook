@@ -136,6 +136,8 @@ const S = {
   busy: false,
   comp: null as { cell: Cell; items: Doc[]; index: number; x: number; y: number } | null,
   theme: "dark" as "dark" | "light",
+  docName: "lesson-04.lemma",
+  menu: null as string | null,
   studio: { scenes: [] as Scene[], active: 0, playing: false, t: 0, speed: 1, codeOpen: true, copied: false },
 };
 
@@ -206,6 +208,7 @@ async function runCell(cell: Cell) {
       ? await client.call("engine.plot", { sessionId, cellId: cell.id, source: src, showWork: true, paths: true })
       : await client.call("engine.evaluate", { sessionId, cellId: cell.id, source: src, showWork: true, paths: true });
     cell.ms = performance.now() - t0;
+    queueMicrotask(autosave);
     if (r.ok) {
       cell.label = cell.label ?? nextLabel++;
       cell.outLatex = r.rendered.latex;
@@ -275,6 +278,102 @@ function wireTerm(host: HTMLElement, cell: Cell, term: TermRef) {
       void explain(cell, term, raw === "root" ? [] : raw.split(".").map(Number));
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Notebook files (.lemma): sources, outputs and studio scenes as JSON
+// ---------------------------------------------------------------------------
+
+interface LemmaFile {
+  lemma: 1; name: string;
+  cells: { src: string; showWork: boolean; label: number | null; outLatex?: string | undefined; echoLatex?: string | undefined; steps?: Step[] | undefined; error?: Cell["error"] | undefined; plot?: PlotData | undefined }[];
+  scenes: Scene[];
+}
+
+function serializeNotebook(): string {
+  const doc: LemmaFile = {
+    lemma: 1, name: S.docName,
+    cells: S.cells.map((c) => ({ src: c.input?.value ?? c.src, showWork: c.showWork, label: c.label, outLatex: c.outLatex, echoLatex: c.echoLatex, steps: c.steps, error: c.error, plot: c.plot })),
+    scenes: ST.scenes,
+  };
+  return JSON.stringify(doc, null, 2);
+}
+
+/** Replace the notebook with a file's contents: saved outputs show at once, then every cell is
+ *  re-run in order so the engine's session (and with it `explain`) matches what is shown. */
+async function loadNotebook(text: string, name?: string) {
+  let doc: LemmaFile;
+  try { doc = JSON.parse(text) as LemmaFile; } catch { log("err", "not a .lemma file: invalid JSON"); return; }
+  if (doc.lemma !== 1 || !Array.isArray(doc.cells)) { log("err", "not a .lemma file"); return; }
+  await restartKernel();
+  S.docName = name ?? doc.name ?? "untitled.lemma";
+  S.cells = [];
+  for (const c of doc.cells) {
+    const cell = addCell(c.src);
+    cell.showWork = c.showWork ?? true; cell.label = c.label ?? null;
+    if (c.outLatex) cell.outLatex = c.outLatex;
+    if (c.echoLatex) cell.echoLatex = c.echoLatex;
+    if (c.steps) cell.steps = c.steps;
+    if (c.error) cell.error = c.error;
+    if (c.plot) cell.plot = c.plot;
+  }
+  if (!S.cells.length) addCell();
+  nextLabel = Math.max(0, ...S.cells.map((c) => c.label ?? 0)) + 1;
+  ST.scenes = Array.isArray(doc.scenes) ? doc.scenes : [];
+  ST.active = 0; ST.t = 0;
+  renderChrome(); renderCells(); renderSidebar();
+  log("ok", `opened ${S.docName}: ${S.cells.length} cells, ${ST.scenes.length} scenes`);
+  await runAll();
+  autosave();
+}
+
+async function runAll() { for (const c of [...S.cells]) if ((c.input?.value ?? c.src).trim()) await runCell(c); }
+
+async function restartKernel() {
+  if (client) { try { await client.call("engine.resetSession", { sessionId }); } catch (e) { log("err", String(e)); } }
+  clearOutputs();
+  log("ok", "kernel restarted: the session is empty");
+}
+
+function download(name: string, text: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function saveNotebook() { download(S.docName, serializeNotebook()); log("ok", `saved ${S.docName}`); }
+function saveNotebookAs() {
+  const name = window.prompt("Save notebook as", S.docName);
+  if (!name) return;
+  S.docName = name.endsWith(".lemma") ? name : `${name}.lemma`;
+  renderChrome(); saveNotebook();
+}
+function openNotebook() {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".lemma,.json,application/json";
+  inp.addEventListener("change", () => {
+    const f = inp.files?.[0]; if (!f) return;
+    void f.text().then((t) => loadNotebook(t, f.name));
+  });
+  inp.click();
+}
+function newNotebook() {
+  void (async () => {
+    await restartKernel();
+    S.docName = "untitled.lemma"; S.cells = []; addCell(); ST.scenes = []; ST.active = 0;
+    renderChrome(); renderCells(); renderSidebar();
+    autosave();
+    log("ok", "new notebook");
+  })();
+}
+
+/** The notebook survives a reload: autosaved to the browser after every run or edit. */
+function autosave() {
+  try { localStorage.setItem("lemma.autosave", serializeNotebook()); } catch { /* storage may be unavailable */ }
+}
+function restoreAutosave(): string | null {
+  try { return localStorage.getItem("lemma.autosave"); } catch { return null; }
 }
 
 // ---------------------------------------------------------------------------
@@ -361,7 +460,28 @@ function renderChrome() {
   const brand = h("div", "brand");
   brand.append(h("span", "mark"), h("span", "name", "Lemma"));
   const menus = h("div", "menus");
-  for (const m of ["File", "Edit", "View", "Run", "Kernel", "Help"]) menus.append(h("span", undefined, m));
+  const MENUS: Record<string, [string, () => void][]> = {
+    File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs]],
+    Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
+    View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }]],
+    Run: [["Run all", () => void runAll()], ["Run cell", () => { const c = S.cells[S.active]; if (c) void runCell(c); }]],
+    Kernel: [["Restart kernel", () => void restartKernel()], ["Restart and run all", async () => { await restartKernel(); await runAll(); }]],
+    Help: [["Reference", () => switchTab("reference")], ["Manim Studio", () => switchTab("studio")]],
+  };
+  for (const m of Object.keys(MENUS)) {
+    const sp = h("span", S.menu === m ? "open" : undefined, m);
+    sp.addEventListener("click", (ev) => { ev.stopPropagation(); S.menu = S.menu === m ? null : m; renderChrome(); });
+    if (S.menu === m) {
+      const dd = h("div", "dropdown");
+      for (const [label, act] of MENUS[m]!) {
+        const it = h("div", "item", label);
+        it.addEventListener("click", (ev) => { ev.stopPropagation(); S.menu = null; renderChrome(); act(); });
+        dd.append(it);
+      }
+      sp.append(dd);
+    }
+    menus.append(sp);
+  }
   const theme = h("span", "themebtn", S.theme === "light" ? "◑ Light" : "◐ Dark");
   theme.title = "Toggle light and dark";
   theme.addEventListener("click", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); if (S.tab === "studio") renderStage(); });
@@ -382,7 +502,7 @@ function renderChrome() {
 
   // tab bar
   const tabs = $(".tabbar"); tabs.innerHTML = "";
-  for (const [key, label] of [["notebook", "lesson-04.lemma"], ["studio", "manim studio"], ["reference", "reference"]] as const) {
+  for (const [key, label] of [["notebook", S.docName], ["studio", "manim studio"], ["reference", "reference"]] as const) {
     const t = h("div", `tab${S.tab === key ? " on" : ""}`);
     t.append(h("span", "label", label), h("span", "x", "×"));
     t.addEventListener("click", () => switchTab(key));
@@ -409,7 +529,7 @@ function renderChrome() {
   };
   group.append(
     mk("▶ Run", "Run the active cell", () => { const c = S.cells[S.active]; if (c) void runCell(c); }, true),
-    mk("▶▶ All", "Run every cell in order", async () => { for (const c of [...S.cells]) if (c.src.trim()) await runCell(c); }),
+    mk("▶▶ All", "Run every cell in order", () => void runAll()),
     mk("Clear", "Clear all outputs", clearOutputs),
     mk("+ Cell", "Add a cell", () => { const c = addCell(); focusCell(S.cells.indexOf(c)); }),
   );
@@ -1511,8 +1631,21 @@ renderSidebar();
 renderPanelHead();
 renderPanel();
 renderView();
-for (const s of SAMPLES) addCell(s);
-addCell();
+document.addEventListener("click", () => { if (S.menu) { S.menu = null; renderChrome(); } });
+const saved = restoreAutosave();
+if (saved) {
+  // sources and outputs come back at once; the engine session is rebuilt by re-running once connected
+  try {
+    const doc = JSON.parse(saved) as LemmaFile;
+    S.docName = doc.name ?? S.docName;
+    for (const c of doc.cells) { const cell = addCell(c.src); cell.showWork = c.showWork ?? true; cell.label = c.label ?? null; if (c.outLatex) cell.outLatex = c.outLatex; if (c.echoLatex) cell.echoLatex = c.echoLatex; if (c.steps) cell.steps = c.steps; if (c.plot) cell.plot = c.plot; }
+    nextLabel = Math.max(0, ...S.cells.map((c) => c.label ?? 0)) + 1;
+    ST.scenes = Array.isArray(doc.scenes) ? doc.scenes : [];
+  } catch { /* ignore a corrupt autosave */ }
+}
+if (!S.cells.length) { for (const s of SAMPLES) addCell(s); }
+if (S.cells[S.cells.length - 1]?.src.trim()) addCell();
+renderChrome();
 renderCells();
 renderSidebar();
-void connect();
+void connect().then(() => { if (saved) void runAll(); });
