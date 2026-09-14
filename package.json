@@ -6,7 +6,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -ws --if-present",
+    "build": "npm run build -w packages/protocol && npm run build -ws --if-present",
     "test": "npm test -ws --if-present",
     "bundle": "node scripts/bundle.mjs",
     "wasm": "scripts/build-wasm.sh",
