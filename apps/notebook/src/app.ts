@@ -781,70 +781,87 @@ function lcsPairs(A: Glyph[], B: Glyph[]) {
 const clamp01 = (x: number) => x < 0 ? 0 : x > 1 ? 1 : x;
 const easeIO = (p: number) => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 
-function glyphEl(g: Glyph, style: Partial<CSSStyleDeclaration> & { color: string }): HTMLElement {
+function glyphEl(g: Glyph): HTMLElement {
   if (g.rule) {
     const d = document.createElement("div");
-    Object.assign(d.style, { position: "absolute", width: `${g.w}px`, height: `${Math.max(1, g.h)}px`, background: style.color }, style);
+    d.style.cssText = `position:absolute; left:0; top:0; width:${g.w}px; height:${Math.max(1, g.h)}px; will-change:transform,opacity`;
     return d;
   }
   const s = document.createElement("span");
-  Object.assign(s.style, { position: "absolute", whiteSpace: "pre", lineHeight: "normal",
-    fontFamily: g.font ?? "", fontSize: g.size ?? "", fontStyle: g.style ?? "", fontWeight: g.weight ?? "" }, style);
+  s.style.cssText = `position:absolute; left:0; top:0; white-space:pre; line-height:normal; will-change:transform,opacity; font-family:${g.font ?? ""}; font-size:${g.size ?? ""}; font-style:${g.style ?? ""}; font-weight:${g.weight ?? ""}`;
   s.textContent = g.ch;
   return s;
 }
 
-/** One frame of the transition from `prevTex` into `curTex` at progress `p` (0..1). */
-function morphFrame(prevTex: string | null, curTex: string, p: number, fontSize: number): { el: HTMLElement; gone: string; added: string } | null {
-  const ink = "var(--ink)", gone = "var(--danger-2)", added = "var(--ok)";
-  const B = measure(curTex, fontSize);
-  if (!B.glyphs.length) return null;
-  const A = prevTex ? measure(prevTex, fontSize) : { glyphs: [], w: 0, h: 0 };
-  const e = easeIO(clamp01(p));
-  const W = A.w ? A.w + (B.w - A.w) * e : B.w;
-  const H = Math.max(A.h, B.h);
-  const box = document.createElement("div");
-  box.style.cssText = `position:relative; width:${W}px; height:${H}px; margin:0 auto`;
+/**
+ * One transition, prevTex → curTex, with its glyph nodes built once. `at(p)` moves them: only
+ * transform and opacity change per frame, so the browser composites rather than relaying out —
+ * rebuilding the nodes every frame (what a naive port does) is what makes a morph stutter.
+ */
+class Morph {
+  readonly el: HTMLElement;
+  readonly gone: string;
+  readonly added: string;
+  private readonly A: Measured;
+  private readonly B: Measured;
+  private readonly pairs: { el: HTMLElement; a: Glyph; b: Glyph }[] = [];
+  private readonly goneEls: { el: HTMLElement; g: Glyph }[] = [];
+  private readonly addedEls: { el: HTMLElement; g: Glyph }[] = [];
+  private readonly writeEls: { el: HTMLElement; g: Glyph }[] = [];
 
-  if (!A.glyphs.length) {
-    // no previous expression: write the glyphs on, left to right
-    const n = B.glyphs.length, span = Math.max(1, n * 0.55);
-    B.glyphs.forEach((g, i) => {
-      const o = clamp01((clamp01(p) * (n + span) - i) / span);
-      if (o <= 0.001) return;
-      box.append(glyphEl(g, { left: `${g.x.toFixed(2)}px`, top: `${g.y.toFixed(2)}px`, opacity: String(o), color: ink }));
-    });
-    return { el: box, gone: "", added: "" };
+  constructor(prevTex: string | null, curTex: string, fontSize: number) {
+    this.B = measure(curTex, fontSize);
+    this.A = prevTex ? measure(prevTex, fontSize) : { glyphs: [], w: 0, h: 0 };
+    this.el = document.createElement("div");
+    this.el.style.cssText = `position:relative; height:${Math.max(this.A.h, this.B.h)}px; margin:0 auto`;
+    if (!this.A.glyphs.length) {
+      for (const g of this.B.glyphs) { const e = glyphEl(g); this.writeEls.push({ el: e, g }); this.el.append(e); }
+      this.gone = ""; this.added = "";
+      return;
+    }
+    const { pairs, usedA, usedB } = lcsPairs(this.A.glyphs, this.B.glyphs);
+    for (const [ai, bi] of pairs) { const b = this.B.glyphs[bi]!; const e = glyphEl(b); this.pairs.push({ el: e, a: this.A.glyphs[ai]!, b }); this.el.append(e); }
+    const goneChars: string[] = [], addedChars: string[] = [];
+    this.A.glyphs.forEach((g, i) => { if (usedA.has(i)) return; if (!g.rule) goneChars.push(g.ch); const e = glyphEl(g); this.goneEls.push({ el: e, g }); this.el.append(e); });
+    this.B.glyphs.forEach((g, i) => { if (usedB.has(i)) return; if (!g.rule) addedChars.push(g.ch); const e = glyphEl(g); this.addedEls.push({ el: e, g }); this.el.append(e); });
+    this.gone = goneChars.join(""); this.added = addedChars.join("");
   }
 
-  const { pairs, usedA, usedB } = lcsPairs(A.glyphs, B.glyphs);
-  const offA = (W - A.w) / 2, offB = (W - B.w) / 2;
-  for (const [ai, bi] of pairs) {
-    const a = A.glyphs[ai]!, b = B.glyphs[bi]!;
-    const st: Partial<CSSStyleDeclaration> & { color: string } = {
-      left: `${((a.x + offA) + ((b.x + offB) - (a.x + offA)) * e).toFixed(2)}px`,
-      top: `${(a.y + (b.y - a.y) * e).toFixed(2)}px`, opacity: "1", color: ink,
+  get width() { return this.B.w; }
+
+  /** Place every glyph for progress `p` (0..1). */
+  at(p: number) {
+    const ink = "var(--ink)", gone = "var(--danger-2)", added = "var(--ok)";
+    const put = (el: HTMLElement, g: Glyph, x: number, y: number, o: number, color: string, scale = 1) => {
+      el.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)${scale !== 1 ? ` scale(${scale.toFixed(3)})` : ""}`;
+      el.style.opacity = o.toFixed(3);
+      if (g.rule) el.style.background = color; else el.style.color = color;
     };
-    if (b.rule) st.width = `${a.w + (b.w - a.w) * e}px`;
-    box.append(glyphEl(b, st));
+    const q = clamp01(p);
+    if (this.writeEls.length) {
+      this.el.style.width = `${this.B.w}px`;
+      const n = this.writeEls.length, span = Math.max(1, n * 0.55);
+      this.writeEls.forEach(({ el, g }, i) => put(el, g, g.x, g.y, clamp01((q * (n + span) - i) / span), ink));
+      return;
+    }
+    const e = easeIO(q);
+    const W = this.A.w + (this.B.w - this.A.w) * e;
+    this.el.style.width = `${W}px`;
+    const offA = (W - this.A.w) / 2, offB = (W - this.B.w) / 2;
+    for (const { el, a, b } of this.pairs) {
+      put(el, b, (a.x + offA) + ((b.x + offB) - (a.x + offA)) * e, a.y + (b.y - a.y) * e, 1, ink);
+      if (b.rule) el.style.width = `${a.w + (b.w - a.w) * e}px`;
+    }
+    for (const { el, g } of this.goneEls) put(el, g, g.x + offA, g.y, clamp01(1 - q * 1.9), gone, 1 - 0.25 * clamp01(q * 1.9));
+    for (const { el, g } of this.addedEls) { const o = clamp01((q - 0.38) / 0.5); put(el, g, g.x + offB, g.y, o, o > 0.94 ? ink : added); }
   }
-  const goneChars: string[] = [], addedChars: string[] = [];
-  A.glyphs.forEach((g, i) => {
-    if (usedA.has(i)) return;
-    if (!g.rule) goneChars.push(g.ch);
-    const o = clamp01(1 - p * 1.9);
-    if (o <= 0.001) return;
-    box.append(glyphEl(g, { left: `${(g.x + offA).toFixed(2)}px`, top: `${g.y.toFixed(2)}px`, opacity: String(o), color: gone,
-      transform: `scale(${(1 - 0.25 * clamp01(p * 1.9)).toFixed(3)})` }));
-  });
-  B.glyphs.forEach((g, i) => {
-    if (usedB.has(i)) return;
-    if (!g.rule) addedChars.push(g.ch);
-    const o = clamp01((p - 0.38) / 0.5);
-    if (o <= 0.001) return;
-    box.append(glyphEl(g, { left: `${(g.x + offB).toFixed(2)}px`, top: `${g.y.toFixed(2)}px`, opacity: String(o), color: o > 0.94 ? ink : added }));
-  });
-  return { el: box, gone: goneChars.join(""), added: addedChars.join("") };
+}
+
+let liveMorph: { key: string; morph: Morph } | null = null;
+function morphFor(prevTex: string | null, curTex: string, fontSize: number): Morph {
+  const key = `${fontSize}|${prevTex ?? ""}→${curTex}`;
+  if (liveMorph?.key !== key) liveMorph = { key, morph: new Morph(prevTex, curTex, fontSize) };
+  return liveMorph.morph;
 }
 
 // ---------------------------------------------------------------------------
@@ -1106,9 +1123,8 @@ function renderStage() {
   const center = stage.querySelector(".center") as HTMLElement;
   const foot = stage.querySelector(".foot") as HTMLElement;
   const label = stage.querySelector(".label") as HTMLElement;
-  center.innerHTML = ""; foot.innerHTML = "";
-
   if (!on.length) {
+    center.innerHTML = ""; foot.innerHTML = "";
     label.textContent = "1920×1080 · —";
     const empty = h("div", "empty");
     empty.append(h("div", "t", "This scene is empty"));
@@ -1129,19 +1145,22 @@ function renderStage() {
   label.textContent = `1920×1080 · shot ${ci + 1} of ${on.length}`;
 
   const fontSize = 34;
-  const morph = morphFrame(prev ? prev.tex : null, cur.tex, p, fontSize);
-  const box = h("div", "morph");
-  if (morph) box.append(morph.el);
-  else { box.innerHTML = tex(cur.tex); box.style.fontSize = "30px"; box.style.opacity = String(Math.min(1, 0.25 + p * 1.6)); }
+  const morph = morphFor(prev ? prev.tex : null, cur.tex, fontSize);
+  let box = center.querySelector(".morph") as HTMLElement | null;
+  if (!box || box.firstElementChild !== morph.el) {
+    center.innerHTML = "";
+    box = h("div", "morph"); box.append(morph.el); center.append(box);
+  }
+  morph.at(p);
   const avail = Math.max(180, stage.clientWidth - 52);
-  const need = measure(cur.tex, fontSize).w;
+  const need = morph.width;
   box.style.transform = `scale(${need > avail ? Math.max(0.42, avail / need) : 1})`;
-  center.append(box);
 
+  foot.innerHTML = "";
   const capOpacity = String(Math.min(1, p * 3));
   if (ci > 0) { const c = h("span", "caption", cur.label); c.style.opacity = capOpacity; foot.append(c); }
-  if (morph?.gone) { const m = h("span", "mark gone", `− ${morph.gone}`); m.style.opacity = capOpacity; foot.append(m); }
-  if (morph?.added) { const m = h("span", "mark added", `+ ${morph.added}`); m.style.opacity = capOpacity; foot.append(m); }
+  if (morph.gone) { const m = h("span", "mark gone", `− ${morph.gone}`); m.style.opacity = capOpacity; foot.append(m); }
+  if (morph.added) { const m = h("span", "mark added", `+ ${morph.added}`); m.style.opacity = capOpacity; foot.append(m); }
 
   const done = t >= total - 1e-6;
   $(".studio .shotlist")?.querySelectorAll<HTMLElement>(".shot").forEach((r) => {
