@@ -126,12 +126,14 @@ export interface EvaluateError {
 export interface ExplainParams {
   sessionId: string;
   cellId: string;
-  /** Path into the *output* expression of the cell. */
+  /** Path into the chosen term of the cell (the output unless `term` says otherwise). */
   path: Path;
+  /** Which term the path is into: the output (default), the input, or the term after step `index`. Optional. */
+  term?: { kind: "output" } | { kind: "input" } | { kind: "step"; index: number };
 }
 
 export interface ExplainResult {
-  /** The subterm at `path` and the steps whose `after` produced something at/above it. */
+  /** The subterm at `path` and the steps up to that term that fired at, above or below it. */
   subterm: WireExpr;
   rendered: Rendered;
   steps: Step[];

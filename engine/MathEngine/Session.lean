@@ -49,15 +49,29 @@ def isPrefix : Path → Path → Bool
   | _ :: _, [] => false
   | a :: as, b :: bs => a == b && isPrefix as bs
 
-/-- Which steps produced the subterm at `path` in the cell's output? Prototype heuristic: every step
-that fired at, above, or below that path. Rewriting *moves* subterms, so this over-approximates;
-proper origin tracking is M6. -/
-def explainCell (s : Session) (cellId : String) (path : Path) : Except String (Expr × Array Step) :=
+/-- Which of a cell's terms a path refers to. -/
+inductive TermRef where
+  | input
+  | output
+  | step (n : Nat)
+
+/-- The subterm at `path` in the chosen term, and the steps that touched it. Prototype heuristic:
+every step up to that term that fired at, above, or below the path. Rewriting *moves* subterms, so
+this over-approximates; proper origin tracking is M6. For the input nothing produced the term yet. -/
+def explainCell (s : Session) (cellId : String) (path : Path) (ref : TermRef := .output) :
+    Except String (Expr × Array Step) :=
   match s.cells.lookup cellId with
   | none => .error s!"unknown cell {cellId}"
   | some cell =>
-    match cell.output.at? path with
+    let d := cell.derivation
+    let (term, upto) : Expr × Nat := match ref with
+      | .input => (d.input, 0)
+      | .output => (cell.output, d.steps.size)
+      | .step n => ((d.steps[n]?.map (·.after)).getD cell.output, n + 1)
+    match term.at? path with
     | none => .error s!"bad path {path}"
-    | some sub => .ok (sub, cell.derivation.steps.filter fun st => isPrefix st.path path || isPrefix path st.path)
+    | some sub =>
+      let related := (d.steps.toList.take upto).filter fun st => isPrefix st.path path || isPrefix path st.path
+      .ok (sub, related.toArray)
 
 end MathEngine

@@ -75,7 +75,7 @@ def evaluate (st : Store) (params : Json) : Store × Json :=
       let paths := params.getBool "paths"
       let res := #[("ok", .bool true), ("value", out.toJson), ("rendered", Rendered.toJson out paths)]
       let res := if params.getBool "showWork" then
-          (res.push ("derivation", d.toJson)).push ("inputRendered", Rendered.toJson d.input false)
+          (res.push ("derivation", d.toJson paths)).push ("inputRendered", Rendered.toJson d.input paths)
         else res
       let res := match stmt with
         | .«let» name _ => res.push ("bound", .arr #[.str name])
@@ -86,7 +86,16 @@ def explain (st : Store) (params : Json) : Except String Json := do
   let sessionId := (params.getStr? "sessionId").getD ""
   let cellId := (params.getStr? "cellId").getD ""
   let path ← match params.get? "path" >>= pathOfJson with | some p => pure p | none => throw "missing or malformed path"
-  let (sub, steps) ← explainCell (st.get sessionId) cellId path
+  -- which term the path is into: the output (default), the input, or the term after step n
+  let ref : TermRef := match params.get? "term" with
+    | some t => match t.getStr? "kind" with
+      | some "input" => .input
+      | some "step" => match t.get? "index" with
+        | some (.num n) => .step (n.toNat?.getD 0)
+        | _ => .output
+      | _ => .output
+    | none => .output
+  let (sub, steps) ← explainCell (st.get sessionId) cellId path ref
   pure (.obj #[("subterm", sub.toJson), ("rendered", Rendered.toJson sub false), ("steps", .arr (steps.map Step.toJson))])
 
 def dispatch (st : Store) (req : Json) : Store × Json :=

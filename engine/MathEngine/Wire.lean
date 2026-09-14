@@ -17,14 +17,15 @@ partial def Expr.toJson : Expr → Json
 def Path.toJson (p : Path) : Json := .arr (p.toArray.map fun i => .num (toString i))
 
 mutual
-  partial def Step.toJson (s : Step) : Json :=
+  /-- `paths` annotates the rendered term with subterm paths, so a page can make it selectable. -/
+  partial def Step.toJson (s : Step) (paths : Bool := false) : Json :=
     let base := #[("rule", .str s.rule), ("explanation", .str s.explanation), ("path", Path.toJson s.path),
                   ("before", s.before.toJson), ("after", s.after.toJson),
-                  -- optional per protocol rule 5: the whole term after the step, rendered, for animation
-                  ("afterRendered", .obj #[("text", .str s.after.toText), ("latex", .str (s.after.toLatex false))])]
-    .obj (match s.sub with | some d => base.push ("sub", d.toJson) | none => base)
-  partial def Derivation.toJson (d : Derivation) : Json :=
-    .obj #[("input", d.input.toJson), ("steps", .arr (d.steps.map Step.toJson)), ("output", d.output.toJson)]
+                  -- optional per protocol rule 5: the whole term after the step, rendered
+                  ("afterRendered", .obj #[("text", .str s.after.toText), ("latex", .str (s.after.toLatex paths))])]
+    .obj (match s.sub with | some d => base.push ("sub", d.toJson paths) | none => base)
+  partial def Derivation.toJson (d : Derivation) (paths : Bool := false) : Json :=
+    .obj #[("input", d.input.toJson), ("steps", .arr (d.steps.map fun s => Step.toJson s paths)), ("output", d.output.toJson)]
 end
 
 end MathEngine

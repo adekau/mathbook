@@ -92,7 +92,10 @@ interface Cell {
   input?: HTMLInputElement;
 }
 
-interface Selection { cellId: string; path: Path; latex: string; text: string; steps: Step[] }
+type TermRef = { kind: "output" } | { kind: "input" } | { kind: "step"; index: number };
+interface Selection { cellId: string; term: TermRef; path: Path; latex: string; text: string; related: Step[] }
+const sameStep = (a: Step, b: Step) => a.rule === b.rule && a.explanation === b.explanation && a.path.join(".") === b.path.join(".");
+const termKey = (t: TermRef) => t.kind === "step" ? `step${t.index}` : t.kind;
 interface LogLine { time: string; level: "rpc" | "ok" | "err"; text: string }
 
 /** One shot of a scene: a rendered term, the animation into it, and its duration. */
@@ -214,20 +217,44 @@ async function runCell(cell: Cell) {
   if (cell === S.cells[S.cells.length - 1]) addCell();
 }
 
-async function explain(cell: Cell, path: Path, spanEl: HTMLElement) {
+async function explain(cell: Cell, term: TermRef, path: Path) {
   if (!client) return;
-  document.querySelectorAll(".katex [data-path].sel").forEach((s) => s.classList.remove("sel"));
-  spanEl.classList.add("sel");
-  log("rpc", `engine.explain [${path.join(".") || "root"}]`);
+  const where = term.kind === "step" ? `step ${term.index + 1}` : term.kind;
+  log("rpc", `engine.explain ${where} [${path.join(".") || "root"}]`);
   try {
-    const ex = await client.call("engine.explain", { sessionId, cellId: cell.id, path });
-    S.sel = { cellId: cell.id, path, latex: ex.rendered.latex, text: ex.rendered.text, steps: ex.steps };
+    const ex = await client.call("engine.explain", { sessionId, cellId: cell.id, path, term });
+    S.sel = { cellId: cell.id, term, path, latex: ex.rendered.latex, text: ex.rendered.text, related: ex.steps };
     S.panelTab = "explain"; S.panelOpen = true;
     log("ok", `${ex.rendered.text} — ${ex.steps.length} related steps`);
   } catch (e) {
     log("err", e instanceof Error ? e.message : String(e));
   }
-  renderPanelHead(); renderPanel(); renderCells();
+  markSelection();
+  renderPanelHead(); renderPanel();
+}
+
+/** Show the current selection in the cells: the selected subterm and, for a step, its row. */
+function markSelection() {
+  document.querySelectorAll(".katex [data-path].sel").forEach((x) => x.classList.remove("sel"));
+  document.querySelectorAll(".step.on").forEach((x) => x.classList.remove("on"));
+  const sel = S.sel; if (!sel) return;
+  const cell = S.cells.find((c) => c.id === sel.cellId);
+  const host = cell?.el?.querySelector(`[data-term="${termKey(sel.term)}"]`);
+  if (!host) return;
+  host.querySelector(`[data-path="${sel.path.join(".") || "root"}"]`)?.classList.add("sel");
+  if (sel.term.kind === "step") host.closest(".step")?.classList.add("on");
+}
+
+/** Make every path-annotated subterm of a rendered term clickable. */
+function wireTerm(host: HTMLElement, cell: Cell, term: TermRef) {
+  host.dataset["term"] = termKey(term);
+  host.querySelectorAll<HTMLElement>("[data-path]").forEach((span) => {
+    span.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const raw = span.dataset["path"]!;
+      void explain(cell, term, raw === "root" ? [] : raw.split(".").map(Number));
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -481,7 +508,8 @@ function renderCellBody(cell: Cell) {
 
   if (cell.echoLatex) {
     const echo = h("div", "echo");
-    echo.innerHTML = tex(cell.echoLatex);
+    echo.innerHTML = tex(cell.echoLatex, true);
+    wireTerm(echo, cell, { kind: "input" });
     body.append(echo);
   }
 
@@ -521,8 +549,11 @@ function renderCellBody(cell: Cell) {
       mark.title = S.ruleStatus.get(st.rule)?.note ?? "No soundness theorem yet.";
       rule.append(mark, document.createTextNode(st.rule));
       row.append(rule);
-      row.append(inlineMath(st.explanation, "el"));
-      row.addEventListener("click", () => { row.parentElement?.querySelectorAll(".step.on").forEach((s) => s.classList.remove("on")); row.classList.add("on"); });
+      const el = h("span", "el");
+      if (st.afterRendered) { el.innerHTML = tex(st.afterRendered.latex, true); wireTerm(el, cell, { kind: "step", index: n }); }
+      else el.append(inlineMath(st.explanation));
+      row.append(el);
+      row.addEventListener("click", () => void explain(cell, { kind: "step", index: n }, []));
       work.append(row);
     });
     body.append(work);
@@ -534,16 +565,11 @@ function renderCellBody(cell: Cell) {
     out.append(h("div", "prompt", `Out[${cell.label}]=`));
     const val = h("div", "outval");
     val.innerHTML = tex(cell.outLatex, true);
-    val.querySelectorAll<HTMLElement>("[data-path]").forEach((span) => {
-      span.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        const raw = span.dataset["path"]!;
-        void explain(cell, raw === "root" ? [] : raw.split(".").map(Number), span);
-      });
-    });
+    wireTerm(val, cell, { kind: "output" });
     out.append(val, h("div", "brk"));
     el.append(out);
   }
+  markSelection();
 
   // per-cell actions beyond Run exist only once there is output
   const acts = el.querySelector(".cellacts")!;
@@ -640,34 +666,61 @@ function renderPanel() {
   }
 
   const grid = h("div", "explain");
+  const sel = S.sel;
+  const cell = S.cells.find((c) => c.id === sel.cellId);
+  const steps = cell?.steps ?? [];
+  const where = sel.term.kind === "step" ? `after step ${sel.term.index + 1}` : sel.term.kind === "input" ? "in the input" : "in the output";
 
+  // Selection: the subterm, what it is, and the reference entry for its head function if any
   const c1 = h("div", "col");
   c1.append(h("h3", undefined, "Selection"));
-  const selEl = h("div", "sel"); selEl.innerHTML = tex(S.sel.latex);
+  const selEl = h("div", "sel"); selEl.innerHTML = tex(sel.latex);
   c1.append(selEl);
-  const cell = S.cells.find((c) => c.id === S.sel!.cellId);
-  c1.append(h("div", "kindname", cell ? `${cellKind(cell.src) ?? "cell"} · path ${S.sel.path.join(".") || "root"}` : "selection"));
-  c1.append(h("p", undefined, `Rendered as ${S.sel.text}. The engine located this subterm by the path recorded when the result was printed, so the selection and the derivation refer to the same node.`));
+  const head = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(sel.text)?.[1];
+  const doc = head ? DOC_BY_NAME.get(head) : undefined;
+  c1.append(h("div", "kindname", doc ? `${doc.sig}` : `${cellKind(cell?.src ?? "") ?? "term"} · path ${sel.path.join(".") || "root"}`));
+  c1.append(h("p", undefined, doc
+    ? `${doc.blurb} This occurrence is ${where}; the engine located it by the path recorded when the term was printed.`
+    : `Rendered as ${sel.text}, ${where}. The engine located this subterm by the path recorded when the term was printed, so the selection and the derivation refer to the same node.`));
+  if (doc?.ref) {
+    const a = document.createElement("a");
+    a.href = doc.ref; a.target = "_blank"; a.rel = "noreferrer"; a.textContent = "Definition and identities ↗";
+    a.style.cssText = "display:inline-block; margin-top:10px; font-size:11.5px";
+    c1.append(a);
+  }
   grid.append(c1);
 
+  // Trail: every step up to the selected term, the ones that touched the selection marked
   const c2 = h("div", "col");
   c2.append(h("h3", undefined, "Derivation trail"));
-  if (S.sel.steps.length) {
+  const upto = sel.term.kind === "step" ? sel.term.index + 1 : sel.term.kind === "input" ? 0 : steps.length;
+  const trailSteps = steps.slice(0, upto);
+  const isRelated = (st: Step) => sel.related.some((r) => sameStep(r, st));
+  if (trailSteps.length) {
     const trail = h("div", "trail");
-    S.sel.steps.forEach((st, i) => {
-      const row = h("div", "trailrow");
+    trailSteps.forEach((st, i) => {
+      const row = h("div", `trailrow${isRelated(st) ? " on" : ""}`);
       row.append(h("span", "no", String(i + 1)), h("span", "rule", st.rule));
+      row.addEventListener("click", () => { if (cell) void explain(cell, { kind: "step", index: i }, []); });
+      row.style.cursor = "pointer";
       trail.append(row);
     });
     c2.append(trail);
-    const p = h("p"); p.append(inlineMath(S.sel.steps[0]!.explanation)); c2.append(p);
+    const focus = sel.term.kind === "step" ? steps[sel.term.index] : [...sel.related].pop();
+    const p = h("p");
+    if (focus) p.append(inlineMath(focus.explanation));
+    else p.textContent = "No rule fired at or below this subterm: it came through unchanged.";
+    c2.append(p);
   } else {
-    c2.append(h("p", undefined, "No rule fired at or below this subterm: it came through unchanged from the input."));
+    c2.append(h("p", undefined, sel.term.kind === "input"
+      ? "This is the input as the engine parsed it; no rule has fired yet."
+      : "No rule fired at or below this subterm: it came through unchanged from the input."));
   }
   grid.append(c2);
 
+  // Proof status of the rules that touched the selection
   const c3 = h("div", "col");
-  const used = [...new Set(S.sel.steps.map((s) => s.rule))];
+  const used = [...new Set(sel.related.map((s) => s.rule))];
   const stats = used.map((r) => S.ruleStatus.get(r)?.status ?? "unverified");
   const overall = stats.length === 0 ? "verified" : stats.includes("unverified") ? "unverified" : stats.includes("conditional") ? "conditional" : "verified";
   const head3 = h("div"); head3.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:10px";
@@ -722,7 +775,7 @@ function measure(texSrc: string, fontSize: number): Measured {
   const el = document.createElement("div");
   el.style.cssText = `font-size:${fontSize}px; display:inline-block; white-space:nowrap`;
   host.appendChild(el);
-  try { katex.render(texSrc, el, { throwOnError: false, displayMode: false, strict: false }); } catch { return empty; }
+  try { katex.render(texSrc, el, { throwOnError: false, displayMode: false, strict: false, trust: true }); } catch { return empty; }
   const root = el.querySelector(".katex-html") as HTMLElement | null;
   if (!root) return empty;
   el.querySelector(".katex-mathml")?.remove();
@@ -921,11 +974,30 @@ function deleteScene(idx: number) {
   renderStudio();
 }
 
+/** Remove the `\htmlData{path=…}{…}` wrappers the engine adds for selection, leaving plain TeX. */
+function stripPaths(src: string): string {
+  let out = "", i = 0, depth = 0;
+  const wrapped: number[] = [];
+  while (i < src.length) {
+    if (src.startsWith("\\htmlData{", i)) {
+      const j = src.indexOf("}{", i);
+      if (j < 0) break;
+      i = j + 2; depth++; wrapped.push(depth); continue;
+    }
+    const c = src[i]!;
+    if (c === "{") { depth++; out += c; }
+    else if (c === "}") { if (wrapped.length && wrapped[wrapped.length - 1] === depth) { wrapped.pop(); depth--; } else { depth--; out += c; } }
+    else out += c;
+    i++;
+  }
+  return out;
+}
+
 /** Turn a cell's derivation into shots: the statement, then every step's result. */
 function sendToScene(cell: Cell) {
   if (!cell.outLatex || !cell.echoLatex) return;
   const mk = (label: string, texSrc: string, anim: string, dur: number, note: string): Shot =>
-    ({ id: ++shotSeq, label, tex: texSrc, anim, dur, note, on: true, cell: cell.label });
+    ({ id: ++shotSeq, label, tex: stripPaths(texSrc), anim, dur, note, on: true, cell: cell.label });
   const shots: Shot[] = [mk("Statement", cell.echoLatex, "Write", 1.2, "Write the problem exactly as the engine parsed it.")];
   for (const st of cell.steps ?? []) {
     if (!st.afterRendered) continue;
