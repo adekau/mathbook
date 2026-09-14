@@ -56,7 +56,10 @@ def textTarget : Target where
   denomPrec := P_POW
 
 private def greek : List (String × String) :=
-  [("π", "\\pi"), ("alpha", "\\alpha"), ("beta", "\\beta"), ("theta", "\\theta"), ("lambda", "\\lambda")]
+  [("π", "\\pi"), ("alpha", "\\alpha"), ("beta", "\\beta"), ("theta", "\\theta"), ("lambda", "\\lambda"),
+   ("α", "\\alpha"), ("β", "\\beta"), ("γ", "\\gamma"), ("δ", "\\delta"), ("ε", "\\varepsilon"), ("θ", "\\theta"),
+   ("λ", "\\lambda"), ("μ", "\\mu"), ("σ", "\\sigma"), ("τ", "\\tau"), ("φ", "\\varphi"), ("ψ", "\\psi"), ("ω", "\\omega"),
+   ("Γ", "\\Gamma"), ("Δ", "\\Delta"), ("Θ", "\\Theta"), ("Λ", "\\Lambda"), ("Σ", "\\Sigma"), ("Φ", "\\Phi"), ("Ω", "\\Omega")]
 private def pathStr (p : Path) : String := if p.isEmpty then "root" else ".".intercalate (p.map toString)
 
 def latexTarget (paths : Bool) : Target where
@@ -143,6 +146,7 @@ mutual
       let as := (enum args).map fun (i, a) => child a i P_ADD
       match name, args, as with
       | "sqrt", [_], [a] => (T.sqrt a, P_ATOM)
+      | "exp", [.num q], _ => if q.isOne then (if T.times != "*" then "e" else "ℯ", P_ATOM) else (T.fn name as, P_ATOM)
       | "diff", [_, .var _], [a, x] =>
         if T.times != "*" then (s!"\\frac\{d}\{d{x}}\\left({a}\\right)", P_MUL) else (T.fn name as, P_ATOM)
       | "integrate", [_, .var _], [a, x] =>

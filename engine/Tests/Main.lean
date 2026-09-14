@@ -276,6 +276,20 @@ def tests : TestM Unit := do
   (st, r) := ev st "sin^2(y)"; check "sin^2(y) is sin(y)^2" r "sin(y)^2"
   (st, r) := ev st "expand(a*(-(-y^2*sin(y) + 2*y*cos(y)) + 2*y*cos(y)))"; check "expand flattens nested sums" r "a*y^2*sin(y)"
   (st, r) := ev st "integrate(5 y^2 sin(y), y)"; check "integrate with a constant factor and two by-parts rounds" r "5*(-y^2*cos(y) + 2*(y*sin(y) + cos(y)))"
+  -- powers of sine and cosine (reduction formulas) and of exp, all verified by the check
+  for src in ["integrate(sin^3(y), y)", "integrate(sin(y)^2, y)", "integrate(5y sin^3(y), y)", "integrate(sin(y)^2*cos(y)^2, y)",
+              "integrate(cos^4(2y), y)", "integrate(cos^5(y), y)", "integrate(exp(x)^2, x)", "integrate(exp(2x+1)^3, x)"] do
+    let (st', res) := ev st src
+    st := st'
+    checkTrue s!"accepted: {src}" (!res.startsWith "<error") res
+  (st, r) := ev st "integrate(sin^2(y) + exp(x)^2, y)"; checkTrue "mixed sum with a trig power" (!r.startsWith "<error") r
+  -- Greek letters and Euler's number
+  (st, r) := ev st "φ + φ"; check "Greek identifiers" r "2*φ"
+  (st, r) := ev st "ℯ^x"; check "ℯ prints as ℯ" r "ℯ^x"
+  (st, r) := ev st "ln(ℯ)"; check "ln ℯ = 1 through exp(1)" r "1"
+  (st, r) := ev st "diff(ℯ^x, x)"; check "d/dx ℯ^x" r "ℯ^x"
+  (st, r) := ev st "N(ℯ)"; check "N(ℯ)" r "2.71828182845905"
+  (st, r) := ev st "N(π)"; check "N(π)" r "3.14159265358979"
   -- user functions with parameters
   (st, r) := ev st "let sq(x) = x^2 + 1"; check "let with parameters" r "x^2 + 1"
   (st, r) := ev st "sq(3)"; check "call a session function" r "10"

@@ -56,7 +56,28 @@ const DOC_BY_NAME = new Map(DOCS.map((d) => [d.name, d]));
 interface Sym { abbr: string; aliases: string[]; sym: string; what: string }
 const SYMBOLS: Sym[] = [
   { abbr: "lam", aliases: ["lambda", "l"], sym: "λ", what: "lambda" },
+  { abbr: "pi", aliases: [], sym: "π", what: "pi" },
+  { abbr: "e", aliases: ["euler"], sym: "ℯ", what: "Euler's number, exp(1)" },
+  { abbr: "phi", aliases: [], sym: "φ", what: "phi" },
+  { abbr: "alpha", aliases: ["a"], sym: "α", what: "alpha" },
+  { abbr: "beta", aliases: ["b"], sym: "β", what: "beta" },
+  { abbr: "gamma", aliases: ["g"], sym: "γ", what: "gamma" },
+  { abbr: "delta", aliases: ["d"], sym: "δ", what: "delta" },
+  { abbr: "eps", aliases: ["epsilon"], sym: "ε", what: "epsilon" },
+  { abbr: "theta", aliases: ["th"], sym: "θ", what: "theta" },
+  { abbr: "mu", aliases: [], sym: "μ", what: "mu" },
+  { abbr: "sigma", aliases: ["s"], sym: "σ", what: "sigma" },
+  { abbr: "tau", aliases: ["t"], sym: "τ", what: "tau" },
+  { abbr: "psi", aliases: [], sym: "ψ", what: "psi" },
+  { abbr: "omega", aliases: ["w"], sym: "ω", what: "omega" },
+  { abbr: "Gamma", aliases: ["G"], sym: "Γ", what: "Gamma" },
+  { abbr: "Delta", aliases: ["D"], sym: "Δ", what: "Delta" },
+  { abbr: "Sigma", aliases: ["S"], sym: "Σ", what: "Sigma" },
+  { abbr: "Omega", aliases: ["W"], sym: "Ω", what: "Omega" },
 ];
+/** `\abbr` at the end of the text before the caret → the symbol; longest abbreviations first so `\eps` beats `\e`. */
+const SYMBOL_RE = new RegExp("\\\\(" + SYMBOLS.flatMap((s) => [s.abbr, ...s.aliases]).sort((a, b) => b.length - a.length).join("|") + ")$");
+const symbolFor = (name: string) => SYMBOLS.find((s) => s.abbr === name || s.aliases.includes(name))?.sym ?? "";
 type CompItem = { kind: "doc"; doc: Doc } | { kind: "sym"; sym: Sym };
 
 /** Label for a cell, from its source. Presentation only — the engine decides what it means. */
@@ -1814,16 +1835,17 @@ function onKey(ev: KeyboardEvent, cell: Cell, i: number) {
     if (ev.key === "Escape") { ev.preventDefault(); return hideCompletions(); }
   }
   if (ev.key === " " || ev.key === ".") {
-    // Lean-style input: \lam, \lambda or \l followed by space or dot becomes λ
+    // Lean-style input: \lam, \pi, \e, \phi … followed by space or dot becomes the symbol
     const input = cell.input!;
     const caret = input.selectionStart ?? input.value.length;
     const before = input.value.slice(0, caret);
-    const m = /\\(lambda|lam|l)$/.exec(before);
+    const m = SYMBOL_RE.exec(before);
     if (m) {
       ev.preventDefault();
       const tail = ev.key === "." ? "." : "";
-      input.value = before.slice(0, before.length - m[0].length) + "λ" + tail + input.value.slice(caret);
-      const pos = caret - m[0].length + 1 + tail.length;
+      const sym = symbolFor(m[1]!);
+      input.value = before.slice(0, before.length - m[0].length) + sym + tail + input.value.slice(caret);
+      const pos = caret - m[0].length + sym.length + tail.length;
       input.setSelectionRange(pos, pos);
       cell.src = input.value; hideCompletions(); renderSidebar();
       return;

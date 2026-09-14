@@ -122,6 +122,47 @@ mutual
     | r :: rs => distList r :: distRows rs
 end
 
+/-! ## Identities the integral checker may use
+
+The check (`cmdIntegrate`) compares normal forms exactly. Two identities the simplifier does not
+apply — they would not decrease the ordering — are needed for correct antiderivatives to
+differentiate back to their integrands: `cos²u = 1 − sin²u` (the derivative of an antiderivative of
+a power of sine or cosine is a trigonometric polynomial that equals the integrand only modulo it)
+and `exp(u)^k = exp(k·u)`. `identNorm` applies both everywhere, bottom-up. Like `dist` it is a
+total function proved sound (`identNorm_sound`, `identNorm_soundD`), so using it weakens nothing. -/
+
+/-- `cos(u)^k` for a natural `k ≥ 2` as `(1 − sin(u)^2)^(k/2)`, times `cos u` when `k` is odd —
+so that cosine never appears above the first power and the comparison is a normal form in the ring
+`ℝ[s, c]/(s² + c² − 1)`; and `exp(u)^k` as `exp(k·u)`. Other terms are left alone. -/
+def identPow : Expr → Expr
+  | .pow (.fn "cos" [u]) (.num k) =>
+    if k.isInt && k.val.num ≥ 2 then
+      let n := k.val.num.toNat
+      let base := Expr.sub Expr.one (.pow (.fn "sin" [u]) (ofInt 2))
+      let even := if n / 2 = 1 then base else .pow base (ofInt ((n / 2 : Nat) : Int))
+      if n % 2 = 0 then even else .mul [even, .fn "cos" [u]]
+    else .pow (.fn "cos" [u]) (.num k)
+  | .pow (.fn "exp" [u]) k => .fn "exp" [.mul [k, u]]
+  | e => e
+
+mutual
+  /-- `identPow` at every power, children first. -/
+  def identNorm : Expr → Expr
+    | .num q => .num q
+    | .var x => .var x
+    | .add es => .add (identNormList es)
+    | .mul es => .mul (identNormList es)
+    | .pow b e => identPow (.pow (identNorm b) (identNorm e))
+    | .fn f es => .fn f (identNormList es)
+    | .matrix rows => .matrix (identNormRows rows)
+  def identNormList : List Expr → List Expr
+    | [] => []
+    | e :: es => identNorm e :: identNormList es
+  def identNormRows : List (List Expr) → List (List Expr)
+    | [] => []
+    | r :: rs => identNormList r :: identNormRows rs
+end
+
 /-- The derivation `dist` would show: one step per product multiplied out and per power copied,
 each with the local before and after. Display only; `dist` is the result. -/
 partial def steps (e : Expr) : Array Step := Id.run do

@@ -1,4 +1,5 @@
 import MathEngine.DiffRules
+import MathEngine.ExpandRules
 /-!
 # `int.*` — a small antiderivative finder (M8), deliberately unverified
 
@@ -61,8 +62,55 @@ def substitute (x : String) (f G : Expr) (a : Expr) : Expr × Array Step :=
   if a.isOne then (G, #[])
   else (Expr.div G a, #[⟨"int.linear-substitution", s!"Linear substitution: with $u = {(f.children.headD f).toText}$, $du = ({a.toText})\\,d{x}$, so the integral in $x$ is $1/({a.toText})$ times the integral in $u$.", [], integral f x, Expr.div G a, none⟩])
 
+/-- `sin^m u · cos^n u` among the factors, all with the same `u`: `(u, m, n)`. Nothing else may be
+present (constants have been pulled out by then). -/
+def trigPowers : List Expr → Option (Expr × Nat × Nat) := go none 0 0
+where
+  go (u? : Option Expr) (m n : Nat) : List Expr → Option (Expr × Nat × Nat)
+    | [] => u?.map fun u => (u, m, n)
+    | f :: fs =>
+      let (base, k) : Expr × Nat := match f with
+        | .pow b (.num q) => if q.isInt && q.val.num ≥ 1 then (b, q.val.num.toNat) else (f, 0)
+        | _ => (f, 1)
+      if k = 0 then none else
+      let same (v : Expr) : Bool := match u? with | some u => equal u v | none => true
+      match base with
+      | .fn "sin" [v] => if same v then go (some v) (m + k) n fs else none
+      | .fn "cos" [v] => if same v then go (some v) m (n + k) fs else none
+      | _ => none
+
+/-- `b^k` with `b^0 = 1` and `b^1 = b`. -/
+def pw (b : Expr) (k : Nat) : Expr := if k = 0 then Expr.one else if k = 1 then b else .pow b (ofInt k)
+
+/-- A product of the factors that are not `1`. -/
+def prodOf (fs : List Expr) : Expr := match fs.filter (fun c => !c.isOne) with | [] => Expr.one | cs => mulN cs
+
 /-- Factors of a product other than the one at index `i`, as one term. -/
 def without (es : List Expr) (i : Nat) : Expr := mulN ((es.zipIdx.filter (·.2 != i)).map (·.1))
+
+mutual
+/-- `∫ sinᵐu cosⁿu dx` for `u` linear in `x` (coefficient `a`), by the reduction formulas
+`∫ sᵐcⁿ = −sᵐ⁻¹cⁿ⁺¹/(a(m+n)) + (m−1)/(m+n) ∫ sᵐ⁻²cⁿ` (on the sine, when `m ≥ 2`) and its mirror on
+the cosine — each is integration by parts followed by solving for the integral. The check accepts
+the result because its derivative is the integrand modulo `cos² = 1 − sin²`, which `identNorm`
+applies before comparing. -/
+partial def trigReduce (simp : Expr → Option Expr) (x : String) (fuel : Nat) (f u : Expr) (m n : Nat) : Option (Expr × Array Step) := do
+  let a ← linearCoeff x u
+  let S := Expr.fn "sin" [u]; let C := Expr.fn "cos" [u]
+  let total := Expr.ofInt (m + n)
+  let onSine := m ≥ 2
+  if !onSine && n < 2 then none else
+  let (boundary, rest, k, why) :=
+    if onSine then
+      (Expr.neg (Expr.div (.mul [pw S (m - 1), pw C (n + 1)]) (.mul [a, total])), prodOf [pw S (m - 2), pw C n], m - 1,
+       s!"Reduction formula (integration by parts, then solving for the integral): $\\int \\sin^\{{m}}u\\cos^\{{n}}u\\,du = -\\frac\{\\sin^\{{m - 1}}u\\cos^\{{n + 1}}u}\{{m + n}} + \\frac\{{m - 1}}\{{m + n}}\\int \\sin^\{{m - 2}}u\\cos^\{{n}}u\\,du$, with $u = {u.toText}$.")
+    else
+      (Expr.div (.mul [pw S (m + 1), pw C (n - 1)]) (.mul [a, total]), prodOf [pw S m, pw C (n - 2)], n - 1,
+       s!"Reduction formula (integration by parts, then solving for the integral): $\\int \\sin^\{{m}}u\\cos^\{{n}}u\\,du = \\frac\{\\sin^\{{m + 1}}u\\cos^\{{n - 1}}u}\{{m + n}} + \\frac\{{n - 1}}\{{m + n}}\\int \\sin^\{{m}}u\\cos^\{{n - 2}}u\\,du$, with $u = {u.toText}$.")
+  let (R, sub) ← anti simp x fuel rest
+  let coeff : Expr := .num (Q.ofRat (mkRat k (m + n)))
+  let F := Expr.add [boundary, .mul [coeff, R]]
+  return (F, #[⟨"int.trig-power", why, [], integral f x, F, none⟩] ++ sub)
 
 /-- A candidate antiderivative of `f` in `x`, with the steps that found it, or `none`. `simp`
 normalizes (and, applied to `diff`, differentiates); `fuel` bounds the depth of integration by
@@ -110,6 +158,9 @@ partial def anti (simp : Expr → Option Expr) (x : String) (fuel : Nat) (f : Ex
         match bySubst with
         | some r => return r
         | none =>
+          match trigPowers es with
+          | some (u, m, n) => trigReduce simp x fuel f u m n
+          | none =>
           -- integration by parts, a logarithm first, else a power of the variable
           if fuel = 0 then none else
           let isLog : Expr → Bool | .fn "ln" [_] => true | _ => false
@@ -124,6 +175,18 @@ partial def anti (simp : Expr → Option Expr) (x : String) (fuel : Nat) (f : Ex
           return (F, #[step "int.by-parts" s!"Integration by parts, $\\int u\\,dv = uv - \\int v\\,du$, with $u = {u.toText}$ and $dv = {dv.toText}\\,d{x}$, so $v = {v.toText}$ and $du = ({du.toText})\\,d{x}$." F] ++ vsteps ++ isteps)
   | .pow b e =>
     if !e.dependsOn x then
+      match b with
+      | .fn "exp" [u] =>
+        -- exp(u)^k = exp(k·u): then the table applies to the linear argument
+        let w ← simp (Expand.dist (.mul [e, u]))
+        let g : Expr := .fn "exp" [w]
+        let (G, sub) ← anti simp x fuel g
+        return (G, #[⟨"int.exp-power", s!"$(e^u)^k = e^\{k u}$: the integrand is $\\exp({w.toText})$.", [], integral f x, integral g x, none⟩] ++ sub)
+      | .fn "sin" [_] | .fn "cos" [_] =>
+        match trigPowers [f] with
+        | some (u, m, n) => trigReduce simp x fuel f u m n
+        | none => none
+      | _ =>
       let a ← linearCoeff x b
       let (G, why) := powerRule b e
       let (F, ss) := substitute x f G a
@@ -140,6 +203,7 @@ partial def anti (simp : Expr → Option Expr) (x : String) (fuel : Nat) (f : Ex
     let (F, ss) := substitute x f G a
     return (F, #[step "int.table" why (if a.isOne then G else Expr.div G a)] ++ ss)
   | _ => none
+end
 
 end Anti
 end MathEngine

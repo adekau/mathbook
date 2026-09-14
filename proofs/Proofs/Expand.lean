@@ -25,6 +25,7 @@ structure Sem where
   ev_mul : ∀ ρ es, ev ρ (.mul es) = (es.map (ev ρ)).prod
   ev_num : ∀ ρ q, ev ρ (.num q) = (q.val : ℝ)
   ev_pow : ∀ ρ b e, ev ρ (.pow b e) = ev ρ b ^ ev ρ e
+  ev_fn₁ : ∀ ρ f a, ev ρ (.fn f [a]) = applyFn f (ev ρ a)
 
 section generic
 variable (S : Sem) (ρ : EnvR)
@@ -172,6 +173,63 @@ theorem ev_powCopies (b e : Expr) : S.ev ρ (powCopies b e) = S.ev ρ (.pow b e)
     · rfl
   · rfl
 
+/-! ### The identities the integral checker may use -/
+
+/-- `c^n = (1 − s²)^(n/2) · c^(n mod 2)` when `c² = 1 − s²`. -/
+theorem pow_eq_of_sq (c s : ℝ) (h : c ^ 2 = 1 - s ^ 2) (n : ℕ) :
+    c ^ n = (1 - s ^ 2) ^ (n / 2) * c ^ (n % 2) := by
+  conv_lhs => rw [← Nat.div_add_mod n 2, pow_add, pow_mul, h]
+
+theorem ev_one : S.ev ρ Expr.one = 1 := by simp [Expr.one, S.ev_num, Q.one, Q.ofInt]
+theorem ev_minusOne : S.ev ρ Expr.minusOne = -1 := by simp [Expr.minusOne, S.ev_num, Q.minusOne, Q.ofInt]
+theorem ev_ofInt (n : ℤ) : S.ev ρ (Expr.ofInt n) = (n : ℝ) := by simp [Expr.ofInt, S.ev_num, Q.ofInt]
+theorem ev_ofNat (n : ℕ) : S.ev ρ (Expr.ofInt n) = (n : ℝ) := by rw [ev_ofInt]; simp
+
+/-- `1 − sin(u)^2` evaluates to `1 − sin²`. -/
+theorem ev_oneSubSinSq (u : Expr) :
+    S.ev ρ (Expr.sub Expr.one (.pow (.fn "sin" [u]) (Expr.ofInt 2))) = 1 - Real.sin (S.ev ρ u) ^ 2 := by
+  simp only [Expr.sub, Expr.neg, S.ev_add, S.ev_mul, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
+    List.prod_cons, List.prod_nil, ev_one, ev_minusOne, S.ev_pow, S.ev_fn₁, applyFn_sin, ev_ofInt]
+  push_cast
+  rw [Real.rpow_two]; ring
+
+theorem ev_identPow (e : Expr) : S.ev ρ (identPow e) = S.ev ρ e := by
+  unfold identPow
+  split
+  · rename_i u k
+    split
+    · rename_i hk
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at hk
+      obtain ⟨hint, h2⟩ := hk
+      have hn : (k.val : ℝ) = ((k.val.num.toNat : ℕ) : ℝ) := by
+        rw [Q_cast_isInt hint, ← Int.cast_natCast, Int.toNat_of_nonneg (by omega)]
+      have hr : S.ev ρ (.pow (.fn "cos" [u]) (.num k)) = Real.cos (S.ev ρ u) ^ (k.val.num.toNat) := by
+        rw [S.ev_pow, S.ev_fn₁, applyFn_cos, S.ev_num, hn, Real.rpow_natCast]
+      rw [hr]
+      generalize k.val.num.toNat = n
+      have key := pow_eq_of_sq (Real.cos (S.ev ρ u)) (Real.sin (S.ev ρ u)) (Real.cos_sq' _) n
+      rw [key]
+      simp only
+      split
+      · rename_i heven
+        rw [heven, pow_zero, mul_one]
+        split
+        · rename_i h1; rw [ev_oneSubSinSq, h1, pow_one]
+        · rw [S.ev_pow, ev_oneSubSinSq, ev_ofNat, Real.rpow_natCast]
+      · rename_i hodd
+        have h1 : n % 2 = 1 := by omega
+        rw [h1, pow_one]
+        simp only [S.ev_mul, List.map_cons, List.map_nil, List.prod_cons, List.prod_nil, mul_one, S.ev_fn₁, applyFn_cos]
+        split
+        · rename_i hh; rw [ev_oneSubSinSq, hh, pow_one]
+        · rw [S.ev_pow, ev_oneSubSinSq, ev_ofNat, Real.rpow_natCast]
+    · rfl
+  · rename_i u k
+    rw [S.ev_pow, S.ev_fn₁, applyFn_exp, S.ev_fn₁, applyFn_exp, S.ev_mul]
+    simp only [List.map_cons, List.map_nil, List.prod_cons, List.prod_nil, mul_one]
+    rw [Real.rpow_def_of_pos (Real.exp_pos _), Real.log_exp, mul_comm]
+  · rfl
+
 end generic
 
 /-! ## `evalR` -/
@@ -193,6 +251,10 @@ def semR : Sem where
   ev_mul := fun ρ es => by rw [evalR_mul, prodR_eq_prod]
   ev_num := fun _ _ => rfl
   ev_pow := fun _ _ _ => rfl
+  ev_fn₁ := fun _ _ _ => rfl
+
+theorem evalR_identPow (ρ : EnvR) (e : Expr) : evalR ρ (identPow e) = evalR ρ e :=
+  ev_identPow semR ρ e
 
 /-- Splicing sums into a sum does not change its value. -/
 theorem sumR_flatAdd (ρ : EnvR) (es : List Expr) : sumR ρ (Expand.flatAdd es) = sumR ρ es := by
@@ -228,6 +290,32 @@ mutual
     | e :: es => by
       obtain ⟨hs, hp⟩ := distList_sound ρ es
       simp only [distList, sumR_cons, prodR_cons, dist_sound ρ e, hs, hp]; exact ⟨trivial, trivial⟩
+end
+
+mutual
+  /-- **The checker's identities are sound over ℝ.** -/
+  theorem identNorm_sound (ρ : EnvR) : ∀ e : Expr, evalR ρ (Expand.identNorm e) = evalR ρ e
+    | .num _ => rfl
+    | .var _ => rfl
+    | .add es => by simp only [Expand.identNorm, evalR_add]; exact (identNormList_sound ρ es).1
+    | .mul es => by simp only [Expand.identNorm, evalR_mul]; exact (identNormList_sound ρ es).2
+    | .pow b e => by
+      simp only [Expand.identNorm]
+      rw [evalR_identPow, evalR_pow, evalR_pow, identNorm_sound ρ b, identNorm_sound ρ e]
+    | .fn f es => by
+      have h := (identNormList_sound ρ es).1
+      simp only [Expand.identNorm]
+      match es, h with
+      | [], _ => rfl
+      | [a], h => simp only [identNormList, sumR_cons, sumR_nil, add_zero] at h; simp only [identNormList, evalR_fn₁, h]
+      | _ :: _ :: _, _ => rfl
+    | .matrix _ => rfl
+  theorem identNormList_sound (ρ : EnvR) : ∀ es : List Expr,
+      sumR ρ (identNormList es) = sumR ρ es ∧ prodR ρ (identNormList es) = prodR ρ es
+    | [] => ⟨rfl, rfl⟩
+    | e :: es => by
+      obtain ⟨hs, hp⟩ := identNormList_sound ρ es
+      simp only [identNormList, sumR_cons, prodR_cons, identNorm_sound ρ e, hs, hp]; exact ⟨trivial, trivial⟩
 end
 
 end MathProofs

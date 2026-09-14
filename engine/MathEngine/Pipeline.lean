@@ -97,7 +97,7 @@ abbrev Norm := Expr → Except String (Expr × Option Derivation)
 
 /-- `integrate(f, x)`: a candidate from the unverified finder (`Antiderivative.lean`), normalized,
 then accepted only if its derivative and the integrand have the same normal form *after
-distribution*: `norm (dist (norm (diff F x))) = norm (dist f)`. Distribution is there because the
+distribution*: `norm (dist (identNorm (norm (diff F x)))) = norm (dist (identNorm f))`. Distribution is there because the
 pipeline never distributes a numeral over a sum (the ordering forbids it), so `-(a + b) + b` is a
 normal form; `Expand.dist` is proved sound, so expanding both sides first weakens nothing. The
 claim is `cmdIntegrate_spec` (Integrate.lean); the finder's steps are the sub-derivation, ending
@@ -115,11 +115,11 @@ def cmdIntegrate (norm : Norm) : PlainRule :=
             match norm (D F x) with
             | .error msg => some (refuse s!"integrate: the candidate {F.toText} could not be differentiated: {msg}")
             | .ok (g, sub) =>
-              match norm (Expand.dist g), norm (Expand.dist f) with
+              match norm (Expand.dist (Expand.identNorm g)), norm (Expand.dist (Expand.identNorm f)) with
               | .ok (g', subg), .ok (f', _) =>
                 if equal g' f' then
                   let check : Step := ⟨"int.check", s!"Check: $\\frac\{d}\{d{x}}$ of the candidate, simplified. This step carries the claim; the finder's steps above are unverified guesses.", [], D F x, g, sub⟩
-                  let compare : Step := ⟨"int.compare", s!"Both the derivative and the integrand are expanded (`Expand.dist`, proved sound) and simplified; they agree: ${f'.toText}$. The candidate is accepted.", [], g, g', subg⟩
+                  let compare : Step := ⟨"int.compare", s!"Both the derivative and the integrand are rewritten with $\\cos^2 u = 1 - \\sin^2 u$ and $(e^u)^k = e^\{ku}$ (`Expand.identNorm`), expanded (`Expand.dist`) and simplified — the two rewrites are proved sound — and they agree: ${f'.toText}$. The candidate is accepted.", [], g, g', subg⟩
                   some ⟨F, "Antiderivative found by the integration rules and accepted because its derivative simplifies back to the integrand (no constant of integration).", some ⟨Anti.integral f x, (steps.push check).push compare, F⟩, none⟩
                 else some (refuse s!"integrate: the candidate {F.toText} was rejected: its derivative simplifies to {g.toText}, not to {f.toText}")
               | _, _ => some (refuse s!"integrate: the candidate {F.toText} could not be compared with the integrand")

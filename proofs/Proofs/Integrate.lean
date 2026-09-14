@@ -38,6 +38,10 @@ def semD : Sem where
   ev_mul := fun ρ es => by rw [evalD_mul, prodD_eq_prod]
   ev_num := fun _ _ => rfl
   ev_pow := fun _ _ _ => rfl
+  ev_fn₁ := fun _ _ _ => rfl
+
+theorem evalD_identPow (ρ : EnvR) (e : Expr) : evalD ρ (identPow e) = evalD ρ e :=
+  ev_identPow semD ρ e
 
 theorem evalD_distMul (ρ : EnvR) (fs : List Expr) : evalD ρ (distMul fs) = prodD ρ fs := by
   have := ev_distMul semD ρ fs; simp only [semD] at this; rw [this, prodD_eq_prod]
@@ -96,6 +100,54 @@ mutual
       simp only [distList, sumD_cons, prodD_cons, dist_soundD e ρ, hs, hp]; exact ⟨trivial, trivial⟩
 end
 
+/-- `identNorm` never turns a non-variable into a variable either. -/
+theorem identNorm_var_iff (v : Expr) (y : String) : Expand.identNorm v = .var y ↔ v = .var y := by
+  cases v <;> simp only [Expand.identNorm, identPow] <;> (repeat' split) <;> simp [Expr.sub, Expr.neg]
+
+mutual
+  /-- **The checker's identities are sound for the derivative semantics.** -/
+  theorem identNorm_soundD : ∀ (e : Expr) (ρ : EnvR), evalD ρ (Expand.identNorm e) = evalD ρ e
+    | .num _, _ => rfl
+    | .var _, _ => rfl
+    | .add es, ρ => by simp only [Expand.identNorm, evalD_add]; exact (identNormList_soundD es ρ).1
+    | .mul es, ρ => by simp only [Expand.identNorm, evalD_mul]; exact (identNormList_soundD es ρ).2
+    | .pow b e, ρ => by
+      simp only [Expand.identNorm]
+      rw [evalD_identPow, evalD_pow, evalD_pow, identNorm_soundD b ρ, identNorm_soundD e ρ]
+    | .fn f es, ρ => by
+      simp only [Expand.identNorm]
+      match es with
+      | [] => rfl
+      | [a] =>
+        have h := (identNormList_soundD [a] ρ).1
+        simp only [identNormList, sumD_cons, sumD_nil, add_zero] at h
+        simp only [identNormList, evalD_fn, fnD_one, h]
+      | [g, v] =>
+        simp only [identNormList, evalD_fn, fnD_two]
+        split
+        · split
+          · rename_i x hx
+            have hv := (identNorm_var_iff v x).1 hx
+            subst hv
+            show deriv (fun t => evalD (upd ρ x t) (Expand.identNorm g)) (ρ x) = deriv (fun t => evalD (upd ρ x t) g) (ρ x)
+            congr 1; funext t
+            have := (identNormList_soundD [g] (upd ρ x t)).1
+            simpa [identNormList] using this
+          · rename_i hne
+            split
+            · rename_i y; exact (hne y (by simp [Expand.identNorm])).elim
+            · rfl
+        · rfl
+      | _ :: _ :: _ :: _ => rfl
+    | .matrix _, _ => rfl
+  theorem identNormList_soundD : ∀ (es : List Expr) (ρ : EnvR),
+      sumD ρ (identNormList es) = sumD ρ es ∧ prodD ρ (identNormList es) = prodD ρ es
+    | [], _ => ⟨rfl, rfl⟩
+    | e :: es, ρ => by
+      obtain ⟨hs, hp⟩ := identNormList_soundD es ρ
+      simp only [identNormList, sumD_cons, prodD_cons, identNorm_soundD e ρ, hs, hp]; exact ⟨trivial, trivial⟩
+end
+
 /-! ## The checker -/
 
 /-- `deriv (integrate f) = f`: the derivative of an accepted antiderivative, read as a function of
@@ -105,14 +157,17 @@ theorem integrate_deriv (norm : Norm) {f : Expr} {x : String} {res : RuleResult}
     (ρ : EnvR)
     (hdiff : ∀ g sub, norm (MathEngine.D res.result x) = .ok (g, sub) →
       evalD ρ (MathEngine.D res.result x) = evalD ρ g)
-    (hleft : ∀ g sub g' s, norm (MathEngine.D res.result x) = .ok (g, sub) → norm (Expand.dist g) = .ok (g', s) →
-      evalD ρ (Expand.dist g) = evalD ρ g')
-    (hright : ∀ f' s, norm (Expand.dist f) = .ok (f', s) → evalD ρ (Expand.dist f) = evalD ρ f') :
+    (hleft : ∀ g sub g' s, norm (MathEngine.D res.result x) = .ok (g, sub) →
+      norm (Expand.dist (Expand.identNorm g)) = .ok (g', s) →
+      evalD ρ (Expand.dist (Expand.identNorm g)) = evalD ρ g')
+    (hright : ∀ f' s, norm (Expand.dist (Expand.identNorm f)) = .ok (f', s) →
+      evalD ρ (Expand.dist (Expand.identNorm f)) = evalD ρ f') :
     deriv (fx ρ x res.result) (ρ x) = evalD ρ f := by
   obtain ⟨g, sub, g', s₁, s₂, h₁, h₂, h₃⟩ := cmdIntegrate_spec norm h hok
   rw [← D_eq, ← evalD_diff]
   show evalD ρ (MathEngine.D res.result x) = _
-  rw [hdiff g sub h₁, ← dist_soundD g ρ, hleft g sub g' s₁ h₁ h₂, ← hright g' s₂ h₃, dist_soundD]
+  rw [hdiff g sub h₁, ← identNorm_soundD g ρ, ← dist_soundD (Expand.identNorm g) ρ, hleft g sub g' s₁ h₁ h₂,
+    ← hright g' s₂ h₃, dist_soundD, identNorm_soundD]
 
 end MathProofs
 end

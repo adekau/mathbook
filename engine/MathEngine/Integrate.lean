@@ -10,8 +10,10 @@ checker. Both are `Ordered` by the one theorem `pipelineOrderedWith`, so the che
 budget either.
 
 `cmdIntegrate_spec` is the checker's claim, in the engine: an accepted result `F` has
-`norm (dist (norm (diff F x))) = norm (dist f)`, exactly (`dist` is `expand`'s distribution,
-proved sound; it is there because the pipeline never distributes a numeral over a sum). Its meaning — `deriv F = f` — is `integrate_deriv` in
+`norm (dist (identNorm (norm (diff F x)))) = norm (dist (identNorm f))`, exactly (`dist` is
+`expand`'s distribution and `identNorm` rewrites `cos²` and `exp(u)^k`; both are proved sound, and
+they are there because the pipeline neither distributes a numeral over a sum nor applies those two
+identities). Its meaning — `deriv F = f` — is `integrate_deriv` in
 `proofs/Proofs/Integrate.lean`, under the one hypothesis that the differentiation shown is sound
 at the point, which the rule statuses of its steps (M3, M4) say rule by rule.
 -/
@@ -39,7 +41,8 @@ normalized. Nothing about the finder is assumed. -/
 theorem cmdIntegrate_spec (norm : Norm) {f : Expr} {x : String} {res : RuleResult}
     (h : (cmdIntegrate norm).apply (.fn "integrate" [f, .var x]) = some res) (hok : res.error = none) :
     ∃ g sub g' s₁ s₂, norm (D res.result x) = .ok (g, sub) ∧
-      norm (Expand.dist g) = .ok (g', s₁) ∧ norm (Expand.dist f) = .ok (g', s₂) := by
+      norm (Expand.dist (Expand.identNorm g)) = .ok (g', s₁) ∧
+      norm (Expand.dist (Expand.identNorm f)) = .ok (g', s₂) := by
   unfold cmdIntegrate at h; simp only [Option.map_eq_some_iff] at h
   obtain ⟨r, hr, rfl⟩ := h
   obtain ⟨hrr, -⟩ := checked_spec rfl hok

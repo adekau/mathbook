@@ -50,8 +50,10 @@ def builtinFunctions : List String :=
 /-- Lexer over the character list; `i` is the byte-free character index used for spans. -/
 partial def lex (src : String) : Except ParseError (Array Tok) := go src.toList 0 #[]
 where
-  isIdStart (c : Char) := c.isAlpha || c == '_'
-  isIdChar (c : Char) := c.isAlphanum || c == '_' || c == '\''
+  -- Greek letters (α … ω) and the script ℯ are identifier characters, so `π`, `φ`, `ℯ^x` parse
+  isGreek (c : Char) := (0x391 ≤ c.val && c.val ≤ 0x3C9) || c == 'ℯ'
+  isIdStart (c : Char) := c.isAlpha || c == '_' || isGreek c
+  isIdChar (c : Char) := c.isAlphanum || c == '_' || c == '\'' || isGreek c
   go : List Char → Nat → Array Tok → Except ParseError (Array Tok)
     | [], i, acc => .ok (acc.push ⟨.eof, "", i, i⟩)
     | c :: cs, i, acc =>
@@ -143,6 +145,7 @@ mutual
         let args ← callArgs
         pure (.fn t.s args)
       else if t.s == "pi" then pure (.var "π")
+      else if t.s == "ℯ" then pure (.fn "exp" [Expr.one])   -- Euler's number is exp(1): every rule about exp applies
       else pure (.var t.s)
     | .op =>
       if t.s == "(" then

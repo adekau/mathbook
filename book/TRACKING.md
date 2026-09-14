@@ -261,3 +261,16 @@ Bug found by Alex's `integrate(5y sin(y) sin^2(y), y)` (2026-09-14): two causes.
    had a constant factor and two rounds of by-parts (`integrate(5 y^2 sin(y), y)`). `flatAdd` fixes it; `dist_sound`
    and `dist_soundD` gained `sumR_flatAdd`/`sumD_flatAdd`. With the parse fixed the original input is refused
    honestly: `∫ 5y sin³y` needs a trig-power reduction (`sin² = 1 − cos²` then u-substitution) the finder lacks.
+
+Trig and exp powers in `integrate` (2026-09-14, Alex: "the word", then `integrate(exp(x)^2, x)`): the finder
+   gained the reduction formulas for `sinᵐu cosⁿu` (`int.trig-power`, by parts with the solve-for trick built in,
+   applied until only first powers remain) and `(eᵘ)ᵏ = eᵏᵘ` (`int.exp-power`). Neither could verify without a
+   change to the check: the derivative of an antiderivative of an even trig power equals the integrand only modulo
+   `sin² + cos² = 1`, and the simplifier applies no direction of it (neither decreases the ordering). So the compare
+   step now runs `Expand.identNorm` — `cos^k u ↦ (1 − sin² u)^(k/2)·cos^(k mod 2) u`, `exp(u)^k ↦ exp(k·u)` — on both
+   sides before `dist`: a total function proved sound in both semantics (`identNorm_sound`, `identNorm_soundD`,
+   from `Real.cos_sq'` and `Real.rpow_def_of_pos`), named in `cmdIntegrate_spec` and `integrate_deriv`. After it a
+   trig polynomial has cosine to at most the first power, a normal form for ℝ[s,c]/(s²+c²−1). Also: Greek letters
+   and `ℯ` are identifiers (`ℯ` parses as `exp(1)`, so `ln ℯ = 1` and `d/dx ℯ^x = ℯ^x` come from the exp rules and
+   `N(ℯ)` from the table; the printer shows `exp(1)` as `e`/`ℯ`), and the notebook's `\` completions cover `\pi`,
+   `\e`, `\phi` and the Greek alphabet.

@@ -96,6 +96,42 @@ compares \lc{norm (Expand.dist g)} with \lc{norm (Expand.dist f)} rather than \l
 \lc{f}. Nothing was weakened. A candidate is still accepted only if its derivative \emph{is} the
 integrand; the identification is just allowed to use the distributive law, which is a theorem.
 
+\section{Powers of sine and cosine}
+
+$\int \sin^3 x\,dx$ is by parts with the solve-for trick built in. Take $u = \sin^{m-1} x$ and
+$dv = \sin x\,dx$:
+\begin{align*}
+  \int \sin^m x\,dx &= -\sin^{m-1} x \cos x + (m-1)\int \sin^{m-2} x \cos^2 x\,dx \\
+    &= -\sin^{m-1} x \cos x + (m-1)\int \sin^{m-2} x\,dx - (m-1)\int \sin^m x\,dx,
+\end{align*}
+using $\cos^2 = 1 - \sin^2$, and solving for the integral gives the \emph{reduction formula}
+\[
+  \int \sin^m x\,dx = -\frac{\sin^{m-1} x \cos x}{m} + \frac{m-1}{m} \int \sin^{m-2} x\,dx .
+\]
+The same computation with a factor $\cos^n x$ carried along gives
+\[
+  \int \sin^m x \cos^n x\,dx = -\frac{\sin^{m-1} x\cos^{n+1} x}{m+n} + \frac{m-1}{m+n}\int \sin^{m-2} x\cos^n x\,dx,
+\]
+and its mirror reduces the cosine. Two steps take $\sin^3$ to $\sin$; the engine's finder applies
+exactly these formulas (\rn{int.trig-power}), each recorded as a step, until only first powers
+remain for the table and substitution to finish.
+
+The check has a new difficulty here. Differentiate the answer for $\int \sin^2 x\,dx$, namely
+$-\frac{1}{2}\sin x \cos x + \frac{1}{2} x$: the derivative is $\frac{1}{2} - \frac{1}{2}\cos^2 x +
+\frac{1}{2}\sin^2 x$, which equals $\sin^2 x$ --- but only \emph{modulo} $\sin^2 + \cos^2 = 1$, an
+identity the simplifier does not apply, because neither direction of it decreases the ordering.
+So the comparison first rewrites every $\cos^k u$ with $k \ge 2$ as $(1 - \sin^2 u)^{k/2}$ times
+$\cos u$ if $k$ is odd, on both sides, then expands and simplifies. After that rewrite a
+trigonometric polynomial has cosine to at most the first power, which is a normal form for the ring
+$\mathbb{R}[s, c]/(s^2 + c^2 - 1)$, and two equal trigonometric polynomials become the same term.
+The same pass rewrites $(e^u)^k$ as $e^{ku}$, which is why $\int (e^x)^2\,dx$ verifies. The pass
+is a total function like \lc{dist}, proved value-preserving in both semantics
+(\lc{identNorm_sound}, \lc{identNorm_soundD}) from Mathlib's \lc{Real.cos_sq'} and the
+definition of a real power of a positive base; the checker's theorem names it alongside
+\lc{dist}. Nothing was weakened: a candidate is still accepted only if its derivative
+\emph{is} the integrand, with the Pythagorean identity and distribution allowed in the
+identification because they are theorems.
+
 \section{The tangent}
 
 A second refusal became a rule. $\int \tan x$ was refused because the candidate $-\ln \cos x$
@@ -109,9 +145,8 @@ true and not before.
 
 \section{What is still refused}
 
-$e^x \sin x$ needs the solve-for trick. $\sin^2 x$ needs the identity $\sin^2 x = \frac{1}{2}(1 -
-\cos 2x)$, which the simplifier lacks. $\frac{1}{x^2 + 1}$ needs an arctangent, which the engine
-does not have. Each is refused with the candidate it tried and the derivative it got, and none is
+$e^x \sin x$ needs the solve-for trick for a product of two functions that never simplify.
+$\frac{1}{x^2 + 1}$ needs an arctangent, which the engine does not have. Each is refused with the candidate it tried and the derivative it got, and none is
 a wrong answer. The finder can be extended without touching a proof; the checker's theorem
 covers whatever it produces.
 
@@ -120,11 +155,14 @@ covers whatever it produces.
 integrate(x * exp(x), x)
 integrate(x^2 * exp(x), x)
 integrate(ln(x), x)
+integrate(sin^3(x), x)
+integrate(x * sin^3(x), x)
 integrate(tan(x), x)
 integrate(exp(x) * sin(x), x)
 \end{minted}
   The first three succeed by parts; open the compare step to see both sides expanded. The
-  fourth is the tangent. The fifth is refused, with the reason.
+  fourth and fifth use the reduction formula, the fifth inside by parts. The sixth is the
+  tangent. The last is refused, with the reason.
 \end{trybox}
 
 \section{Exercises}
