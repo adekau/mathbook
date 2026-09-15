@@ -119,6 +119,8 @@ export interface EvaluateResult {
   derivation?: Derivation;
   /** Names bound by this cell (e.g. `let f = x^2`). */
   bound?: string[];
+  /** With `bound`: the parameters when the binding defined a function (`let f(x, y) = e`). */
+  params?: string[];
   /** Visual specs for this result. Reserved; empty until a module emits one. */
   visuals?: VisualSpec[];
   /** The parsed input, rendered by the engine (the frontend owns no printer). Sent with `showWork`. */

@@ -225,6 +225,11 @@ const S = {
   httpUrl: "http://localhost:8787",
   busy: false,
   comp: null as { cell: Cell; items: CompItem[]; index: number; x: number; y: number } | null,
+  /** Signature help: the call the caret is inside, and which argument it is in (View menu toggles it). */
+  sig: null as { cell: Cell; key: string; sig: string; blurb: string; arg: number } | null,
+  /** A call site dismissed with Esc stays quiet until the caret leaves it. */
+  sigDismissed: null as string | null,
+  sigHelp: (() => { try { return localStorage.getItem("chalkmath.sighelp") !== "off"; } catch { return true; } })(),
   theme: "dark" as "dark" | "light",
   docName: "untitled.chalk",
   deBruijn: false,
@@ -317,7 +322,11 @@ async function runCell(cell: Cell) {
       if ("kind" in r && r.kind === "plot") cell.plot = { var: r.var, from: r.from, to: r.to, series: r.series.map((s) => ({ latex: s.rendered.latex, text: s.rendered.text, points: s.points })) };
       if ("kind" in r && r.kind === "lambda") { cell.outDeBruijn = r.renderedDeBruijn?.latex; cell.reading = r.reading; cell.kind = "λ-term"; }
       log("ok", `Out[${cell.label}] ${r.rendered.text}  (${cell.ms.toFixed(1)} ms, ${cell.steps.length} steps)`);
-      if ("bound" in r && r.bound?.length) log("ok", `bound ${r.bound.join(", ")}`);
+      if ("bound" in r && r.bound?.length) {
+        log("ok", `bound ${r.bound.join(", ")}`);
+        const k = `${sessionId}:${r.bound[0]}`;
+        if (r.params?.length) USER_FNS.set(k, r.params); else USER_FNS.delete(k);
+      }
     } else {
       cell.label = r.label ?? cell.label ?? nextLabel++;
       delete cell.outLatex; delete cell.outText; delete cell.echoLatex; delete cell.plot; cell.steps = [];
@@ -432,7 +441,7 @@ function loadDoc(i: number) {
   S.doc = i;
   S.docName = d.name; S.cells = d.cells; ST.scenes = d.scenes; ST.active = d.studioActive; ST.t = 0; stopPlayback();
   S.active = Math.min(d.active, Math.max(0, d.cells.length - 1)); nextLabel = d.nextLabel; sessionId = d.sessionId;
-  S.sel = null; hideCompletions(); hideHover();
+  S.sel = null; hideCompletions(); hideSigHelp(); hideHover();
   renderChrome(); renderCells(); renderSidebar(); renderPanelHead(); renderPanel();
   if (S.tab === "studio") renderStudio();
   if (!d.hydrated && client) hydrate(d);
@@ -577,6 +586,7 @@ async function runAll() { for (const c of [...S.cells]) if ((c.input?.value ?? c
 async function restartKernel() {
   if (client) { try { await client.call("engine.resetSession", { sessionId }); } catch (e) { log("err", String(e)); } }
   clearOutputs();
+  for (const k of [...USER_FNS.keys()]) if (k.startsWith(`${sessionId}:`)) USER_FNS.delete(k);
   log("ok", "kernel restarted: the session is empty");
 }
 
@@ -782,6 +792,7 @@ function renderChrome() {
     Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
     View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }],
       [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("chalkmath.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }],
+      [`${S.sigHelp ? "✓ " : ""}Signature help`, () => { S.sigHelp = !S.sigHelp; try { localStorage.setItem("chalkmath.sighelp", S.sigHelp ? "on" : "off"); } catch { /* private mode */ } if (!S.sigHelp) hideSigHelp(); renderChrome(); }],
       ...(["s", "m", "l"] as const).map((sz): [string, () => void] => [`${S.outSize === sz ? "✓ " : "   "}Math size: ${{ s: "small", m: "normal", l: "large" }[sz]}`, () => {
         S.outSize = sz; document.documentElement.dataset["outsize"] = sz;
         try { localStorage.setItem("chalkmath.outsize", sz); } catch { /* private mode */ }
@@ -996,7 +1007,7 @@ function pyExpr(text: string): string {
 }
 
 function renderCells() {
-  hideHover();
+  hideHover(); hideSigHelp();
   const host = $(".cells");
   host.innerHTML = "";
   S.cells.forEach((cell, i) => {
@@ -1011,8 +1022,10 @@ function renderCells() {
     input.spellcheck = false;
     cell.input = input;
     input.addEventListener("focus", () => { S.active = i; renderChrome(); renderSidebar(); markActive(); });
-    input.addEventListener("input", () => { cell.src = input.value; updateCompletions(cell); renderSidebar(); renderTabs(); });
-    input.addEventListener("blur", () => { hideCompletions(); });
+    input.addEventListener("input", () => { cell.src = input.value; updateCompletions(cell); updateSigHelp(cell); renderSidebar(); renderTabs(); });
+    input.addEventListener("keyup", () => updateSigHelp(cell));     // caret moves without an input event
+    input.addEventListener("click", () => updateSigHelp(cell));
+    input.addEventListener("blur", () => { hideCompletions(); hideSigHelp(); });
     input.addEventListener("keydown", (ev) => onKey(ev, cell, i));
     mid.append(input);
 
@@ -2114,6 +2127,110 @@ function renderCompletions() {
   document.body.append(box);
 }
 
+// --- Signature help: the call around the caret, its parameters, the current one in bold ---------
+
+/** Session-defined functions (`let f(x, y) = e`), keyed by session and name, for signature help. */
+const USER_FNS = new Map<string, string[]>();
+
+/** The innermost call the caret is inside: its name, where its `(` is, and which argument the caret
+ *  is in. Balanced groups before the caret are skipped; an unclosed `[`/`{` or a bare grouping `(` is
+ *  part of an argument, so the walk continues outward. */
+function callContext(input: HTMLInputElement): { name: string; open: number; arg: number; firstArg: string } | null {
+  const s = input.value, caret = input.selectionStart ?? s.length;
+  let depth = 0;
+  for (let k = caret - 1; k >= 0; k--) {
+    const c = s[k]!;
+    if (c === ")" || c === "]" || c === "}") { depth++; continue; }
+    if (c !== "(" && c !== "[" && c !== "{") continue;
+    if (depth > 0) { depth--; continue; }
+    if (c !== "(") continue;
+    const m = /([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(s.slice(0, k));
+    if (!m) continue;
+    let arg = 0, d = 0;
+    for (let j = k + 1; j < caret; j++) {
+      const cj = s[j]!;
+      if (cj === "(" || cj === "[" || cj === "{") d++;
+      else if (cj === ")" || cj === "]" || cj === "}") d--;
+      else if (cj === "," && d === 0) arg++;
+    }
+    return { name: m[1]!, open: k, arg, firstArg: s.slice(k + 1, caret).trim() };
+  }
+  return null;
+}
+
+/** The signature to show for a call: a session function first, else the reference entry whose
+ *  signature lists `name(`; `plot` picks its list form when the first argument starts with `[`. */
+function sigFor(name: string, firstArg: string): { sig: string; blurb: string } | null {
+  const user = USER_FNS.get(`${sessionId}:${name}`);
+  if (user) return { sig: `${name}(${user.join(", ")})`, blurb: "Defined in this session with let." };
+  for (const d of DOCS) {
+    const alts = d.sig.split(" · ").map((a) => a.trim()).filter((a) => a.startsWith(name + "("));
+    if (!alts.length) continue;
+    const alt = (alts.length > 1 && firstArg.startsWith("[") ? alts.find((a) => a.startsWith(name + "([")) : undefined) ?? alts[0]!;
+    return { sig: alt, blurb: d.blurb.split(".")[0]! + "." };
+  }
+  return null;
+}
+
+type SigPiece = { text: string; param: boolean };
+/** `diff(f, x[, n])` as pieces: the name and punctuation as text, each parameter on its own, so the
+ *  current one can be set in bold. `[, n]` marks an optional parameter; a `[f, g, …]` list is one. */
+function sigPieces(sig: string): SigPiece[] {
+  const open = sig.indexOf("("), close = sig.lastIndexOf(")");
+  if (open < 0 || close < open) return [{ text: sig, param: false }];
+  const out: SigPiece[] = [{ text: sig.slice(0, open + 1), param: false }];
+  const inside = sig.slice(open + 1, close);
+  let buf = "", d = 0, opt = false;
+  const flush = () => { if (buf) { out.push({ text: buf, param: true }); buf = ""; } };
+  for (let k = 0; k < inside.length; k++) {
+    const c = inside[k]!;
+    if (d === 0 && c === "[" && inside[k + 1] === ",") { flush(); opt = true; out.push({ text: "[", param: false }); }
+    else if (d === 0 && opt && c === "]") { flush(); opt = false; out.push({ text: "]", param: false }); }
+    else if (d === 0 && c === ",") { flush(); let sep = ","; while (inside[k + 1] === " ") { sep += " "; k++; } out.push({ text: sep, param: false }); }
+    else { if (c === "(" || c === "{" || c === "[") d++; else if (c === ")" || c === "}" || c === "]") d--; buf += c; }
+  }
+  flush();
+  out.push({ text: sig.slice(close), param: false });
+  return out;
+}
+
+function updateSigHelp(cell: Cell) {
+  const input = cell.input;
+  if (!S.sigHelp || !input || document.activeElement !== input) return hideSigHelp();
+  const ctx = callContext(input);
+  const found = ctx && sigFor(ctx.name, ctx.firstArg);
+  if (!ctx || !found) { S.sigDismissed = null; return hideSigHelp(); }
+  const key = `${cell.id}:${ctx.open}`;
+  if (S.sigDismissed === key) return hideSigHelp();
+  S.sigDismissed = null;
+  S.sig = { cell, key, sig: found.sig, blurb: found.blurb, arg: ctx.arg };
+  renderSigHelp();
+}
+function hideSigHelp() { S.sig = null; renderSigHelp(); }
+function dismissSigHelp() { if (S.sig) { S.sigDismissed = S.sig.key; hideSigHelp(); } }
+
+function renderSigHelp() {
+  document.querySelector(".sighelp")?.remove();
+  const g = S.sig;
+  if (!g || !g.cell.input) return;
+  const box = h("div", "sighelp");
+  const line = h("div", "ss");
+  const pieces = sigPieces(g.sig), n = pieces.filter((p) => p.param).length;
+  let k = 0;
+  for (const p of pieces) {
+    if (!p.param) { line.append(p.text); continue; }
+    const on = k === g.arg || (g.arg >= n && k === n - 1 && p.text.endsWith("…"));
+    line.append(on ? h("b", undefined, p.text) : document.createTextNode(p.text));
+    k++;
+  }
+  box.append(line, h("div", "sb", g.blurb));
+  const r = g.cell.input.getBoundingClientRect();
+  box.style.left = `${r.left + 8}px`;
+  // above the input, like an editor; below it only when there is no room and no completion list there
+  if (r.top > 80 || S.comp) box.style.bottom = `${window.innerHeight - r.top + 6}px`; else box.style.top = `${r.bottom + 4}px`;
+  document.body.append(box);
+}
+
 function showHover(doc: Doc, ev: MouseEvent) {
   hideHover();
   const box = h("div", "hoverdoc");
@@ -2135,6 +2252,7 @@ function onKey(ev: KeyboardEvent, cell: Cell, i: number) {
     if (ev.key === "Tab" || ev.key === "Enter") { ev.preventDefault(); acceptCompletion(); return; }
     if (ev.key === "Escape") { ev.preventDefault(); return hideCompletions(); }
   }
+  if (ev.key === "Escape" && S.sig) { ev.preventDefault(); return dismissSigHelp(); }
   if (ev.key === " " || ev.key === ".") {
     // Lean-style input: \lam, \pi, \e, \phi … followed by space or dot becomes the symbol
     const input = cell.input!;

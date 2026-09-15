@@ -326,3 +326,11 @@ Complex numbers (2026-09-14, Alex: the logo `e^(π i)` could not be computed; ch
    the six-tier decrease through a proxy lemma `muLt_of_clean_via` (the collapsed result is no heavier and no
    larger than the singleton the old proof handled). Soundness over ℤ, ℝ and ℂ rewrites with `eval?_addN` etc.
    `diff(x^3, x)` is now two steps, not three; the origin-tracking test was updated accordingly.
+- notebook: signature help — DONE 2026-09-14. While the caret is inside a call the notebook shows the function's
+   signature above the input with the current parameter in bold (`diff(f, **x**[, n])`), the way an editor's LSP
+   client does. `callContext` walks back from the caret skipping balanced groups (an unclosed `[`/`{` or a bare
+   grouping `(` is part of an argument, so the walk continues outward) and counts top-level commas; `sigPieces`
+   splits a reference signature into parameters, treating `[, n]` as an optional one and a `[f, g, …]` list as a
+   single one; `plot` shows its list form when the first argument starts with `[`. Session functions get it too:
+   the evaluate reply's `params` (already emitted by the engine, now in the protocol) are remembered per session.
+   Esc dismisses it for that call site until the caret leaves; View → Signature help turns it off (`chalkmath.sighelp`).
