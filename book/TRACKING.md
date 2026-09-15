@@ -345,3 +345,7 @@ Complex numbers (2026-09-14, Alex: the logo `e^(π i)` could not be computed; ch
    inside the scrolling paper, where a menu near the bottom grew a scrollbar. The input reserves room for the
    action buttons only while they are shown (hover/active); a long input was hidden under invisible buttons.
    `focusCell` focused before re-rendering, so Duplicate/Move/arrow navigation lost focus — now it renders first.
+- notebook: no vertical scrollbar on a tall output — DONE 2026-09-14. A 3×3 matrix's output row scrolled by 8px:
+   `.outval` is `overflow-x:auto`, which makes `overflow-y` auto too, and KaTeX's vlist struts extend the scroll
+   height a few px past the strut that bounds the visible render (nothing visible goes past it — measured). Now
+   `overflow-y:hidden`, as `.step .el` already was; the panel's selection line likewise.

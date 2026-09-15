@@ -287,7 +287,7 @@ svg .curve.c1 { stroke:var(--curve1); } svg .curve.c2 { stroke:var(--curve2); } 
 .outtext { font-family:var(--code); font-size:14px; color:var(--p-ink); white-space:pre-wrap; }
 .outrow .brk { border-color:var(--p-br-out); }
 .cell.active .outrow .brk { border-color:var(--p-acc-2); }
-.outval { font-size:var(--sz-out, 22px); line-height:1.6; color:var(--p-ink-strong); padding-left:8px; min-width:0; overflow-x:auto; }
+.outval { font-size:var(--sz-out, 22px); line-height:1.6; color:var(--p-ink-strong); padding-left:8px; min-width:0; overflow-x:auto; overflow-y:hidden; }   /* overflow-y: KaTeX's vlist struts overflow a scroll container by a few px below the strut; hidden, like .step .el */
 .katex [data-path] { cursor:pointer; border-radius:3px; padding:0 1px; }
 /* a matrix (or any tall subterm) is taller than its line box; let the highlight follow the content */
 .katex [data-path]:has(.mtable) { display:inline-block; }
@@ -380,7 +380,7 @@ svg .curve.c1 { stroke:var(--curve1); } svg .curve.c2 { stroke:var(--curve2); } 
 .explain { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr); gap:10px; padding:12px; align-items:start; }
 .col { padding:13px 15px; border-radius:9px; background:var(--panel); min-width:0; overflow-y:auto; }
 .col h3 { font-size:10px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:var(--ink-mut); margin:0 0 10px; }
-.col .sel { font-size:22px; color:var(--ink); margin-bottom:12px; overflow-x:auto; }
+.col .sel { font-size:22px; color:var(--ink); margin-bottom:12px; overflow-x:auto; overflow-y:hidden; }
 .col .kindname { font-size:12px; font-weight:600; color:var(--acc-hi); margin-bottom:6px; }
 .col p { font-size:12px; line-height:1.6; color:var(--ink-2); margin:0; }
 .trailrow { display:grid; grid-template-columns:20px minmax(0,1fr) auto; gap:9px; align-items:center; padding:4px 7px; border-radius:6px; }
