@@ -715,8 +715,8 @@ function addCell(src = ""): Cell {
 
 function focusCell(i: number) {
   S.active = Math.max(0, Math.min(i, S.cells.length - 1));
-  S.cells[S.active]?.input?.focus();
   renderCells(); renderSidebar(); renderChrome();
+  S.cells[S.active]?.input?.focus();     // after the render: it rebuilds the inputs, and focus on the old one is lost
 }
 
 function clearOutputs() {
@@ -1039,10 +1039,26 @@ function renderCells() {
     run.addEventListener("click", () => void runCell(cell));
     acts.append(run);
     el.append(acts, h("div", "brk"));
+    insertGap(host, i);
     host.append(el);
     renderCellBody(cell);
   });
+  insertGap(host, S.cells.length);
   markActive();
+}
+
+/** A thin strip between cells (and after the last): hovering shows a rule with a `+ cell` pill, a
+ *  click inserts a fresh cell there — Mathematica's cell insertion bar. */
+function insertGap(host: HTMLElement, at: number) {
+  const gap = h("div", "gap");
+  const pill = h("span", "gappill", "+ cell");
+  gap.title = "Insert a cell here";
+  gap.append(pill);
+  gap.addEventListener("click", () => {
+    S.cells.splice(at, 0, freshCell());
+    renderCells(); renderSidebar(); focusCell(at); autosave();
+  });
+  host.append(gap);
 }
 
 function markActive() {
@@ -1272,9 +1288,12 @@ function toggleCellMenu(cell: Cell, anchor: HTMLElement) {
     S.active = Math.min(S.active, S.cells.length - 1);
     renderCells(); renderSidebar(); renderChrome(); autosave();
   }, { danger: true });
-  anchor.closest(".cell")!.append(menu);
-  const r = anchor.getBoundingClientRect(), c = anchor.closest(".cell")!.getBoundingClientRect();
-  menu.style.top = `${r.bottom - c.top + 4}px`; menu.style.right = `${c.right - r.right}px`;
+  // on the body, fixed: the paper scrolls and clips, and a menu near its bottom must not grow a scrollbar
+  document.body.append(menu);
+  const r = anchor.getBoundingClientRect(), mh = menu.offsetHeight;
+  const below = r.bottom + 4 + mh <= window.innerHeight - 8;
+  menu.style.top = `${below ? r.bottom + 4 : Math.max(8, r.top - 4 - mh)}px`;
+  menu.style.right = `${window.innerWidth - r.right}px`;
 }
 function closeCellMenu() { document.querySelectorAll(".cellmenu").forEach((m) => m.remove()); }
 
@@ -2288,6 +2307,7 @@ renderPanelHead();
 renderPanel();
 renderView();
 document.addEventListener("click", () => { if (S.menu) { S.menu = null; renderChrome(); } closeCellMenu(); });
+document.querySelector(".cells")?.addEventListener("scroll", () => closeCellMenu(), { passive: true });   // a fixed menu must not float away from its cell
 document.addEventListener("keydown", (ev) => {
   if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "s") { ev.preventDefault(); if (ev.shiftKey) saveNotebookAs(); else saveNotebook(); }
   if (ev.key === "Escape") closeModal();

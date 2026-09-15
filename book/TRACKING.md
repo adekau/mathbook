@@ -338,3 +338,10 @@ Complex numbers (2026-09-14, Alex: the logo `e^(π i)` could not be computed; ch
    `a*g`: the unapplied `g` was a free variable (Mathematica reads it the same way, silently). `substituteFns` now
    expands a bare name of a function with parameters to its body over those parameters, so `integrate(g, a)`
    integrates `a*b` and `diff(g, b)` is `a`. The reference entry for `let` says so.
+- notebook: insert bar between cells, menu off the paper, no hidden input text — DONE 2026-09-14. A thin strip
+   between cells (and after the last) shows a rule with a `+ cell` pill on hover; a click inserts a cell there
+   (`insertGap`), as Mathematica's insertion bar does. The cell `⋮` menu now lives on the body as a fixed popup,
+   flipping above its button when there is no room below and closing when the paper scrolls — it used to sit
+   inside the scrolling paper, where a menu near the bottom grew a scrollbar. The input reserves room for the
+   action buttons only while they are shown (hover/active); a long input was hidden under invisible buttons.
+   `focusCell` focused before re-rendering, so Duplicate/Move/arrow navigation lost focus — now it renders first.

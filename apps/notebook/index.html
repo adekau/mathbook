@@ -181,11 +181,17 @@ button { font-family: var(--font); }
 .cells ::selection { background:var(--p-sel); }
 .cell { position:relative; display:grid; grid-template-columns:82px minmax(0,1fr) 30px; align-items:start; padding:8px 12px 10px 0; }
 .cell:hover { background:var(--p-cell-hover); }
+.gap { position:relative; height:12px; margin:-6px 0; cursor:pointer; z-index:2; }
+.gap::before { content:""; position:absolute; left:82px; right:30px; top:50%; border-top:1px solid var(--p-acc); opacity:0; transition:opacity .12s; }
+.gap .gappill { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-family:var(--code); font-size:10px; line-height:14px; padding:1px 9px; border-radius:9px; background:var(--p-acc); color:var(--on-acc); opacity:0; transition:opacity .12s; user-select:none; white-space:nowrap; }
+.gap:hover::before, .gap:hover .gappill { opacity:1; }
 .cell.active { background:var(--p-cell-active); }
 .cell .prompt { text-align:right; padding:5px 12px 0 0; line-height:23px; font-family:var(--code); font-size:11px; letter-spacing:0.01em; color:var(--p-mut3); user-select:none; }
 .cell.done .prompt { color:var(--p-acc); }
 .cell .mid { position:relative; min-width:0; }
-.cellin { width:100%; box-sizing:border-box; background:transparent; border:0; border-radius:6px; color:var(--p-ink); font-family:var(--code); font-size:14px; line-height:1.65; padding:5px 150px 5px 8px; }
+.cellin { width:100%; box-sizing:border-box; background:transparent; border:0; border-radius:6px; color:var(--p-ink); font-family:var(--code); font-size:14px; line-height:1.65; padding:5px 8px; }
+/* room for the action buttons only while they are shown, so a long input is not hidden under invisible buttons */
+.cell:hover .cellin, .cell.active .cellin { padding-right:150px; }
 .cell.active .cellin { background:var(--p-input-bg); box-shadow:inset 0 0 0 1px var(--p-input-br); }
 .cellin::placeholder { color:var(--p-ph); }
 html[data-outsize="s"] { --sz-out:17px; --sz-echo:14px; --sz-work:13px; --sz-sub:12px; }
@@ -259,7 +265,7 @@ svg .curve.c1 { stroke:var(--curve1); } svg .curve.c2 { stroke:var(--curve2); } 
 .modalfoot { display:flex; align-items:center; gap:8px; margin-top:14px; }
 .modalfoot button { font:12px var(--font); padding:5px 12px; border-radius:5px; border:1px solid var(--btn-edge); background:var(--btn); color:var(--ink-2); cursor:pointer; }
 .modalfoot button.primary { background:var(--primary); color:var(--pri-ink); border-color:var(--pri-edge); }
-.cellmenu { position:absolute; z-index:30; min-width:200px; padding:5px; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; box-shadow:var(--pop); font-family:var(--font); }
+.cellmenu { position:fixed; z-index:60; min-width:200px; padding:5px; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; box-shadow:var(--pop); font-family:var(--font); }
 .cellmenu .item { position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 10px; border-radius:5px; font-size:12.5px; color:var(--ink); cursor:default; white-space:nowrap; }
 .cellmenu .item:hover { background:var(--hov); }
 .cellmenu .item.off { color:var(--ink-faint); }
