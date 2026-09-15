@@ -319,3 +319,10 @@ Complex numbers (2026-09-14, Alex: the logo `e^(π i)` could not be computed; ch
    the protocol); old `.chalk` files with a single `points`/`text` migrate on load (`migratePlot`). The notebook
    shares one y-range across the curves, colours them by index (`--curve1…5`, both themes), and the studio's Graph
    shot draws them all; the Manim export emits one `axes.plot` per curve in a `VGroup`.
+- simp.fold-constants builds its result with `addN`/`mulN` — DONE 2026-09-14. `2 · 5` folded to the *one-element
+   product* `[10]`, which prints as `10`, so the notebook showed a `simp.identity` step ("a product of one factor
+   is that factor") that changed nothing visible — after every `la.scale`, every `diff.power` exponent (`3 − 1`),
+   every fully numeric sum. The fix is one word in `foldApply`; the termination proof goes through `M_addN_le`, and
+   the six-tier decrease through a proxy lemma `muLt_of_clean_via` (the collapsed result is no heavier and no
+   larger than the singleton the old proof handled). Soundness over ℤ, ℝ and ℂ rewrites with `eval?_addN` etc.
+   `diff(x^3, x)` is now two steps, not three; the origin-tracking test was updated accordingly.

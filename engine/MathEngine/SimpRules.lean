@@ -284,17 +284,20 @@ def identity : Rule simpW where
 -- simp.fold-constants
 -- ---------------------------------------------------------------------------
 
+/-- Fold the numerals of a sum or product into one. The result is built with `addN`/`mulN`, so when
+every term was a numeral the answer is that numeral, not a one-element sum or product that
+`simp.identity` would then have to collapse in a step of its own. -/
 def foldApply : Expr → Option RuleResult
   | .add es =>
     let nums := es.filter isNum
     if 2 ≤ nums.length then
-      some ⟨.add (.num (sumQ nums) :: es.filter (fun e => !isNum e)),
+      some ⟨addN (.num (sumQ nums) :: es.filter (fun e => !isNum e)),
         s!"Arithmetic on constants: {" + ".intercalate (nums.map Expr.toText)} = {(sumQ nums).toText}.", none, none⟩
     else none
   | .mul es =>
     let nums := es.filter isNum
     if 2 ≤ nums.length then
-      some ⟨.mul (.num (prodQ nums) :: es.filter (fun e => !isNum e)),
+      some ⟨mulN (.num (prodQ nums) :: es.filter (fun e => !isNum e)),
         s!"Arithmetic on constants: {" × ".intercalate (nums.map Expr.toText)} = {(prodQ nums).toText}.", none, none⟩
     else none
   | _ => none
@@ -325,9 +328,9 @@ def foldConstants : Rule simpW where
   decreasing e r h := by
     cases e <;> simp only [foldApply, reduceCtorEq] at h
     · split at h <;> simp only [Option.some.injEq, reduceCtorEq] at h
-      subst h; simp only [M_add]; exact fold_decreasing _ ‹_› _
+      subst h; simp only [M_add]; exact Nat.lt_of_le_of_lt (M_addN_le _) (fold_decreasing _ ‹_› _)
     · split at h <;> simp only [Option.some.injEq, reduceCtorEq] at h
-      subst h; simp only [M_mul]; exact fold_decreasing _ ‹_› _
+      subst h; simp only [M_mul]; exact Nat.lt_of_le_of_lt (M_mulN_le _) (fold_decreasing _ ‹_› _)
 
 -- ---------------------------------------------------------------------------
 -- simp.function

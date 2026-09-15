@@ -250,11 +250,11 @@ theorem foldConstants_soundR : RuleSoundR foldConstants := by
   cases e <;> simp only [foldConstants, foldApply, reduceCtorEq] at h
   · split at h <;> simp only [Option.some.injEq, reduceCtorEq] at h
     subst h; rename_i es _
-    rw [evalR_add, evalR_add, sumR_cons, evalR_num, sumQ_evalR ρ _ (hnums es),
+    rw [evalR_addN, evalR_add, sumR_cons, evalR_num, sumQ_evalR ρ _ (hnums es),
       ← sumR_perm ρ (List.filter_append_perm Expr.isNum es), sumR_append]
   · split at h <;> simp only [Option.some.injEq, reduceCtorEq] at h
     subst h; rename_i es _
-    rw [evalR_mul, evalR_mul, prodR_cons, evalR_num, prodQ_evalR ρ _ (hnums es),
+    rw [evalR_mulN, evalR_mul, prodR_cons, evalR_num, prodQ_evalR ρ _ (hnums es),
       ← prodR_perm ρ (List.filter_append_perm Expr.isNum es), prodR_append]
 
 -- ---------------------------------------------------------------------------

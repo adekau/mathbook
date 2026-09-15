@@ -259,7 +259,7 @@ theorem foldConstants_sound : RuleSound foldConstants := by
   cases e <;> simp only [foldConstants, foldApply, reduceCtorEq] at h
   · split at h <;> simp only [Option.some.injEq, reduceCtorEq] at h
     subst h; rename_i es _
-    rw [eval?_add] at hv ⊢
+    rw [eval?_add] at hv; rw [eval?_addN]
     rw [← evalSum?_perm ρ (List.filter_append_perm isNum es), evalSum?_append] at hv
     simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.some.injEq] at hv
     obtain ⟨a, ha, b, hb, rfl⟩ := hv
@@ -268,7 +268,7 @@ theorem foldConstants_sound : RuleSound foldConstants := by
     simp only [sumQ, this, hb, Int.zero_add]; rfl
   · split at h <;> simp only [Option.some.injEq, reduceCtorEq] at h
     subst h; rename_i es _
-    rw [eval?_mul] at hv ⊢
+    rw [eval?_mul] at hv; rw [eval?_mulN]
     rw [← evalProd?_perm ρ (List.filter_append_perm isNum es), evalProd?_append] at hv
     simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.some.injEq] at hv
     obtain ⟨a, ha, b, hb, rfl⟩ := hv

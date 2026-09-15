@@ -1506,6 +1506,37 @@ theorem sizeList_length_le : ∀ es : List Expr, es.length ≤ sizeList es
 
 -- simp.fold-constants ------------------------------------------------------
 
+theorem M_addN_cons_le (x : Expr) (l : List Expr) : M (addN (x :: l)) ≤ M (.add (x :: l)) := by
+  cases l with
+  | nil => simp only [addN, M.add_cons, ML.nil]; omega
+  | cons y l => simp only [addN]; exact Nat.le_refl _
+
+theorem M_mulN_cons_le (x : Expr) (l : List Expr) : M (mulN (x :: l)) ≤ M (.mul (x :: l)) := by
+  cases l with
+  | nil => simp only [mulN, M.mul, ML.cons, ML.nil]; omega
+  | cons y l => simp only [mulN]; exact Nat.le_refl _
+
+theorem size_addN_cons_le (x : Expr) (l : List Expr) : size (addN (x :: l)) ≤ size (.add (x :: l)) := by
+  cases l with
+  | nil => simp only [addN, size, sizeList]; omega
+  | cons y l => simp only [addN]; exact Nat.le_refl _
+
+theorem size_mulN_cons_le (x : Expr) (l : List Expr) : size (mulN (x :: l)) ≤ size (.mul (x :: l)) := by
+  cases l with
+  | nil => simp only [mulN, size, sizeList]; omega
+  | cons y l => simp only [mulN]; exact Nat.le_refl _
+
+/-- `muLt_of_clean` through a proxy `r'` that the result `r` is no heavier and no larger than
+(`addN`/`mulN` collapsing a singleton). -/
+theorem muLt_of_clean_via {r r' e : Expr} (hr : Clean r) (he : Clean e) (hM : M r ≤ M r') (hs : size r ≤ size r')
+    (h : M r' < M e ∨ (M r' = M e ∧ size r' < size e)) : MuLt (μ r) (μ e) := by
+  apply muLt_of_clean hr he
+  rcases h with h | ⟨h1, h2⟩
+  · left; omega
+  · rcases Nat.lt_or_eq_of_le hM with h' | h'
+    · left; omega
+    · right; exact ⟨by omega, by omega⟩
+
 theorem dec_foldConstants : Dec norm (scalarOnly foldConstants.toPlain) := dec_scalar fun e res hcn hm happ herr => by
   simp only [Rule.toPlain, foldConstants, foldApply] at happ
   split at happ
@@ -1517,11 +1548,11 @@ theorem dec_foldConstants : Dec norm (scalarOnly foldConstants.toPlain) := dec_s
       simp only [children] at hcs
       have hnums : ∀ d ∈ es.filter isNum, isNum d = true := fun d hd => (List.mem_filter.mp hd).2
       obtain ⟨hw, _⟩ := nums_weight _ hnums h2
-      have hres : Clean (.add (.num (sumQ (es.filter isNum)) :: es.filter fun e => !isNum e)) := Clean.add fun c hc => by
+      have hres : Clean (addN (.num (sumQ (es.filter isNum)) :: es.filter fun e => !isNum e)) := Clean.addN fun c hc => by
         rcases List.mem_cons.mp hc with rfl | hc
         · exact Clean.num _
         · exact hcs c (List.mem_filter.mp hc).1
-      apply muLt_of_clean hres he
+      apply muLt_of_clean_via hres he (M_addN_cons_le _ _) (size_addN_cons_le _ _)
       have hsplit := ML_filter_add isNum es
       have hne : es ≠ [] := by cases es <;> simp_all
       rw [M.add_cons, M_add_ne_nil hne]
@@ -1540,11 +1571,11 @@ theorem dec_foldConstants : Dec norm (scalarOnly foldConstants.toPlain) := dec_s
       simp only [children] at hcs
       have hnums : ∀ d ∈ es.filter isNum, isNum d = true := fun d hd => (List.mem_filter.mp hd).2
       obtain ⟨_, hw⟩ := nums_weight _ hnums h2
-      have hres : Clean (.mul (.num (prodQ (es.filter isNum)) :: es.filter fun e => !isNum e)) := Clean.mul fun c hc => by
+      have hres : Clean (mulN (.num (prodQ (es.filter isNum)) :: es.filter fun e => !isNum e)) := Clean.mulN fun c hc => by
         rcases List.mem_cons.mp hc with rfl | hc
         · exact Clean.num _
         · exact hcs c (List.mem_filter.mp hc).1
-      apply muLt_of_clean hres he
+      apply muLt_of_clean_via hres he (M_mulN_cons_le _ _) (size_mulN_cons_le _ _)
       left
       have hsplit := ML_filter_add isNum es
       have hlen := length_filter_add isNum es
