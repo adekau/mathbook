@@ -164,15 +164,18 @@ export interface ExplainResult {
   trace?: StepRelation[];
 }
 
-/** `plot(f, x, from, to[, n])`: the engine simplifies `f` under the session, records the cell like
- *  any other (so `engine.explain` works on it), and samples it on a uniform grid. Drawing is the
- *  frontend's; a sample is `null` where `f` has no finite value. Optional method (rule 5). */
+/** `plot(f, x, from, to[, n])` or `plot([f, g, …], x, from, to[, n])`: the engine simplifies the
+ *  function (or the list, entrywise) under the session, records the cell like any other (so
+ *  `engine.explain` works on it), and samples each curve on a uniform grid. Drawing is the
+ *  frontend's; a sample is `null` where the curve has no finite value. Optional method (rule 5). */
 export interface PlotParams { sessionId: string; cellId: string; source: string; showWork?: boolean; paths?: boolean }
+/** One curve: its normalized term (rendered) and its samples. */
+export interface PlotSeries { rendered: Rendered; points: [number, number | null][] }
 export interface PlotResult {
   ok: true; kind: "plot";
   value: WireExpr; rendered: Rendered;
   var: string; from: number; to: number;
-  points: [number, number | null][];
+  series: PlotSeries[];
   derivation?: Derivation; inputRendered?: Rendered; label?: number;
 }
 

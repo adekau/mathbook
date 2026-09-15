@@ -32,7 +32,7 @@ const DOCS: Doc[] = [
   { name: "map", sig: "map(P; a->b, c->d, …) · monotone(P, f) · lfp(P, f) · gfp(P, f) · fixpoints(P, f)", blurb: "A map on a poset given as a table (other elements are fixed). monotone checks every pair; lfp and gfp iterate from ⊥ and ⊤ and show the Kleene chain, which is proved to end at the least (greatest) fixed point.", examples: ["let f = map(D; 1->2, 3->6)", "monotone(D, f)", "lfp(D, f)"] },
   { name: "lambda", sig: "λx. e  ·  type \\lam", blurb: "A λ-cell: any cell with a λ (type \\lam, then Tab or space) or a backslash. Application is juxtaposition, λx y. e binds two, digits are Church numerals, and name := term defines. The engine reduces in normal order one β-step at a time; toggle de Bruijn indices in the View menu.", examples: ["(λx. x) y", "(λx. λy. x y) y", "add 2 3", "TWO := succ (succ zero)"] },
   { name: "church", sig: "true false and or not if · zero succ add mul pow iszero · pair fst snd · id const K S I omega Y", blurb: "The Church library, available in every λ-cell; a normal form that is a Church numeral or boolean is read out beside the result.", examples: ["if (iszero 0) a b", "fst (pair 1 2)", "mul 2 3"] },
-  { name: "plot", sig: "plot(f, x, from, to[, n])", blurb: "Graph of f over [from, to]. The engine simplifies f under the session (a derivative plots as the derivative), records the derivation, and samples it exactly where it has a finite value; the notebook draws the samples.", examples: ["plot(sin(x)/x, x, -10, 10)", "plot(diff(x^3 - 3x, x), x, -3, 3)"] },
+  { name: "plot", sig: "plot(f, x, from, to[, n])  ·  plot([f, g, …], x, from, to[, n])", blurb: "Graph of f — or of several functions, given as a list — over [from, to]. The engine simplifies each under the session (a derivative plots as the derivative), records the derivation, and samples every curve where it has a finite value; the notebook draws them with a legend.", examples: ["plot(sin(x)/x, x, -10, 10)", "plot([sin(x), cos(x)], x, 0, 2pi)", "plot([x^2, diff(x^2, x)], x, -3, 3)"] },
   { name: "expand", sig: "expand(e)", blurb: "Multiplies out products and powers of sums by repeated distribution.", ref: "https://mathworld.wolfram.com/Expand.html", examples: ["expand((x+1)^3)", "expand((a+b)^4)"] },
   { name: "simplify", sig: "simplify(e)", blurb: "Explicit request for the normal form. Every cell is simplified anyway; this names the intent.", examples: ["simplify(x + x)"] },
   { name: "rref", sig: "rref(M)", blurb: "Gauss–Jordan elimination to reduced row echelon form. Each row operation is recorded as its own step.", ref: "https://mathworld.wolfram.com/ReducedRowEchelonForm.html", examples: ["rref([1,2,3;4,5,6;7,8,10])", "rref([1,2;2,4])"] },
@@ -121,7 +121,16 @@ const SAMPLES = [
 // State
 // ---------------------------------------------------------------------------
 
-interface PlotData { var: string; from: number; to: number; points: [number, number | null][]; text: string }
+/** One curve of a plot: its normalized term (LaTeX and plain text, the latter for Manim) and its samples. */
+interface PlotSeries { latex: string; text: string; points: [number, number | null][] }
+interface PlotData { var: string; from: number; to: number; series: PlotSeries[] }
+/** How many curve colours the stylesheet defines (`svg .curve.c0` … ). */
+const CURVE_COLOURS = 6;
+/** A `.chalk` file from before lists in `plot` stored one curve as `points` + `text`. */
+function migratePlot(p: PlotData | { var: string; from: number; to: number; points: [number, number | null][]; text: string }): PlotData {
+  if ("series" in p) return p;
+  return { var: p.var, from: p.from, to: p.to, series: [{ latex: "", text: p.text, points: p.points }] };
+}
 
 interface Cell {
   id: string;
@@ -305,7 +314,7 @@ async function runCell(cell: Cell) {
       delete cell.error;
       delete cell.plot; delete cell.outDeBruijn; delete cell.reading; delete cell.kind; delete cell.hasse; delete cell.summary;
       if ("kind" in r && r.kind === "poset") { cell.kind = "order"; cell.hasse = r.hasse; cell.summary = r.summary; }
-      if ("kind" in r && r.kind === "plot") cell.plot = { var: r.var, from: r.from, to: r.to, points: r.points, text: r.rendered.text };
+      if ("kind" in r && r.kind === "plot") cell.plot = { var: r.var, from: r.from, to: r.to, series: r.series.map((s) => ({ latex: s.rendered.latex, text: s.rendered.text, points: s.points })) };
       if ("kind" in r && r.kind === "lambda") { cell.outDeBruijn = r.renderedDeBruijn?.latex; cell.reading = r.reading; cell.kind = "λ-term"; }
       log("ok", `Out[${cell.label}] ${r.rendered.text}  (${cell.ms.toFixed(1)} ms, ${cell.steps.length} steps)`);
       if ("bound" in r && r.bound?.length) log("ok", `bound ${r.bound.join(", ")}`);
@@ -558,7 +567,7 @@ function cellsFromFile(doc: ChalkFile): Cell[] {
     if (c.echoLatex) cell.echoLatex = c.echoLatex;
     if (c.steps) cell.steps = c.steps;
     if (c.error) cell.error = c.error;
-    if (c.plot) cell.plot = c.plot;
+    if (c.plot) cell.plot = migratePlot(c.plot);
     return cell;
   });
 }
@@ -904,7 +913,7 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1): SVGSVGElement {
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${w} ${hgt}`); svg.setAttribute("width", String(w)); svg.setAttribute("height", String(hgt));
-  const ys = p.points.map((q) => q[1]).filter((y): y is number => y !== null).sort((a, b) => a - b);
+  const ys = p.series.flatMap((s) => s.points.map((q) => q[1])).filter((y): y is number => y !== null).sort((a, b) => a - b);
   let y0 = -1, y1 = 1;
   if (ys.length) {
     // trim the tails so an asymptote does not flatten the rest
@@ -935,16 +944,18 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1): SVGSVGElement {
     line(sx(x), hgt - B, sx(x), hgt - B + 4, "tick"); text(sx(x), hgt - 6, nice(x), "tl");
     line(L - 4, sy(y), L, sy(y), "tick"); text(L - 6, sy(y) + 3, nice(y), "tl r");
   }
-  // the curve, in segments
-  const n = Math.max(0, Math.min(p.points.length, Math.round(p.points.length * frac)));
-  let d = "", pen = false;
-  for (let i = 0; i < n; i++) {
-    const [x, y] = p.points[i]!;
-    if (y === null || y < y0 || y > y1) { pen = false; continue; }
-    d += `${pen ? "L" : "M"}${sx(x).toFixed(1)} ${sy(y).toFixed(1)} `; pen = true;
-  }
-  const path = document.createElementNS(NS, "path");
-  path.setAttribute("d", d); path.setAttribute("class", "curve"); svg.append(path);
+  // the curves, each in segments
+  p.series.forEach((s, si) => {
+    const n = Math.max(0, Math.min(s.points.length, Math.round(s.points.length * frac)));
+    let d = "", pen = false;
+    for (let i = 0; i < n; i++) {
+      const [x, y] = s.points[i]!;
+      if (y === null || y < y0 || y > y1) { pen = false; continue; }
+      d += `${pen ? "L" : "M"}${sx(x).toFixed(1)} ${sy(y).toFixed(1)} `; pen = true;
+    }
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", d); path.setAttribute("class", `curve c${si % CURVE_COLOURS}`); svg.append(path);
+  });
   text(w - R, T + 10, `${p.var}`, "tl r");
   return svg;
 }
@@ -1137,8 +1148,18 @@ function renderCellBody(cell: Cell) {
       const box = h("div", "plotbox");
       box.append(plotSvg(cell.plot, 520, 240));
       const cap = h("div", "plotcap");
-      cap.innerHTML = tex(cell.outLatex, true);
-      wireTerm(cap, cell, { kind: "output" });
+      if (cell.plot.series.length > 1) {
+        cell.plot.series.forEach((s, i) => {
+          const it = h("span", `legend c${i % CURVE_COLOURS}`);
+          it.append(h("i", "swatch")); it.insertAdjacentHTML("beforeend", tex(s.latex));
+          it.title = "Explain this curve";
+          it.addEventListener("click", () => void explain(cell, { kind: "output" }, [i]));   // entry i of the list
+          cap.append(it);
+        });
+      } else {
+        cap.innerHTML = tex(cell.outLatex, true);
+        wireTerm(cap, cell, { kind: "output" });
+      }
       val.classList.add("isplot");
       val.append(box, cap);
     } else if (S.deBruijn && cell.outDeBruijn) {
@@ -1719,7 +1740,8 @@ function sendToScene(cell: Cell, target?: number | "new") {
     shots.push(mk(st.rule, st.afterRendered.latex, defaultAnim(st.rule), 1.4, st.explanation));
   }
   if (cell.plot) {
-    const g = mk("Graph", cell.outLatex, "Create", 2.0, `Plot of the function over [${cell.plot.from}, ${cell.plot.to}], sampled by the engine.`);
+    const k = cell.plot.series.length;
+    const g = mk("Graph", cell.outLatex, "Create", 2.0, `Plot of ${k > 1 ? `${k} functions` : "the function"} over [${cell.plot.from}, ${cell.plot.to}], sampled by the engine.`);
     g.plot = cell.plot;
     shots.push(g);
   }
@@ -1775,15 +1797,17 @@ function manimSceneCode(scene: Scene | null): string {
     L.push(`        # ${q(s.label)}`);
     if (s.plot) {
       const pl = s.plot;
-      const ys = pl.points.map((pt) => pt[1]).filter((y): y is number => y !== null);
+      const ys = pl.series.flatMap((c) => c.points.map((pt) => pt[1])).filter((y): y is number => y !== null);
       const ymin = ys.length ? Math.min(0, ...ys) : -1, ymax = ys.length ? Math.max(0, ...ys) : 1;
+      const colours = ["YELLOW", "BLUE", "GREEN", "RED", "PURPLE", "ORANGE"];
       if (!first) L.push("        self.play(FadeOut(expr), run_time=0.3)");
       L.push(`        axes = Axes(x_range=[${pl.from}, ${pl.to}], y_range=[${ymin.toFixed(2)}, ${ymax.toFixed(2)}], axis_config={"include_numbers": True})`);
-      L.push(`        graph = axes.plot(lambda ${pl.var}: ${pyExpr(pl.text)}, x_range=[${pl.from}, ${pl.to}], color=YELLOW)`);
+      pl.series.forEach((c, i) => L.push(`        graph${i} = axes.plot(lambda ${pl.var}: ${pyExpr(c.text)}, x_range=[${pl.from}, ${pl.to}], color=${colours[i % colours.length]})`));
+      L.push(`        graphs = VGroup(${pl.series.map((_, i) => `graph${i}`).join(", ")})`);
       L.push(`        label = MathTex(r"${s.tex}", font_size=36).to_corner(UR)`);
       L.push("        self.play(Create(axes), run_time=0.8)");
-      L.push(`        self.play(Create(graph), FadeIn(label), run_time=${s.dur.toFixed(1)})`);
-      L.push("        expr = VGroup(axes, graph, label)");
+      L.push(`        self.play(Create(graphs), FadeIn(label), run_time=${s.dur.toFixed(1)})`);
+      L.push("        expr = VGroup(axes, graphs, label)");
       first = false;
       L.push("");
       continue;

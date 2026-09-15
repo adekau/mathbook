@@ -307,3 +307,15 @@ Complex numbers (2026-09-14, Alex: the logo `e^(π i)` could not be computed; ch
    have a `complex` column; the notebook shows it for such cells and "proved over ℝ only" for the rest. Book: a new
    chapter, complex numbers and Euler's identity (Part I). Not proved over ℂ: collect-powers (needs `b ≠ 0`,
    `Complex.cpow_add`), radicals, expand, the derivative rules (no complex derivative semantics).
+- parser: a numeral over a nonzero numeral is that rational — DONE 2026-09-14. `3/4` used to parse as the
+   product `3 · 4⁻¹`, so `cos(3/4 π)` showed a `simp.power`, a `simp.fold-constants` and a `simp.identity` step
+   before any trigonometry (the reference engine's convention, ported unnoticed). Now `n/d` for numerals is the
+   literal `n/d`; `x/y/z` still tests the parser's left associativity, and `8/2/2` is `2`.
+- plot: lists of functions — DONE 2026-09-14. `plot([f, g, …], x, from, to[, n])` draws one curve per entry. The
+   list is the one-row matrix the parser already reads, so the engine normalizes it as one term (scalar rules
+   rewrite inside matrix entries; `plotFns` accepts a row or a column and refuses a genuine matrix) and records
+   one derivation, so `explain` still works — a legend entry in the notebook explains that entry of the output
+   list (path `[i]`). The reply's `points` became `series: [{rendered, points}]`, one per curve (`PlotSeries` in
+   the protocol); old `.chalk` files with a single `points`/`text` migrate on load (`migratePlot`). The notebook
+   shares one y-range across the curves, colours them by index (`--curve1…5`, both themes), and the studio's Graph
+   shot draws them all; the Manim export emits one `axes.plot` per curve in a `VGroup`.

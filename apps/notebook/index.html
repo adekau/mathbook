@@ -26,6 +26,7 @@
   --btn-a:#373734; --btn-b:#2b2b28; --btn-c:#3e3e3a; --btn-edge:#171716; --btn-edge2:#1b1b19; --btn-ink:#dcd8d0; --btn-ink2:#c4c0b8;
   --danger:#f0897c; --danger-hi:#ffb0a4; --danger-2:#e0574a; --danger-soft:rgba(224,87,74,0.16);
   --ok:#93b04f; --ok-2:#6d8a35; --ok-soft:rgba(147,176,79,0.16); --warn:#b07d16;
+  --curve1:#6ea0e0; --curve2:#8fbf5a; --curve3:#d67fb8; --curve4:#57bdb1; --curve5:#b9b4c8;
   --stage-bg:#131312; --scrim:rgba(18,18,17,0.88);
   --hov:rgba(255,255,255,0.06); --chip-bg:rgba(255,255,255,0.1); --pill-bg:rgba(255,255,255,0.18);
   --hl-a:rgba(255,255,255,0.08); --hl-b:rgba(255,255,255,0.05); --hl-c:rgba(255,255,255,0.26);
@@ -54,6 +55,7 @@ html[data-theme="light"] {
   --btn-a:#fdf7ec; --btn-b:#e6d9c3; --btn-c:#f6eddc; --btn-edge:#a08b6c; --btn-edge2:#a8937a; --btn-ink:#4a3c2e; --btn-ink2:#5a4a39;
   --danger:#a33322; --danger-hi:#8d2a1a; --danger-2:#c0442f; --danger-soft:rgba(163,51,34,0.12);
   --ok:#54691c; --ok-2:#455614; --ok-soft:rgba(92,117,32,0.14); --warn:#8a6206;
+  --curve1:#2f6bb5; --curve2:#4f7f1f; --curve3:#a3407f; --curve4:#237f75; --curve5:#5c5970;
   --stage-bg:#e4d9c5; --scrim:rgba(240,232,219,0.92);
   --hov:rgba(90,70,45,0.07); --chip-bg:rgba(90,70,45,0.1); --pill-bg:rgba(90,70,45,0.16);
   --hl-a:rgba(255,255,255,0.7); --hl-b:rgba(255,255,255,0.6); --hl-c:rgba(255,255,255,0.8);
@@ -214,6 +216,11 @@ svg .hedge { stroke:var(--ink-mut); stroke-width:1.4; }
 svg .hnode { fill:var(--acc); }
 svg .hlabel { font-family:var(--code); font-size:11px; fill:var(--ink); }
 svg .curve { fill:none; stroke:var(--acc); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+svg .curve.c1 { stroke:var(--curve1); } svg .curve.c2 { stroke:var(--curve2); } svg .curve.c3 { stroke:var(--curve3); } svg .curve.c4 { stroke:var(--curve4); } svg .curve.c5 { stroke:var(--curve5); }
+.plotcap .legend { display:inline-flex; align-items:center; gap:7px; margin:2px 18px 2px 0; cursor:pointer; }
+.plotcap .legend:hover { color:var(--p-ink-strong); }
+.plotcap .swatch { display:inline-block; width:16px; height:3px; border-radius:2px; background:var(--acc); }
+.plotcap .legend.c1 .swatch { background:var(--curve1); } .plotcap .legend.c2 .swatch { background:var(--curve2); } .plotcap .legend.c3 .swatch { background:var(--curve3); } .plotcap .legend.c4 .swatch { background:var(--curve4); } .plotcap .legend.c5 .swatch { background:var(--curve5); }
 .plotshot { display:flex; justify-content:center; padding:12px; }
 .step.sub { padding-top:5px; padding-bottom:5px; grid-template-columns:34px minmax(0,224px) minmax(0,1fr); }
 .step.sub .no { width:auto; padding:0 6px; border-radius:9px; }

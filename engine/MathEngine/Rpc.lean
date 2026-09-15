@@ -216,9 +216,11 @@ def plot (st : Store) (params : Json) : Store × Json :=
     | .error (code, msg, span) => (st, errorJson code msg span)
     | .ok (_, out, d, pl) =>
       let paths := params.getBool "paths"
-      let pts := pl.points.map fun (t, y) => Json.arr #[floatJson t, match y with | some v => floatJson v | none => .null]
+      let ptsJson (pts : Array (Float × Option Float)) : Json :=
+        .arr (pts.map fun (t, y) => Json.arr #[floatJson t, match y with | some v => floatJson v | none => .null])
+      let series := pl.series.map fun (g, pts) => Json.obj #[("rendered", Rendered.toJson g false), ("points", ptsJson pts)]
       let res := #[("ok", .bool true), ("kind", .str "plot"), ("value", out.toJson), ("rendered", Rendered.toJson out paths),
-        ("var", .str pl.var), ("from", floatJson pl.from_), ("to", floatJson pl.to), ("points", .arr pts)]
+        ("var", .str pl.var), ("from", floatJson pl.from_), ("to", floatJson pl.to), ("series", .arr series)]
       let res := if params.getBool "showWork" then
           (res.push ("derivation", d.toJson paths)).push ("inputRendered", Rendered.toJson d.input paths)
         else res

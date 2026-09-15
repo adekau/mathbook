@@ -334,16 +334,26 @@ def orderCell (s : Session) (cellId source : String) :
       | .error m, _ | _, .error m => err m
     | h, _ => err s!"{h}: wrong arguments (see the reference)"
 
-/-- A sampled plot: the variable, the range, and `(t, y)` pairs (`none` where `f` has no finite value). -/
+/-- A sampled plot: the variable, the range, and one series per function — its normalized term and
+`(t, y)` pairs (`none` where it has no finite value). -/
 structure Plot where
   var : String
   from_ : Float
   to : Float
-  points : Array (Float × Option Float)
+  series : Array (Expr × Array (Float × Option Float))
 
-/-- `plot(f, x, from, to[, n])`: simplify `f` under the session (so derivatives and session functions
-plot as what they are), record the cell like any other, and sample `f` on a uniform grid with the
-numeric evaluator. Sampling is presentation: the derivation shown is `f`'s. -/
+/-- The curves a plot argument names: a list `[f, g, …]` (which the parser reads as a one-row
+matrix; a column is accepted too) is one curve per entry, a scalar is one curve, and a genuine
+matrix is none. -/
+def plotFns : Expr → Option (List Expr)
+  | .matrix [row] => some row
+  | .matrix rows => if rows.all (·.length == 1) then some (rows.filterMap List.head?) else none
+  | e => some [e]
+
+/-- `plot(f, x, from, to[, n])` or `plot([f, g, …], x, from, to[, n])`: simplify the function (or
+the list, entrywise) under the session — so derivatives and session functions plot as what they
+are — record the cell like any other, and sample each curve on a uniform grid with the numeric
+evaluator. Sampling is presentation: the derivation shown is the list's. -/
 def plotCell (s : Session) (cellId source : String) :
     Session × Except (String × String × Option (Nat × Nat)) (Expr × Expr × Derivation × Plot) :=
   match parseStmt source (s.fns.map (·.1)) with
@@ -365,13 +375,17 @@ def plotCell (s : Session) (cellId source : String) :
         match (normalizeT pipelineRules pipelineOrdered input).run #[] with
         | (.error msg, _) => (s, .error ("eval", msg, none))
         | (.ok output, steps) =>
+          match plotFns output with
+          | none => (s, .error ("eval", "plot: give one function or a list [f, g, …], not a matrix", none))
+          | some fns =>
           let d : Derivation := ⟨input, steps, output⟩
           let s := { s with cells := (cellId, ⟨output, d⟩) :: s.cells.filter (·.1 != cellId) }
-          let points := (Array.range n).map fun i =>
+          let sample (g : Expr) := (Array.range n).map fun i =>
             let t := lo + (hi - lo) * i.toFloat / (n - 1).toFloat
-            let y := (evalNumeric [(x, t)] output).toOption.filter fun v => v.isFinite
+            let y := (evalNumeric [(x, t)] g).toOption.filter fun v => v.isFinite
             (t, y)
-          (s, .ok (f, output, d, ⟨x, lo, hi, points⟩))
+          let series := fns.toArray.map fun g => (g, sample g)
+          (s, .ok (f, output, d, ⟨x, lo, hi, series⟩))
       | _, _ => (s, .error ("eval", "plot: the range must evaluate to numbers", none))
     | _ => bad
 
