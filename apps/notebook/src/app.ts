@@ -49,7 +49,7 @@ const DOCS: Doc[] = [
   { name: "abs", sig: "abs(x)", blurb: "Absolute value; folds on numeric arguments.", examples: ["abs(-3)"] },
   { name: "i", sig: "i · conj(z) · re(z) · im(z) · abs(z) · pi · ℯ", blurb: "The imaginary unit, with i² = −1. Gaussian numerals a + b·i multiply, divide and take powers exactly; conj, re, im and abs read them; sin, cos and tan take exact values at rational multiples of π; and exp(iθ) becomes cos θ + i sin θ where both are exact, so ℯ^(π i) is −1. A cell that mentions i is read over ℂ and shows each rule's status there.", examples: ["ℯ^(pi*i)", "(1+i)*(2-i)", "abs(3+4i)", "cos(pi/3)"] },
   { name: "%", sig: "% · %% · %n", blurb: "The previous output, the one before it, or Out[n]: Mathematica's output references. The engine numbers every evaluation and substitutes the value before anything else happens, so the input interpretation shows what % stood for.", examples: ["diff(%, x)", "rref(%)", "%1 + %2"] },
-  { name: "let", sig: "let name = e · let f(x, y) = e", blurb: "Binds a name in this session, or defines a function of its parameters. Later cells substitute the value or expand the call.", examples: ["let f = x^3 - 3x", "let sq(x) = x^2 + 1", "diff(sq(x), x)"] },
+  { name: "let", sig: "let name = e · let f(x, y) = e", blurb: "Binds a name in this session, or defines a function of its parameters. Later cells substitute the value or expand the call; a bare function name stands for its body over its own parameters, so after let g(a, b) = a*b, integrate(g, a) integrates a*b.", examples: ["let f = x^3 - 3x", "let sq(x) = x^2 + 1", "diff(sq(x), x)", "let g(a, b) = a*b", "integrate(g, a)"] },
 ];
 const DOC_BY_NAME = new Map(DOCS.map((d) => [d.name, d]));
 

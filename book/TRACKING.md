@@ -334,3 +334,7 @@ Complex numbers (2026-09-14, Alex: the logo `e^(π i)` could not be computed; ch
    single one; `plot` shows its list form when the first argument starts with `[`. Session functions get it too:
    the evaluate reply's `params` (already emitted by the engine, now in the protocol) are remembered per session.
    Esc dismisses it for that call site until the caret leaves; View → Signature help turns it off (`chalkmath.sighelp`).
+- a bare session-function name is its body — DONE 2026-09-14. After `let g(a, b) = a*b`, `integrate(g, a)` gave
+   `a*g`: the unapplied `g` was a free variable (Mathematica reads it the same way, silently). `substituteFns` now
+   expands a bare name of a function with parameters to its body over those parameters, so `integrate(g, a)`
+   integrates `a*b` and `diff(g, b)` is `a`. The reference entry for `let` says so.

@@ -319,6 +319,7 @@ def tests : TestM Unit := do
   (st, r) := ev st "diff(sq(x), x)"; check "differentiate a session function" r "2*x"
   (st, r) := ev st "sq(sq(2))"; check "nested calls" r "26"
   (st, r) := ev st "let g(a, b) = a*b - sq(a)"; check "definition using another function" r "-(a^2 + 1) + a*b"
+  (st, r) := ev st "diff(g, b)"; check "a bare function name stands for its body over its parameters" r "a"
   (st, r) := ev st "g(2, 5)"; check "two parameters" r "5"
   (st, r) := ev st "let sqz(zz) = zz^2 + 1"; check "let with a parameter named like a later binding" r "zz^2 + 1"
   (st, r) := ev st "let zz = 7"; check "bind zz" r "7"

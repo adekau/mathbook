@@ -15,13 +15,21 @@ abbrev FnDef := List String × Expr
 
 /-- Expand calls of session functions: `f(a, b)` becomes the body with the parameters replaced by
 the (already expanded) arguments. A call with the wrong number of arguments is left alone. The body
-is not expanded again, so a self-referential definition unfolds one level per evaluation. -/
+is not expanded again, so a self-referential definition unfolds one level per evaluation.
+
+A bare `f` — the name of a function of one or more parameters, unapplied — stands for its body over
+its own parameters, so after `let g(a, b) = a·b`, `integrate(g, a)` integrates `a·b`. (Mathematica
+would read the bare `g` as an unrelated symbol and answer `a·g`; a silent free variable is a trap.) -/
 partial def substituteFns (fns : List (String × FnDef)) : Expr → Expr
   | .fn f args =>
     let args' := args.map (substituteFns fns)
     match fns.lookup f with
     | some (params, body) => if params.length = args'.length then substitute (params.zip args') body else .fn f args'
     | none => .fn f args'
+  | .var x =>
+    match fns.lookup x with
+    | some (_ :: _, body) => body
+    | _ => .var x
   | e => withChildren e ((children e).map (substituteFns fns))
 
 def constants : List (String × Float) := [("π", 3.141592653589793), ("e", 2.718281828459045)]
