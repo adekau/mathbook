@@ -31,7 +31,7 @@ theorem mem_pipeline_iff (r : PlainRule) : r ∈ (pipelineRulesWith norm) ↔
     r = diffProduct ∨ r = diffPower ∨ r = diffChain ∨ r = diffMatrix ∨
     r = laAdd ∨ r = laScalarMul ∨ r = laMul ∨ r = laTranspose ∨ r = laDet ∨ r = laPow ∨ r = laDot ∨ r = laNorm ∨ r = laConj ∨
     r = scalarOnly iPower ∨ r = scalarOnly cxArith ∨ r = scalarOnly cxPow ∨ r = scalarOnly cxConj ∨ r = scalarOnly cxReIm ∨
-    r = scalarOnly cxAbs ∨ r = scalarOnly exactTrig ∨ r = scalarOnly euler ∨ r = scalarOnly eulerPower ∨
+    r = scalarOnly cxAbs ∨ r = scalarOnly exactTrig ∨ r = scalarOnly euler ∨ r = scalarOnly eulerPower ∨ r = scalarOnly expProduct ∨
     r = scalarOnly flatten.toPlain ∨ r = scalarOnly identity.toPlain ∨ r = scalarOnly foldConstants.toPlain ∨
     r = scalarOnly functionRules.toPlain ∨ r = scalarOnly powerRules.toPlain ∨ r = scalarOnly collectPowers.toPlain ∨
     r = scalarOnly collectTerms.toPlain ∨ r = scalarOnly parityPowMul ∨ r = scalarOnly parityPowPow ∨
@@ -2612,6 +2612,34 @@ theorem dec_cxPow : Dec norm (scalarOnly cxPow) := dec_scalar fun e res hcn hm h
     · simp at happ
   · simp at happ
 
+theorem dec_expProduct : Dec norm (scalarOnly expProduct) := dec_scalar fun e res hcn hm happ herr => by
+  simp only [expProduct] at happ
+  split at happ
+  · rename_i es
+    split at happ
+    · obtain ⟨he, hcs⟩ := clean_of_scalar hcn hm (by simp [cmdOwn]) (by simp [d3Own]) rfl
+      simp only [children] at hcs
+      have hres : Clean (mulN (.fn "exp" [.add ((es.filter isExp).map expArg)] :: es.filter (fun f => !isExp f))) :=
+        Clean.mulN fun c hc => by
+          simp only [List.mem_cons] at hc
+          rcases hc with rfl | hc
+          · refine Clean.fn₁ (by decide) (by decide) (Clean.add fun a ha => ?_)
+            obtain ⟨f, hf, rfl⟩ := List.mem_map.mp ha
+            obtain ⟨hmem, hexp⟩ := List.mem_filter.mp hf
+            have hcf := hcs f hmem
+            match f, hexp with
+            | .fn "exp" [a], _ => exact hcf.child (by simp [children, expArg])
+            | .num _, h | .var _, h | .add _, h | .mul _, h | .pow _ _, h | .matrix _, h => simp [isExp] at h
+            | .fn g [], h | .fn g (_ :: _ :: _), h => simp [isExp] at h
+            | .fn g [a], h =>
+              by_cases hg : g = "exp"
+              · subst hg; exact hcf.child (by simp [children, expArg])
+              · simp [isExp, hg] at h
+          · exact hcs c (List.mem_filter.mp hc).1
+      exact dec_guarded happ hres he
+    · simp at happ
+  · simp at happ
+
 theorem dec_cxConj : Dec norm (scalarOnly cxConj) := dec_scalar fun e res hcn hm happ herr => by
   simp only [cxConj] at happ
   split at happ
@@ -2702,7 +2730,7 @@ theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := 
   rw [mem_pipeline_iff] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
     rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact dec_cmdSimplify
   · exact dec_cmdExpand
   · exact dec_cmdRref
@@ -2738,6 +2766,7 @@ theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := 
   · exact dec_exactTrig
   · exact dec_euler
   · exact dec_eulerPower
+  · exact dec_expProduct
   · exact dec_flatten
   · exact dec_identity
   · exact dec_foldConstants

@@ -1,0 +1,387 @@
+\chapter{Inner Products and Fourier Series: Drawing Llamas with Circles}\label{ch:fourier}\chaptermark{Fourier Series}
+
+In 2020, a few months after finishing the degree, the author wrote an article about drawing a
+llama with a thousand rotating circles. Six years later the article reads like someone else's:
+the symbols are familiar, the reasons are gone. This chapter re-derives it, with the engine doing
+the calculus, and ends where the article did --- at a picture drawn by circles connected tip to
+tail. On the way it needs three things the earlier chapters built separately and never joined:
+the inner product of Chapter~\ref{ch:systems}, the definite integral of
+Chapter~\ref{ch:anti}, and Euler's formula of Chapter~\ref{ch:cx}.
+
+\section{Inner products}
+
+\begin{definition}
+  The \emph{inner product} of $u, v \in \mathbb{R}^n$ is $\langle u, v\rangle = \sum_i u_i v_i$;
+  of $u, v \in \mathbb{C}^n$ it is $\langle u, v\rangle = \sum_i u_i \overline{v_i}$. The
+  \emph{norm} is $\|v\| = \sqrt{\langle v, v\rangle}$, and $u, v$ are \emph{orthogonal} when
+  $\langle u, v\rangle = 0$.
+\end{definition}
+
+Over $\mathbb{C}$ the conjugate is what makes $\langle v, v\rangle = \sum |v_i|^2$ a nonnegative
+real number, so that the norm is a length; the price is that the inner product is linear in its
+first argument and \emph{antilinear} in its second, $\langle u, \lambda v\rangle =
+\bar\lambda\langle u, v\rangle$. The engine's \rn{dot} is the bilinear sum $\sum u_i v_i$, as
+Mathematica's \texttt{Dot} is; the Hermitian product is \rn{dot(u, conj(v))}.
+
+\begin{theorem}[Coefficients from an orthonormal basis]\label{thm:coeff}
+  Let $e_1, \dots, e_n$ be orthonormal: $\langle e_j, e_k\rangle = 1$ if $j = k$ and $0$
+  otherwise. If $w = \sum_k c_k e_k$, then $c_k = \langle w, e_k\rangle$ for every $k$.
+\end{theorem}
+\begin{proof}
+  $\langle w, e_k\rangle = \big\langle \sum_j c_j e_j, e_k\big\rangle = \sum_j c_j \langle e_j,
+  e_k\rangle = c_k$, by linearity in the first argument and orthonormality.
+\end{proof}
+
+This is the whole of Fourier analysis in one line: \emph{a coefficient is an inner product}. The
+rest of the chapter chooses the basis. The article's example --- $u = (\tfrac{1}{\sqrt 2},
+\tfrac{1}{\sqrt 2})$, $v = (-\tfrac{1}{\sqrt 2}, \tfrac{1}{\sqrt 2})$, $w = (0.7, 1.2)$ --- is
+worth redoing with an orthonormal pair that stays rational, since the engine's radicals do not
+yet simplify $(\sqrt 2)^{-2}$.
+
+\begin{trybox}
+\begin{minted}{text}
+let u = [3/5, 4/5]
+let v = [-4/5, 3/5]
+let w = [7/10, 6/5]
+dot(u, v)
+norm(u)
+dot(u, w)
+dot(v, w)
+dot(u, w)*u + dot(v, w)*v
+\end{minted}
+  $\langle u, v\rangle = 0$ and $\|u\| = 1$: an orthonormal pair. The two inner products are
+  $\frac{69}{50}$ and $\frac{4}{25}$, and the last line rebuilds $w$ from them, exactly.
+\end{trybox}
+
+\section{Functions as vectors}
+
+A function on $[0, T]$ is a vector with a continuum of coordinates, one per $t$. The sum in the
+inner product becomes an integral --- a Riemann sum $\sum_k f(t_k)\overline{g(t_k)}\,\Delta t$
+in the limit --- and it is convenient to divide by the length of the interval.
+
+\begin{definition}
+  For square-integrable $f, g$ on $[0, T]$ (that is, $\int_0^T |f|^2 < \infty$), the inner product
+  is $\langle f, g\rangle = \frac{1}{T}\int_0^T f(t)\overline{g(t)}\,dt$.
+\end{definition}
+
+The functions that will be the basis are the complex exponentials $e_k(t) = e^{ikt}$ on $[-\pi,
+\pi]$, one for every integer $k$. Two facts about them carry everything.
+
+\begin{lemma}\label{lem:expint}
+  For an integer $n$, $\int_{-\pi}^{\pi} e^{int}\,dt = 2\pi$ if $n = 0$ and $0$ otherwise.
+\end{lemma}
+\begin{proof}
+  For $n = 0$ the integrand is $1$. For $n \neq 0$, $\frac{d}{dt}\frac{e^{int}}{in} = e^{int}$,
+  so by the fundamental theorem of calculus the integral is $\frac{e^{in\pi} - e^{-in\pi}}{in} =
+  \frac{2i\sin n\pi}{in} = 0$, since $\sin n\pi = 0$ for every integer $n$.
+\end{proof}
+
+\begin{theorem}[Orthonormality]\label{thm:ortho}
+  With $T = 2\pi$ on $[-\pi, \pi]$, $\langle e_k, e_m\rangle = 1$ if $k = m$ and $0$ otherwise.
+\end{theorem}
+\begin{proof}
+  $\overline{e^{imt}} = e^{-imt}$, so $\langle e_k, e_m\rangle = \frac{1}{2\pi}\int_{-\pi}^{\pi}
+  e^{ikt}e^{-imt}\,dt = \frac{1}{2\pi}\int_{-\pi}^{\pi} e^{i(k-m)t}\,dt$, and
+  Lemma~\ref{lem:expint} applies with $n = k - m$.
+\end{proof}
+
+The step $e^{ikt}e^{-imt} = e^{i(k-m)t}$ is a rule the engine did not have before this chapter:
+\rn{simp.exp-product}, $e^a e^b = e^{a+b}$, unconditional in both fields. The collect-powers
+rule never saw these products, because the base $e$ is not written. The engine cannot know that a
+symbolic $k$ is an integer, so it cannot do the lemma symbolically; it can do every instance, and
+the instances are what the coefficients need.
+
+\begin{trybox}
+\begin{minted}{text}
+exp(2i*t)*exp(-3i*t)
+integrate(exp(2i*t)*exp(-3i*t), t, -pi, pi)
+integrate(exp(2i*t)*exp(-2i*t), t, -pi, pi)
+integrate(cos(t)*sin(t), t, 0, 2pi)
+\end{minted}
+  The product merges to $e^{-it}$; the definite integrals are $0$ and $2\pi$ --- open the work
+  and find the antiderivative, its check by differentiation, and the \rn{int.bounds} step that
+  evaluates it at $\pm\pi$ with the exact values $e^{\pm i\pi} = -1$ from Chapter~\ref{ch:cx}.
+  The last is the article's orthogonality of $\cos$ and $\sin$.
+\end{trybox}
+
+\section{Euler's formula as motion}
+
+Why does $t \mapsto e^{it}$ trace a circle? The article's answer is a physicist's, and it is a
+theorem.
+
+\begin{proposition}
+  $\frac{d}{dt} e^{it} = i e^{it}$. So the velocity of the point $e^{it}$ is its position rotated
+  by a quarter turn, and the point moves on the unit circle at unit speed.
+\end{proposition}
+\begin{proof}
+  The chain rule, with $\frac{d}{dt}(it) = i$. Multiplication by $i$ sends $a + bi$ to $-b + ai$,
+  which is $(a, b)$ rotated by $90^\circ$ counter-clockwise, so the velocity is perpendicular to
+  the position; a curve whose velocity is always perpendicular to its position has $\frac{d}{dt}|p|^2
+  = 2\operatorname{Re}(\bar p \dot p) = 0$, constant distance from the origin, and $|p(0)| = 1$.
+\end{proof}
+
+\begin{trybox}
+\begin{minted}{text}
+diff(exp(i*t), t)
+plot(exp(i*t), t, 0, 2pi)
+expand(exptotrig(exp(i*t) + exp(-i*t)))
+\end{minted}
+  A complex-valued curve is drawn in the plane, real part across and imaginary part up, with equal
+  scales, so the circle is round. The last line is the article's first drawing: two circles of
+  radius $1$ turning in opposite directions add to $2\cos t$, a segment of the real axis.
+\end{trybox}
+
+\section{Fourier coefficients}
+
+\begin{definition}
+  The \emph{Fourier coefficients} of $f$ on $[-\pi, \pi]$ are
+  \[
+    c_k = \langle f, e_k\rangle = \frac{1}{2\pi}\int_{-\pi}^{\pi} f(t)\,e^{-ikt}\,dt, \qquad k \in
+    \mathbb{Z},
+  \]
+  and the \emph{$N$-th partial sum} is $S_N f(t) = \sum_{k=-N}^{N} c_k e^{ikt}$.
+\end{definition}
+
+\begin{theorem}
+  If $f = \sum_{k=-N}^{N} a_k e_k$ is a finite sum of exponentials, then $a_k = c_k$: the
+  coefficients are recovered by the integral.
+\end{theorem}
+\begin{proof}
+  Theorem~\ref{thm:coeff} with the orthonormal family of Theorem~\ref{thm:ortho}.
+\end{proof}
+
+For a function that is not a finite sum the question is whether $S_N f \to f$, and the honest
+answer is that this chapter does not prove it. Dirichlet's theorem gives convergence at every point
+where $f$ is piecewise smooth, to the average of the two one-sided limits at a jump; the
+$L^2$ statement, that $\|S_N f - f\| \to 0$ for every square-integrable $f$, is the completeness
+of the exponentials. Both are a chapter of their own. What is proved here is what the engine
+computes: each coefficient, each partial sum, and the algebra that turns them into sines.
+
+\section{The square wave}
+
+\begin{definition}
+  The \emph{square wave} is $\operatorname{sq}(t) = \operatorname{sgn}(\sin t)$: $1$ on $(0,
+  \pi)$, $-1$ on $(-\pi, 0)$, $0$ at the jumps.
+\end{definition}
+
+\begin{theorem}\label{thm:square}
+  The Fourier coefficients of the square wave are $c_0 = 0$ and, for $k \neq 0$,
+  \[
+    c_k = \frac{i\,\big((-1)^k - 1\big)}{k\pi} =
+    \begin{cases} -\dfrac{2i}{k\pi} & k \text{ odd}, \\[6pt] 0 & k \text{ even}. \end{cases}
+  \]
+\end{theorem}
+\begin{proof}
+  The sign function is constant on each half of the interval, so the integral splits:
+  \[
+    c_k = \frac{1}{2\pi}\left(\int_0^{\pi} e^{-ikt}\,dt - \int_{-\pi}^{0} e^{-ikt}\,dt\right).
+  \]
+  For $k = 0$ both integrals are $\pi$ and $c_0 = 0$. For $k \neq 0$, $\int e^{-ikt}\,dt =
+  \frac{e^{-ikt}}{-ik} = \frac{i\,e^{-ikt}}{k}$, so
+  \[
+    \int_0^{\pi} e^{-ikt}\,dt = \frac{i(e^{-ik\pi} - 1)}{k}, \qquad
+    \int_{-\pi}^{0} e^{-ikt}\,dt = \frac{i(1 - e^{ik\pi})}{k},
+  \]
+  and the difference is $\frac{i}{k}\big(e^{-ik\pi} + e^{ik\pi} - 2\big) = \frac{i}{k}\big(2\cos
+  k\pi - 2\big)$. Since $\cos k\pi = (-1)^k$ for an integer $k$, dividing by $2\pi$ gives the
+  formula; $(-1)^k - 1$ is $-2$ for odd $k$ and $0$ for even.
+\end{proof}
+
+The engine does every step of this except the last: it does not know that $k$ is an integer, so
+$e^{-ik\pi}$ stays as it is with a symbolic $k$. Bind the coefficient as a function of $k$ and
+the concrete values come out exact, with their derivations.
+
+\begin{trybox}
+\begin{minted}{text}
+integrate(exp(-i*k*t), t, 0, pi)
+let c(k) = 1/(2pi)*(integrate(exp(-i*k*t), t, 0, pi) - integrate(exp(-i*k*t), t, -pi, 0))
+c(1)
+c(2)
+c(3)
+\end{minted}
+  The first is $-\frac{i}{k} + \frac{i\,e^{-i\pi k}}{k}$, the theorem's bracket. Then $c_1 =
+  -\frac{2i}{\pi}$, $c_2 = 0$, $c_3 = -\frac{2i}{3\pi}$: every $e^{\pm ik\pi}$ evaluates exactly
+  because $k$ is now a numeral.
+\end{trybox}
+
+\begin{theorem}
+  $S_3\operatorname{sq}(t) = \frac{4}{\pi}\sin t + \frac{4}{3\pi}\sin 3t$.
+\end{theorem}
+\begin{proof}
+  By Theorem~\ref{thm:square}, $S_3 = c_{-3}e^{-3it} + c_{-1}e^{-it} + c_1 e^{it} + c_3 e^{3it}$
+  with $c_{-k} = \overline{c_k} = -c_k$ (the coefficients are pure imaginary). Grouping $\pm k$,
+  $c_k(e^{ikt} - e^{-ikt}) = c_k \cdot 2i\sin kt$ by Euler's formula, and $-\frac{2i}{k\pi} \cdot
+  2i \sin kt = \frac{4}{k\pi}\sin kt$ since $i^2 = -1$.
+\end{proof}
+
+\begin{trybox}
+\begin{minted}{text}
+sum(c(k)*exp(i*k*t), k, -3, 3)
+expand(exptotrig(sum(c(k)*exp(i*k*t), k, -3, 3)))
+plot([sign(sin(t)), 4/pi*sin(t) + 4/(3pi)*sin(3t)], t, -pi, pi)
+plot([sign(sin(t)), expand(exptotrig(sum(c(k)*exp(i*k*t), k, -25, 25)))], t, -pi, pi)
+\end{minted}
+  \rn{sum} writes the seven terms and the pipeline collects them; \rn{exptotrig} applies Euler's
+  formula to every exponential at once, and \rn{expand} distributes, after which the imaginary
+  parts cancel and the $i^2$ become $-1$: $\frac{4}{\pi}\sin t + \frac{4}{3\pi}\sin 3t$, the
+  article's equation (32), proved sound step by step. The plots show the partial sums against the
+  wave; the overshoot at the jumps that does not shrink as $N$ grows is the Gibbs phenomenon.
+\end{trybox}
+
+Why is \rn{exptotrig} a command rather than a rule? Euler's formula turns one $e^{i\theta}$ into
+$\cos\theta + i\sin\theta$, which mentions $\theta$ twice. In the weights of
+Chapter~\ref{ch:wf} that is never a decrease, so no simplification rule can contain it: the
+ordering cannot pay for the general formula, only for the exact-value case of
+Chapter~\ref{ch:cx}. A command runs once, on request, and the count of commands is the first tier
+of the ordering. The same reasoning put \rn{expand} outside the rule set.
+
+\section{Epicycles}
+
+A finite Fourier sum is a machine. The term $c_k e^{ikt}$ is a point moving on a circle of radius
+$|c_k|$, centred at the origin, starting at angle $\arg c_k$ and turning $k$ times per period
+--- backwards if $k < 0$. The sum places each circle's centre at the previous term's point, tip
+to tail, and the last tip traces $f(t)$. That is the whole content of the pictures; the mathematics
+is that a sum of complex numbers is a sum of vectors.
+
+\begin{proposition}
+  $e^{it} + \frac{1}{2}e^{-it}$ traces the ellipse $\big(\frac{x}{3/2}\big)^2 + \big(\frac{y}{1/2}\big)^2
+  = 1$, and $e^{it} + e^{-it}$ traces the segment $[-2, 2]$ of the real axis.
+\end{proposition}
+\begin{proof}
+  By Euler's formula, $e^{it} + \frac{1}{2}e^{-it} = \frac{3}{2}\cos t + \frac{i}{2}\sin t$, so
+  $x = \frac{3}{2}\cos t$, $y = \frac{1}{2}\sin t$, and $\cos^2 + \sin^2 = 1$. With equal
+  coefficients the imaginary part cancels and $x = 2\cos t$.
+\end{proof}
+
+\begin{trybox}
+\begin{minted}{text}
+epicycles(exp(i*t) + exp(-i*t), t)
+epicycles(exp(i*t) + 1/2*exp(-i*t), t)
+epicycles(exp(i*t) + 1/3*exp(-3i*t), t)
+epicycles(sum(c(k)*exp(i*k*t), k, -5, 5), t)
+\end{minted}
+  The segment, the ellipse, a rounded square (a circle and a smaller one turning three times the
+  other way), and the square wave's partial sum: its circles come in $\pm k$ pairs of equal radius,
+  and their imaginary parts cancel, so the tip runs back and forth along the real axis --- a real
+  function drawn by complex circles. Each circle's coefficient is shown exactly under the picture;
+  the drawing itself is numeric.
+\end{trybox}
+
+\section{The discrete Fourier transform}
+
+A llama is not a formula. The article traced one from an SVG, sampling $N$ points $p_0, \dots,
+p_{N-1}$ along the outline, and asked for coefficients from the samples alone. Replacing the
+integral of the definition by the sum over the samples, with $t_j = 2\pi j/N$, gives the discrete
+Fourier transform.
+
+\begin{definition}
+  The \emph{DFT} of $p_0, \dots, p_{N-1} \in \mathbb{C}$ is $\hat p_k = \frac{1}{N}\sum_{j=0}^{N-1}
+  p_j\,e^{-2\pi i kj/N}$, for $k = 0, \dots, N - 1$ (or any $N$ consecutive integers, since
+  $\hat p_{k+N} = \hat p_k$).
+\end{definition}
+
+\begin{lemma}[Discrete orthogonality]\label{lem:dortho}
+  For an integer $n$, $\sum_{j=0}^{N-1} e^{2\pi i nj/N}$ is $N$ if $N \mid n$ and $0$ otherwise.
+\end{lemma}
+\begin{proof}
+  Let $\omega = e^{2\pi i n/N}$. If $N \mid n$ then $\omega = 1$ and every term is $1$. Otherwise
+  $\omega \neq 1$ but $\omega^N = e^{2\pi i n} = 1$, and the geometric sum is $\frac{\omega^N -
+  1}{\omega - 1} = 0$.
+\end{proof}
+
+\begin{theorem}[Inversion]
+  $p_j = \sum_{k=0}^{N-1} \hat p_k\,e^{2\pi i kj/N}$ for every $j$: the samples are exactly a finite
+  Fourier sum of $N$ circles, and the epicycles pass through every sample point.
+\end{theorem}
+\begin{proof}
+  Substitute the definition and exchange the finite sums:
+  \[
+    \sum_k \hat p_k e^{2\pi i kj/N} = \frac{1}{N}\sum_m p_m \sum_k e^{2\pi i k(j-m)/N}.
+  \]
+  By Lemma~\ref{lem:dortho} the inner sum is $N$ when $m = j$ (as $|j - m| < N$, that is the only
+  multiple of $N$) and $0$ otherwise, leaving $p_j$.
+\end{proof}
+
+This is Theorem~\ref{thm:coeff} again, in $\mathbb{C}^N$ with the orthonormal basis $\frac{1}{\sqrt
+N}(e^{2\pi i kj/N})_j$, and it explains the article's picture: with all $N$ coefficients the
+drawing is exact at the samples, and keeping only the largest few gives a llama-shaped
+approximation that sharpens as circles are added. Which $k$ to use is a matter of choice, since
+$\hat p_k$ is periodic in $k$; taking $k$ from $-\lfloor N/2\rfloor$ upward, centred on $0$, makes
+the circles come in slow $\pm k$ pairs, the form the animation wants.
+
+\begin{trybox}
+\begin{minted}{text}
+dft([1, i, -1, -i])
+dft([0, 0; 1, 0; 1, 1; 0, 1])
+\end{minted}
+  Four points on the unit circle have one nonzero coefficient, $\hat p_1 = 1$: one circle. The
+  corners of the unit square give $\hat p_0 = \frac{1}{2} + \frac{i}{2}$, the centre, and $\hat
+  p_1 = -\frac{1}{2} - \frac{i}{2}$; the drawing passes through the four corners and rounds
+  between them, as four samples cannot say more. For a llama, File $\to$ Import SVG as epicycles
+  samples a drawing's outline at equal arc lengths --- the article's \texttt{getPointAtLength}
+  loop --- into a \rn{dft} cell. Try a heart or a letter; a thousand circles is what the article
+  used.
+\end{trybox}
+
+\section{What is proved and what is drawn}
+
+The chapter's calculus is the engine's, and its claims are theorems in the ledger.
+\rn{integrate(f, x, a, b)} returns $F(b) - F(a)$ for the antiderivative the checker of
+Chapter~\ref{ch:anti} accepted, and \lc{integrate_definite} is the fundamental theorem of calculus
+read through the engine: the interval integral of the integrand equals the value returned,
+wherever $F$ is differentiable on $[a, b]$, the integrand is integrable there, and the checker's
+normalizations were sound --- the hypotheses of Chapter~\ref{ch:anti}, with differentiability
+stated because Mathlib's \lc{deriv} of a non-differentiable function is the junk value $0$ and the
+theorem would otherwise be vacuous. \rn{sum} is a definition (\lc{sum_soundR}), \rn{exptotrig} is
+Euler's formula (\lc{expToTrig_soundC}, \lc{Complex.exp_mul_I}), \rn{simp.exp-product} is
+\lc{exp_add} in both fields.
+
+\begin{minted}{lean}
+theorem integrate_definite (norm : Norm) {f a b : Expr} {x : String} {res : RuleResult}
+    (h : (cmdIntegrate norm).apply (.fn "integrate" [f, .var x, a, b]) = some res)
+    (hok : res.error = none) :
+    ∃ F, res.result = definite F x a b ∧ ∀ ρ : EnvR, DiffFree F →
+      (∀ t ∈ Set.uIcc (evalR ρ a) (evalR ρ b), DifferentiableAt ℝ (fx ρ x F) t) →
+      IntervalIntegrable (fun t => evalD (upd ρ x t) f) volume (evalR ρ a) (evalR ρ b) →
+      (∀ t ∈ Set.uIcc (evalR ρ a) (evalR ρ b), ‹the checker's normalizations are sound at t›) →
+      ∫ t in (evalR ρ a)..(evalR ρ b), evalD (upd ρ x t) f = evalR ρ res.result
+\end{minted}
+
+The drawings are not theorems. \rn{plot} samples, \rn{epicycles} evaluates the coefficients in
+floating point to turn the circles, and \rn{dft} is the $O(N^2)$ sum in floating point --- the
+article's inner loop, ported. They sit beside the exact results the way a graph sits beside a
+proof, and the notebook labels them so. Where the exact coefficients exist, as for
+\rn{epicycles} of a symbolic sum, they are shown under the picture, and the picture is what they
+mean.
+
+\section{Exercises}
+
+\begin{exercisebox}[Parseval, finitely]
+  For $f = \sum_{k=-N}^{N} c_k e_k$, show $\|f\|^2 = \frac{1}{2\pi}\int_{-\pi}^{\pi}|f|^2 =
+  \sum_k |c_k|^2$. Check it for $S_3\operatorname{sq}$ with the engine, and compare with
+  $\|\operatorname{sq}\|^2 = 1$: how much of the wave's energy is in three harmonics?
+\end{exercisebox}
+
+\begin{exercisebox}[The triangle wave]
+  Compute the Fourier coefficients of $f(t) = |t|$ on $[-\pi, \pi]$ by hand (integration by parts,
+  Chapter~\ref{ch:parts}), verify $c_1$ and $c_3$ with \rn{integrate}, and explain from the
+  formula why its partial sums converge faster than the square wave's.
+\end{exercisebox}
+
+\begin{exercisebox}[Conjugate pairs]
+  Show that $f$ is real-valued if and only if $c_{-k} = \overline{c_k}$ for every $k$, and that
+  the epicycles of such an $f$ therefore come in mirror-image pairs whose imaginary parts cancel.
+  Which drawings in the chapter are of this kind?
+\end{exercisebox}
+
+\begin{exercisebox}[A symmetric outline]
+  The heart of the last Try-it box, sampled from its bottom tip, has purely imaginary
+  coefficients. Prove that an outline symmetric under $z \mapsto -\bar z$, parametrized so that
+  $p(-t) = -\overline{p(t)}$, has $\hat p_k = -\overline{\hat p_k}$ for every $k$.
+\end{exercisebox}
+
+\begin{exercisebox}[What the engine cannot say]
+  \rn{integrate(exp(i*k*t)*exp(-i*m*t), t, -pi, pi)} is refused for symbolic $k, m$. Say exactly
+  which two facts about integers the engine would need, and why neither can be a rewrite rule
+  under the ordering of Chapter~\ref{ch:wf}.
+\end{exercisebox}

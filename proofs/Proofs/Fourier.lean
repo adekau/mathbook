@@ -109,6 +109,66 @@ theorem sign_fold_soundR (ρ : EnvR) (q : Q) :
       have : 0 < q.val := lt_of_le_of_ne hnn (Ne.symm hne)
       rw [Real.sign_of_pos (by exact_mod_cast this)]; simp
 
+/-! ## `exp(a)·exp(b) = exp(a+b)` -/
+
+theorem prodR_exps (ρ : EnvR) : ∀ (l : List Expr), (∀ f ∈ l, isExp f = true) →
+    prodR ρ l = Real.exp (sumR ρ (l.map expArg))
+  | [], _ => by simp
+  | f :: l, h => by
+    have hf := h f (by simp)
+    have ih := prodR_exps ρ l fun g hg => h g (by simp [hg])
+    match f, hf with
+    | .fn "exp" [a], _ =>
+      simp only [prodR_cons, List.map_cons, sumR_cons, ih, expArg, evalR_fn₁, applyFn_exp, Real.exp_add]
+    | .num _, h | .var _, h | .add _, h | .mul _, h | .pow _ _, h | .matrix _, h => simp [isExp] at h
+    | .fn g [], h | .fn g (_ :: _ :: _), h => simp [isExp] at h
+    | .fn g [a], h =>
+      by_cases hg : g = "exp"
+      · subst hg; simp only [prodR_cons, List.map_cons, sumR_cons, ih, expArg, evalR_fn₁, applyFn_exp, Real.exp_add]
+      · simp [isExp, hg] at h
+
+theorem prodC_exps (ρ : EnvC) : ∀ (l : List Expr), (∀ f ∈ l, isExp f = true) →
+    prodC ρ l = Complex.exp (sumC ρ (l.map expArg))
+  | [], _ => by simp
+  | f :: l, h => by
+    have hf := h f (by simp)
+    have ih := prodC_exps ρ l fun g hg => h g (by simp [hg])
+    match f, hf with
+    | .fn "exp" [a], _ =>
+      simp only [prodC_cons, List.map_cons, sumC_cons, ih, expArg, evalC_fn₁, applyFnC_exp, Complex.exp_add]
+    | .num _, h | .var _, h | .add _, h | .mul _, h | .pow _ _, h | .matrix _, h => simp [isExp] at h
+    | .fn g [], h | .fn g (_ :: _ :: _), h => simp [isExp] at h
+    | .fn g [a], h =>
+      by_cases hg : g = "exp"
+      · subst hg; simp only [prodC_cons, List.map_cons, sumC_cons, ih, expArg, evalC_fn₁, applyFnC_exp, Complex.exp_add]
+      · simp [isExp, hg] at h
+
+/-- **`simp.exp-product` is sound over ℝ**, unconditionally. -/
+theorem expProduct_soundR : PlainSoundR expProduct := by
+  intro e res h ρ
+  simp only [expProduct] at h
+  split at h
+  · rename_i es
+    split at h
+    · rw [guarded_result h, evalR_mulN, prodR_cons, evalR_fn₁, applyFn_exp, evalR_add, evalR_mul,
+        ← prodR_perm ρ (List.filter_append_perm isExp es), prodR_append,
+        prodR_exps ρ _ (fun f hf => (List.mem_filter.mp hf).2)]
+    · simp at h
+  · simp at h
+
+/-- **`simp.exp-product` is sound over ℂ**, unconditionally. -/
+theorem expProduct_soundC : PlainSoundC expProduct := by
+  intro e res h ρ
+  simp only [expProduct] at h
+  split at h
+  · rename_i es
+    split at h
+    · rw [guarded_result h, evalC_mulN, prodC_cons, evalC_fn₁, applyFnC_exp, evalC_add, evalC_mul,
+        ← prodC_perm ρ (List.filter_append_perm isExp es), prodC_append,
+        prodC_exps ρ _ (fun f hf => (List.mem_filter.mp hf).2)]
+    · simp at h
+  · simp at h
+
 /-! ## Finite sums -/
 
 theorem sumR_map (ρ : EnvR) (g : ℕ → Expr) : ∀ (l : List ℕ),

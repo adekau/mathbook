@@ -321,6 +321,26 @@ def eulerPower : PlainRule :=
         if q.isOne && !b.isNum then guarded (.fn "exp" [b]) e "$e^{b}$ is $\\exp(b)$: the constant $e$ is $\\exp(1)$ and $(e^1)^b = e^b$." else none
       | _ => none }
 
-def complexRules : List PlainRule := [iPower, cxArith, cxPow, cxConj, cxReIm, cxAbs, exactTrig, euler, eulerPower]
+/-- Is a factor an exponential `exp(a)`? -/
+def isExp : Expr → Bool | .fn "exp" [_] => true | _ => false
+/-- The argument of an exponential factor (`0` for anything else, never used). -/
+def expArg : Expr → Expr | .fn "exp" [a] => a | _ => Expr.zero
+
+/-- `exp(a) · exp(b) = exp(a + b)`: every exponential factor of a product merges into one. Lighter
+by the weight of a function node per factor merged; unconditional over ℝ and ℂ
+(`Real.exp_add`, `Complex.exp_add`). Products of `e^{ikt}` are the bread and butter of Fourier
+analysis, and the collect-powers rule does not see them (the base `e` is not written). -/
+def expProduct : PlainRule :=
+  { name := "simp.exp-product", apply := fun e =>
+      match e with
+      | .mul es =>
+        let exps := es.filter isExp
+        if exps.length ≥ 2 then
+          guarded (mulN (.fn "exp" [.add (exps.map expArg)] :: es.filter (fun f => !isExp f))) e
+            "$e^a \\cdot e^b = e^{a+b}$: exponentials of a product merge into one exponential of the sum."
+        else none
+      | _ => none }
+
+def complexRules : List PlainRule := [iPower, cxArith, cxPow, cxConj, cxReIm, cxAbs, exactTrig, euler, eulerPower, expProduct]
 
 end MathEngine

@@ -400,4 +400,16 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
   into a `dft` cell. The studio has an Epicycles shot, and the Manim export emits a `ValueTracker`
   with `always_redraw` arms and a `TracedPath`. Checked: the square wave's partial sum traces a
   segment on the real axis (the article's "line"), a heart SVG draws with 21 circles.
-- Stage C, the chapter — TODO: `m11b-fourier-series`, after echelon form.
+- Stage C, the chapter — DONE 2026-09-16. `m11b-fourier-series` (Chapter 13, after echelon form): inner products
+  and "a coefficient is an inner product" (Theorem: coefficients from an orthonormal basis); functions as vectors,
+  `∫e^{int} = 2πδ` and orthonormality of `e^{ikt}` (paper proofs; the engine does every instance, not the
+  symbolic lemma — it cannot know k is an integer); Euler as motion (`d/dt e^{it} = i e^{it}`); Fourier
+  coefficients and the finite-sum recovery theorem, with Dirichlet/completeness stated as unproved; the square
+  wave's `c_k = i((−1)^k − 1)/(kπ)` re-derived and `S_3 = 4/π sin t + 4/(3π) sin 3t`, every step run in the
+  engine; epicycles (the ellipse and the segment as propositions); the DFT with discrete orthogonality and the
+  inversion theorem; a "what is proved and what is drawn" section quoting `integrate_definite`; five exercises.
+  Every Try-it input was checked against the native engine. Added on the way: `simp.exp-product`
+  (`exp(a)·exp(b) = exp(a+b)`, guarded; `expProduct_soundR`/`soundC`), without which the orthogonality integrals
+  were refused. Book: 174 pages, zero missing characters. Open: `(√2)^{-2}` does not simplify (powers of
+  radicals with an integer outer exponent), so the inner-product Try-it uses (3/5, 4/5) instead of the article's
+  (1/√2, 1/√2).
