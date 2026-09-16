@@ -3,6 +3,7 @@ import MathEngine.Origin
 import MathEngine.Parser
 import MathEngine.Lambda
 import MathEngine.Poset
+import MathEngine.Fourier
 /-!
 # Sessions, commands and the evaluation pipeline
 
@@ -335,12 +336,21 @@ def orderCell (s : Session) (cellId source : String) :
     | h, _ => err s!"{h}: wrong arguments (see the reference)"
 
 /-- A sampled plot: the variable, the range, and one series per function — its normalized term and
-`(t, y)` pairs (`none` where it has no finite value). -/
+`(t, y)` pairs (`none` where it has no finite value). A `parametric` series is a complex-valued
+curve: its pairs are `(re, im)`, drawn in the plane. -/
+structure PlotSeries where
+  term : Expr
+  points : Array (Float × Option Float)
+  parametric : Bool := false
+
 structure Plot where
   var : String
   from_ : Float
   to : Float
-  series : Array (Expr × Array (Float × Option Float))
+  series : Array PlotSeries
+  /-- `epicycles`/`dft` only: the rotating terms `(k, c_k)` as numbers, each with its exact term when
+  there is one. -/
+  terms : Array (Int × CF × Option Expr) := #[]
 
 /-- The curves a plot argument names: a list `[f, g, …]` (which the parser reads as a one-row
 matrix; a column is accepted too) is one curve per entry, a scalar is one curve, and a genuine
@@ -350,43 +360,106 @@ def plotFns : Expr → Option (List Expr)
   | .matrix rows => if rows.all (·.length == 1) then some (rows.filterMap List.head?) else none
   | e => some [e]
 
-/-- `plot(f, x, from, to[, n])` or `plot([f, g, …], x, from, to[, n])`: simplify the function (or
-the list, entrywise) under the session — so derivatives and session functions plot as what they
-are — record the cell like any other, and sample each curve on a uniform grid with the numeric
-evaluator. Sampling is presentation: the derivation shown is the list's. -/
+/-- A list of points for `dft`: complex numbers, or `[x, y]` pairs, in a row or a column. -/
+def samplePoints (e : Expr) : Except String (Array CF) := do
+  let entries ← match e with
+    | .matrix [row] => pure row
+    | .matrix rows =>
+      if rows.all (·.length == 1) then pure (rows.filterMap List.head?)
+      else if rows.all (·.length == 2) then pure (rows.map fun r => .add [r[0]!, .mul [r[1]!, iE]])
+      else throw "dft: give the points as complex numbers [z₁, z₂, …] or as pairs [x₁, y₁; x₂, y₂; …]"
+    | _ => throw "dft takes a list of points"
+  let pts ← entries.mapM fun z => match evalNumericC [] z with
+    | .ok v => pure v
+    | .error m => throw s!"dft: {m}"
+  pure pts.toArray
+
+private def sampleReal (x : String) (lo hi : Float) (n : Nat) (g : Expr) : Array (Float × Option Float) :=
+  (Array.range n).map fun i =>
+    let t := lo + (hi - lo) * i.toFloat / (n - 1).toFloat
+    (t, (evalNumeric [(x, t)] g).toOption.filter fun v => v.isFinite)
+
+private def sampleComplex (x : String) (lo hi : Float) (n : Nat) (g : Expr) : Array (Float × Option Float) :=
+  (Array.range n).map fun i =>
+    let t := lo + (hi - lo) * i.toFloat / (n - 1).toFloat
+    match (evalNumericC [(x, t)] g).toOption.filter CF.isFinite with
+    | some z => (z.re, some z.im)
+    | none => (0, none)
+
+/-- `plot(f, x, from, to[, n])`, `plot([f, g, …], x, from, to[, n])`, `epicycles(f, t[, n])` and
+`dft(points[, modes])`: simplify the function (or the list, entrywise) under the session — so
+derivatives and session functions plot as what they are — record the cell like any other, and
+sample. A curve that mentions `i` is complex-valued and is drawn in the plane (`parametric`).
+`epicycles` reads the `(k, c_k)` off a finite Fourier sum and samples the curve over `[0, 2π]`;
+`dft` computes the coefficients of sample points numerically, keeps the `modes` largest, and does
+the same. Sampling and the DFT are presentation: the derivation shown is the term's. -/
 def plotCell (s : Session) (cellId source : String) :
     Session × Except (String × String × Option (Nat × Nat)) (Expr × Expr × Derivation × Plot) :=
   match parseStmt source (s.fns.map (·.1)) with
   | .error e => (s, .error ("syntax", e.message, some (e.start, e.stop)))
   | .ok stmt =>
-    let bad := (s, .error ("eval", "plot takes a function, a variable, and the range: plot(f, x, from, to)", none))
+    let bad := (s, .error ("eval", "plot takes a function, a variable, and the range: plot(f, x, from, to); epicycles(f, t); dft(points)", none))
     match s.resolveOuts stmt.value with
     | .error msg => (s, .error ("eval", msg, none))
     | .ok value =>
+    let num (e : Expr) : Option Float := (evalNumeric [] (substitute s.env (substituteFns s.fns e))).toOption
+    -- normalize a term under the session, record the cell, and hand back the derivation
+    let record (x : String) (f : Expr) : Session × Except String (Expr × Derivation) :=
+      let input := substitute (s.env.filter (·.1 != x)) (substituteFns s.fns f)
+      match (normalizeT pipelineRules pipelineOrdered input).run #[] with
+      | (.error msg, _) => (s, .error msg)
+      | (.ok output, steps) =>
+        let d : Derivation := ⟨input, steps, output⟩
+        ({ s with cells := (cellId, ⟨output, d⟩) :: s.cells.filter (·.1 != cellId) }, .ok (output, d))
+    let samples (rest : List Expr) (dflt : Nat) : Nat := match rest with
+      | [.num k] => min 4000 (max 2 k.val.num.toNat)
+      | _ => dflt
     match value with
     | .fn "plot" (f :: .var x :: a :: b :: rest) =>
-      let num (e : Expr) : Option Float := (evalNumeric [] (substitute s.env (substituteFns s.fns e))).toOption
       match num a, num b with
       | some lo, some hi =>
-        let n : Nat := match rest with
-          | [.num k] => min 4000 (max 2 k.val.num.toNat)
-          | _ => 300
-        let input := substitute (s.env.filter (·.1 != x)) (substituteFns s.fns f)
-        match (normalizeT pipelineRules pipelineOrdered input).run #[] with
-        | (.error msg, _) => (s, .error ("eval", msg, none))
-        | (.ok output, steps) =>
+        let n := samples rest 300
+        match record x f with
+        | (s, .error msg) => (s, .error ("eval", msg, none))
+        | (s, .ok (output, d)) =>
           match plotFns output with
           | none => (s, .error ("eval", "plot: give one function or a list [f, g, …], not a matrix", none))
           | some fns =>
-          let d : Derivation := ⟨input, steps, output⟩
-          let s := { s with cells := (cellId, ⟨output, d⟩) :: s.cells.filter (·.1 != cellId) }
-          let sample (g : Expr) := (Array.range n).map fun i =>
-            let t := lo + (hi - lo) * i.toFloat / (n - 1).toFloat
-            let y := (evalNumeric [(x, t)] g).toOption.filter fun v => v.isFinite
-            (t, y)
-          let series := fns.toArray.map fun g => (g, sample g)
-          (s, .ok (f, output, d, ⟨x, lo, hi, series⟩))
+            let series := fns.toArray.map fun g =>
+              if mentionsI g then ⟨g, sampleComplex x lo hi n g, true⟩ else ⟨g, sampleReal x lo hi n g, false⟩
+            (s, .ok (f, output, d, ⟨x, lo, hi, series, #[]⟩))
       | _, _ => (s, .error ("eval", "plot: the range must evaluate to numbers", none))
+    | .fn "epicycles" (f :: .var t :: rest) =>
+      match record t f with
+      | (s, .error msg) => (s, .error ("eval", msg, none))
+      | (s, .ok (output, d)) =>
+        -- distribute first (the pipeline never does): 2i/π·(e^{−it} − e^{it}) is two terms, not one
+        match fourierTerms output t <|> fourierTerms (Expand.dist output) t with
+        | none => (s, .error ("eval", s!"epicycles: {output.toText} is not a finite sum of terms c·exp(i·k·{t}) with integer k", none))
+        | some fts =>
+          match fts.mapM fun ft => (evalNumericC [] ft.coeff).toOption.map fun c => (ft.k, c, some ft.coeff) with
+          | none => (s, .error ("eval", "epicycles: a coefficient could not be evaluated numerically (unbound variable?)", none))
+          | some terms =>
+            -- slow, big circles first: by |k|, then k
+            let terms := terms.toArray.qsort fun (k₁, _, _) (k₂, _, _) => k₁.natAbs < k₂.natAbs || (k₁.natAbs == k₂.natAbs && k₁ < k₂)
+            let n := samples rest 400
+            let trace := (epicycleTrace (terms.map fun (k, c, _) => (k, c)) n).map fun (x, y) => (x, some y)
+            (s, .ok (f, output, d, ⟨t, 0, 2 * 3.141592653589793, #[⟨output, trace, true⟩], terms⟩))
+    | .fn "dft" (p :: rest) =>
+      match samplePoints (substitute s.env (substituteFns s.fns p)) with
+      | .error msg => (s, .error ("eval", msg, none))
+      | .ok pts =>
+        let all := dft pts
+        let modes := match rest with | [.num k] => k.val.num.toNat | _ => all.size
+        -- keep the `modes` largest coefficients (an approximation; all of them reproduce the samples exactly)
+        let sorted := all.qsort fun (_, a) (_, b) => a.abs > b.abs
+        let kept := (sorted.extract 0 (min modes sorted.size)).qsort fun (k₁, _) (k₂, _) => k₁.natAbs < k₂.natAbs || (k₁.natAbs == k₂.natAbs && k₁ < k₂)
+        let n := max 400 pts.size
+        let trace := (epicycleTrace kept n).map fun (x, y) => (x, some y)
+        let terms := kept.map fun (k, c) => (k, c, (none : Option Expr))
+        let d : Derivation := ⟨value, #[], value⟩
+        let s := { s with cells := (cellId, ⟨value, d⟩) :: s.cells.filter (·.1 != cellId) }
+        (s, .ok (p, value, d, ⟨"t", 0, 2 * 3.141592653589793, #[⟨value, trace, true⟩], terms⟩))
     | _ => bad
 
 def isPrefix : Path → Path → Bool

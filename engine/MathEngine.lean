@@ -16,5 +16,6 @@ import MathEngine.PosetProofs
 import MathEngine.Json
 import MathEngine.Wire
 import MathEngine.Parser
+import MathEngine.Fourier
 import MathEngine.Print
 import MathEngine.Rpc

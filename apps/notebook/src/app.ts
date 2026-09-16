@@ -31,6 +31,7 @@ const DOCS: Doc[] = [
   { name: "sum", sig: "sum(f, k, a, b)", blurb: "The finite sum f[k := a] + … + f[k := b] for integer bounds, expanded and collected. A definition, read over ℝ by sum_soundR.", examples: ["sum(k^2, k, 1, 10)", "sum(c*exp(i*k*t), k, -3, 3)"] },
   { name: "exptotrig", sig: "exptotrig(e)", blurb: "Euler's formula exp(iθ) = cos θ + i sin θ applied to every exponential with a pure-imaginary argument, at once (Mathematica's ExpToTrig). It is a command rather than a simplification rule because the general formula makes the term bigger; wrap it in expand to distribute and collect. Proved sound over ℂ.", examples: ["exptotrig(exp(i*t))", "expand(exptotrig(exp(-i*t) - exp(i*t)))"] },
   { name: "dot", sig: "dot(u, v) · norm(v)", blurb: "The dot product Σ uᵢvᵢ of two vectors (one-row or one-column matrices), bilinear like Mathematica's Dot — the Hermitian inner product of complex vectors is dot(u, conj(v)). norm(v) is the Euclidean length √(Σ vᵢ²).", examples: ["dot([1,2,3],[4,5,6])", "dot([i,1], conj([i,1]))", "norm([3,4])"] },
+  { name: "epicycles", sig: "epicycles(f, t[, n]) · dft(points[, modes])", blurb: "Draw a finite Fourier sum Σ c_k·exp(i k t) with circles: one per term, radius |c_k| and phase arg c_k, spinning at k turns per period, tip to tail; the tip traces the curve. dft(points) computes the coefficients of sample points numerically (the discrete Fourier transform, keeping the modes largest) and draws the same way — File → Import SVG samples a drawing for it. The drawing is numeric presentation; the sum's algebra is the engine's.", examples: ["epicycles(exp(i*t) + 1/2*exp(-3i*t), t)", "epicycles(sum(2i/(k*pi)*(exp(-i*k*t) - exp(i*k*t)), k, 1, 3), t)", "dft([1, i, -1, -i])"] },
   { name: "sign", sig: "sign(x)", blurb: "The sign function: −1, 0 or 1. Folds on numerals and stays symbolic otherwise, so sign(sin(t)) is the square wave.", examples: ["sign(-3)", "plot(sign(sin(t)), t, -pi, pi)"] },
   { name: "poset", sig: "poset({a,b,c}; a<b, a<c) · divisors(n) · subsets({…}) · chain(n)", blurb: "A finite partial order: the reflexive-transitive closure of the relation given, checked for antisymmetry. Bind it with let and ask about it: hasse, join, meet, sup, inf, upper, lower, top, bottom, maximal, minimal, lattice, le.", examples: ["let D = divisors(12)", "join(D, 4, 6)", "lattice(D)", "le(D, 2, 12)", "let P = poset({a,b,c,d}; a<b, a<c, b<d, c<d)"] },
   { name: "map", sig: "map(P; a->b, c->d, …) · monotone(P, f) · lfp(P, f) · gfp(P, f) · fixpoints(P, f)", blurb: "A map on a poset given as a table (other elements are fixed). monotone checks every pair; lfp and gfp iterate from ⊥ and ⊤ and show the Kleene chain, which is proved to end at the least (greatest) fixed point.", examples: ["let f = map(D; 1->2, 3->6)", "monotone(D, f)", "lfp(D, f)"] },
@@ -43,7 +44,7 @@ const DOCS: Doc[] = [
   { name: "det", sig: "det(M)", blurb: "Determinant by Laplace expansion along the first row. Works on symbolic entries.", ref: "https://mathworld.wolfram.com/Determinant.html", examples: ["det([1,2;3,4])", "det([a,b;c,d])"] },
   { name: "transpose", sig: "transpose(M)", blurb: "Swaps rows and columns.", examples: ["transpose([1,2,3;4,5,6])"] },
   { name: "subst", sig: "subst(e, x, v)", blurb: "Replaces every free occurrence of x with v.", examples: ["subst(x^2 + 1, x, 3)"] },
-  { name: "N", sig: "N(e)", blurb: "Numerical approximation in IEEE-754 double precision, printed to fifteen significant digits.", examples: ["N(pi)", "N(sqrt(2))"] },
+  { name: "N", sig: "N(e)", blurb: "Numerical approximation in IEEE-754 double precision, printed to fifteen significant digits. Over ℂ when the term mentions i, or when the real value is not finite (N(sqrt(-1)) is i).", examples: ["N(pi)", "N(sqrt(2))"] },
   { name: "sqrt", sig: "sqrt(x)", blurb: "Square root, i.e. x^(1/2), so the power rule handles it directly.", ref: "https://mathworld.wolfram.com/SquareRoot.html", examples: ["sqrt(16)", "diff(sqrt(x), x)"] },
   { name: "sin", sig: "sin(x)", blurb: "Sine. Derivative cos x.", ref: "https://mathworld.wolfram.com/Sine.html", examples: ["diff(sin(x^2), x)"] },
   { name: "cos", sig: "cos(x)", blurb: "Cosine. Derivative −sin x.", ref: "https://mathworld.wolfram.com/Cosine.html", examples: ["diff(cos(x), x)"] },
@@ -96,6 +97,9 @@ function cellKind(src: string): string | null {
     case "diff": return "derivative";
     case "integrate": return "integral";
     case "plot": return "plot";
+    case "epicycles": case "dft": return "epicycles";
+    case "sum": return "sum";
+    case "exptotrig": return "Euler";
   }
   if (/[λ\\]|:=/.test(s)) return "λ-term";
   if (/^(let\s+\w+\s*=\s*)?(poset|divisors|subsets|chain|map|hasse|join|meet|sup|inf|upper|lower|lattice|top|bottom|le|maximal|minimal|monotone|lfp|gfp|fixpoints)\s*\(/.test(s)) return "order";
@@ -126,8 +130,10 @@ const SAMPLES = [
 // ---------------------------------------------------------------------------
 
 /** One curve of a plot: its normalized term (LaTeX and plain text, the latter for Manim) and its samples. */
-interface PlotSeries { latex: string; text: string; points: [number, number | null][] }
-interface PlotData { var: string; from: number; to: number; series: PlotSeries[] }
+interface PlotSeries { latex: string; text: string; points: [number, number | null][]; parametric?: boolean }
+/** One epicycle: frequency k and coefficient c_k (with its exact term's LaTeX when there is one). */
+interface Epicycle { k: number; re: number; im: number; latex?: string }
+interface PlotData { var: string; from: number; to: number; series: PlotSeries[]; terms?: Epicycle[] }
 /** How many curve colours the stylesheet defines (`svg .curve.c0` … ). */
 const CURVE_COLOURS = 6;
 /** A `.chalk` file from before lists in `plot` stored one curve as `points` + `text`. */
@@ -305,7 +311,7 @@ async function runCell(cell: Cell) {
   S.busy = true;
   renderChrome();
   const t0 = performance.now();
-  const isPlot = /^\s*plot\s*\(/.test(src);
+  const isPlot = /^\s*(plot|epicycles|dft)\s*\(/.test(src);
   log("rpc", `${isPlot ? "engine.plot" : "engine.evaluate"} ${JSON.stringify(src)}`);
   try {
     const r = isPlot
@@ -319,11 +325,16 @@ async function runCell(cell: Cell) {
       cell.outText = r.rendered.text;
       cell.semantics = "semantics" in r && r.semantics === "complex" ? "complex" : "real";
       cell.echoLatex = r.inputRendered?.latex;
+      // a dft cell's input is a long list of sample points: say how many rather than typeset them
+      if (/^\s*dft\s*\(/.test(src)) { const n = (src.match(/;/g)?.length ?? 0) + 1; cell.echoLatex = `\\text{dft of ${n} sample point${n === 1 ? "" : "s"}}`; }
       cell.steps = r.derivation?.steps ?? [];
       delete cell.error;
       delete cell.plot; delete cell.outDeBruijn; delete cell.reading; delete cell.kind; delete cell.hasse; delete cell.summary;
       if ("kind" in r && r.kind === "poset") { cell.kind = "order"; cell.hasse = r.hasse; cell.summary = r.summary; }
-      if ("kind" in r && r.kind === "plot") cell.plot = { var: r.var, from: r.from, to: r.to, series: r.series.map((s) => ({ latex: s.rendered.latex, text: s.rendered.text, points: s.points })) };
+      if ("kind" in r && r.kind === "plot") {
+        cell.plot = { var: r.var, from: r.from, to: r.to, series: r.series.map((s) => ({ latex: s.rendered.latex, text: s.rendered.text, points: s.points, ...(s.parametric ? { parametric: true } : {}) })) };
+        if (r.terms?.length) cell.plot.terms = r.terms.map((t) => ({ k: t.k, re: t.re, im: t.im, ...(t.rendered ? { latex: t.rendered.latex } : {}) }));
+      }
       if ("kind" in r && r.kind === "lambda") { cell.outDeBruijn = r.renderedDeBruijn?.latex; cell.reading = r.reading; cell.kind = "λ-term"; }
       log("ok", `Out[${cell.label}] ${r.rendered.text}  (${cell.ms.toFixed(1)} ms, ${cell.steps.length} steps)`);
       if ("bound" in r && r.bound?.length) {
@@ -685,6 +696,44 @@ function importNotebook() {
   });
   inp.click();
 }
+/** Import SVG…: sample the file's paths at evenly spaced arc lengths (the article's
+ *  `getPointAtLength` loop), centre and scale them, and add a `dft([...])` cell — the discrete Fourier
+ *  transform of the samples drives an epicycle drawing of the picture. Presentation, not exact. */
+function importSvg() {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".svg,image/svg+xml";
+  inp.addEventListener("change", () => {
+    const f = inp.files?.[0]; if (!f) return;
+    void f.text().then((xml) => {
+      const doc = new DOMParser().parseFromString(xml, "image/svg+xml");
+      const paths = Array.from(doc.querySelectorAll("path"));
+      if (!paths.length) { log("err", "Import SVG: no <path> elements in the file"); return; }
+      // measure in a hidden host SVG so getTotalLength works
+      const NS = "http://www.w3.org/2000/svg";
+      const host = document.createElementNS(NS, "svg"); host.setAttribute("width", "0"); host.setAttribute("height", "0"); host.style.position = "absolute";
+      document.body.append(host);
+      const N = 400;
+      const copies = paths.map((p) => { const c = document.createElementNS(NS, "path"); c.setAttribute("d", p.getAttribute("d") ?? ""); host.append(c); return c; });
+      const total = copies.reduce((a, c) => a + c.getTotalLength(), 0);
+      const pts: [number, number][] = [];
+      for (const c of copies) {
+        const len = c.getTotalLength(), n = Math.max(1, Math.round((N * len) / (total || 1)));
+        for (let i = 0; i < n; i++) { const q = c.getPointAtLength((len * i) / n); pts.push([q.x, q.y]); }
+      }
+      host.remove();
+      // centre, flip y (SVG's y grows downward), scale the larger extent to [-1, 1]
+      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+      const ext = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 2 || 1;
+      const rows = pts.map(([x, y]) => `${((x - cx) / ext).toFixed(3)}, ${(-(y - cy) / ext).toFixed(3)}`).join("; ");
+      const cell = addCell(`dft([${rows}])`);
+      renderSidebar(); focusCell(S.cells.length - 1);
+      log("ok", `imported ${f.name}: ${pts.length} sample points along ${paths.length} path${paths.length === 1 ? "" : "s"}`);
+      void runCell(cell);
+    });
+  });
+  inp.click();
+}
 function newNotebook() {
   newDoc(); switchTab("notebook");
   autosave();
@@ -792,7 +841,7 @@ function renderChrome() {
   brand.append(mark, h("span", "name", "ChalkMath"));
   const menus = h("div", "menus");
   const MENUS: Record<string, [string, () => void][]> = {
-    File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs], ["Export to file…", exportNotebook], ["Import from file…", importNotebook]],
+    File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs], ["Export to file…", exportNotebook], ["Import from file…", importNotebook], ["Import SVG as epicycles…", importSvg]],
     Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
     View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }],
       [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("chalkmath.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }],
@@ -923,13 +972,15 @@ function renderSidebar() {
 
 /** Draw sampled points: axes through the origin when in range, a few labelled ticks, the curve
  *  broken wherever the engine reported no finite value. `frac` draws the first part of the curve
- *  (the studio animates it). */
-function plotSvg(p: PlotData, w: number, hgt: number, frac = 1): SVGSVGElement {
+ *  (the studio animates it). A parametric (complex-valued) plot is drawn in the plane with equal
+ *  scales on the axes, so a circle is a circle. `t01` in [0, 1] adds the epicycles at that phase. */
+function plotSvg(p: PlotData, w: number, hgt: number, frac = 1, t01?: number): SVGSVGElement {
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${w} ${hgt}`); svg.setAttribute("width", String(w)); svg.setAttribute("height", String(hgt));
+  const parametric = p.series.some((s) => s.parametric);
   const ys = p.series.flatMap((s) => s.points.map((q) => q[1])).filter((y): y is number => y !== null).sort((a, b) => a - b);
-  let y0 = -1, y1 = 1;
+  let y0 = -1, y1 = 1, x0 = p.from, x1 = p.to;
   if (ys.length) {
     // trim the tails so an asymptote does not flatten the rest
     const lo = ys[Math.floor(ys.length * 0.02)]!, hi = ys[Math.ceil(ys.length * 0.98) - 1]!;
@@ -937,8 +988,23 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1): SVGSVGElement {
     if (y1 - y0 < 1e-9) { y0 -= 1; y1 += 1; }
     const pad = (y1 - y0) * 0.08; y0 -= pad; y1 += pad;
   }
+  if (parametric) {
+    // the x range is the real parts', and both axes share one scale; the epicycles' reach counts too
+    const xs = p.series.filter((s) => s.parametric).flatMap((s) => s.points.filter((q) => q[1] !== null).map((q) => q[0]));
+    const reach = (p.terms ?? []).reduce((a, c) => a + Math.hypot(c.re, c.im), 0);
+    const c0 = p.terms?.find((c) => c.k === 0);
+    x0 = Math.min(...xs, c0 ? c0.re - reach : Infinity); x1 = Math.max(...xs, c0 ? c0.re + reach : -Infinity);
+    if (p.terms?.length) { y0 = Math.min(y0, (c0?.im ?? 0) - reach); y1 = Math.max(y1, (c0?.im ?? 0) + reach); }
+    if (!isFinite(x0) || !isFinite(x1)) { x0 = -1; x1 = 1; }
+    if (x1 - x0 < 1e-9) { x0 -= 1; x1 += 1; }
+    const padx = (x1 - x0) * 0.08; x0 -= padx; x1 += padx;
+    const pw = w - 48, ph = hgt - 34;
+    const scale = Math.min(pw / (x1 - x0), ph / (y1 - y0));
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    x0 = cx - pw / scale / 2; x1 = cx + pw / scale / 2; y0 = cy - ph / scale / 2; y1 = cy + ph / scale / 2;
+  }
   const L = 38, R = 10, T = 10, B = 24;
-  const sx = (x: number) => L + ((x - p.from) / (p.to - p.from || 1)) * (w - L - R);
+  const sx = (x: number) => L + ((x - x0) / (x1 - x0 || 1)) * (w - L - R);
   const sy = (y: number) => T + ((y1 - y) / (y1 - y0)) * (hgt - T - B);
   const line = (x1: number, yA: number, x2: number, yB: number, cls: string) => {
     const l = document.createElementNS(NS, "line");
@@ -953,9 +1019,9 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1): SVGSVGElement {
   // frame and axes
   line(L, T, L, hgt - B, "axis"); line(L, hgt - B, w - R, hgt - B, "axis");
   if (y0 < 0 && y1 > 0) line(L, sy(0), w - R, sy(0), "zero");
-  if (p.from < 0 && p.to > 0) line(sx(0), T, sx(0), hgt - B, "zero");
+  if (x0 < 0 && x1 > 0) line(sx(0), T, sx(0), hgt - B, "zero");
   for (let k = 0; k <= 4; k++) {
-    const x = p.from + ((p.to - p.from) * k) / 4, y = y0 + ((y1 - y0) * k) / 4;
+    const x = x0 + ((x1 - x0) * k) / 4, y = y0 + ((y1 - y0) * k) / 4;
     line(sx(x), hgt - B, sx(x), hgt - B + 4, "tick"); text(sx(x), hgt - 6, nice(x), "tl");
     line(L - 4, sy(y), L, sy(y), "tick"); text(L - 6, sy(y) + 3, nice(y), "tl r");
   }
@@ -965,14 +1031,57 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1): SVGSVGElement {
     let d = "", pen = false;
     for (let i = 0; i < n; i++) {
       const [x, y] = s.points[i]!;
-      if (y === null || y < y0 || y > y1) { pen = false; continue; }
+      if (y === null || (!s.parametric && (y < y0 || y > y1))) { pen = false; continue; }
       d += `${pen ? "L" : "M"}${sx(x).toFixed(1)} ${sy(y).toFixed(1)} `; pen = true;
     }
     const path = document.createElementNS(NS, "path");
     path.setAttribute("d", d); path.setAttribute("class", `curve c${si % CURVE_COLOURS}`); svg.append(path);
   });
-  text(w - R, T + 10, `${p.var}`, "tl r");
+  // the epicycles at phase t01: circles tip to tail, each spinning at its frequency
+  if (p.terms?.length && t01 !== undefined) {
+    const t = t01 * 2 * Math.PI;
+    let x = 0, y = 0;
+    const g = document.createElementNS(NS, "g"); g.setAttribute("class", "epi");
+    for (const c of p.terms) {
+      const r = Math.hypot(c.re, c.im), ph = Math.atan2(c.im, c.re);
+      const nx = x + r * Math.cos(c.k * t + ph), ny = y + r * Math.sin(c.k * t + ph);
+      if (c.k !== 0) {
+        const circ = document.createElementNS(NS, "circle");
+        circ.setAttribute("cx", String(sx(x))); circ.setAttribute("cy", String(sy(y)));
+        circ.setAttribute("r", String(r * (w - L - R) / (x1 - x0 || 1))); circ.setAttribute("class", "epicircle"); g.append(circ);
+      }
+      const l = document.createElementNS(NS, "line");
+      l.setAttribute("x1", String(sx(x))); l.setAttribute("y1", String(sy(y))); l.setAttribute("x2", String(sx(nx))); l.setAttribute("y2", String(sy(ny)));
+      l.setAttribute("class", "epiarm"); g.append(l);
+      x = nx; y = ny;
+    }
+    const tip = document.createElementNS(NS, "circle");
+    tip.setAttribute("cx", String(sx(x))); tip.setAttribute("cy", String(sy(y))); tip.setAttribute("r", "3"); tip.setAttribute("class", "epitip");
+    g.append(tip); svg.append(g);
+  }
+  if (!parametric) text(w - R, T + 10, `${p.var}`, "tl r");
   return svg;
+}
+
+/** The epicycle animation in a cell: redraw at the phase of a 12-second loop while the box is on
+ *  screen. Returns the box; the loop stops when the box leaves the document. */
+function epicycleBox(p: PlotData, w: number, hgt: number): HTMLElement {
+  const box = h("div", "plotbox epibox");
+  const period = 12000;
+  let start = performance.now();
+  const draw = () => {
+    const t01 = ((performance.now() - start) % period) / period;
+    const svg = plotSvg(p, w, hgt, Math.min(1, t01 * 1.02), t01);
+    box.replaceChildren(svg);
+  };
+  draw();
+  let raf = 0;
+  const loop = () => { if (!box.isConnected) return; draw(); raf = requestAnimationFrame(loop); };
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) { if (e.isIntersecting) { if (!raf) { start = performance.now(); raf = requestAnimationFrame(loop); } } else { cancelAnimationFrame(raf); raf = 0; } }
+  });
+  io.observe(box);
+  return box;
 }
 
 /** A Hasse diagram: elements in layers by height, covers as edges, nothing else. */
@@ -1000,6 +1109,14 @@ function hasseSvg(d: { nodes: { name: string; height: number }[]; covers: [strin
     t.setAttribute("x", String(x + 9)); t.setAttribute("y", String(y - 7)); t.setAttribute("class", "hlabel"); t.textContent = name; svg.append(t);
   }
   return svg;
+}
+
+/** A complex number as LaTeX, to a few digits. */
+function fmtC(re: number, im: number): string {
+  const f = (v: number) => (Math.abs(v) < 1e-12 ? "0" : String(Math.round(v * 1000) / 1000));
+  if (Math.abs(im) < 1e-12) return f(re);
+  if (Math.abs(re) < 1e-12) return `${f(im)}i`;
+  return `${f(re)} ${im < 0 ? "-" : "+"} ${f(Math.abs(im))}i`;
 }
 
 /** The sampled function as a Python expression for Manim: `3*x^2 + sin(x)` → `3*x**2 + np.sin(x)`. */
@@ -1178,10 +1295,23 @@ function renderCellBody(cell: Cell) {
       val.classList.add("isplot");
       val.append(box, cap);
     } else if (cell.plot) {
-      const box = h("div", "plotbox");
-      box.append(plotSvg(cell.plot, 520, 240));
+      const epi = !!cell.plot.terms?.length;
+      const box = epi ? epicycleBox(cell.plot, 520, 320) : h("div", "plotbox");
+      if (!epi) box.append(plotSvg(cell.plot, 520, cell.plot.series.some((s) => s.parametric) ? 320 : 240));
       const cap = h("div", "plotcap");
-      if (cell.plot.series.length > 1) {
+      if (epi) {
+        const terms = cell.plot.terms!;
+        const shown = terms.slice(0, 8);
+        cap.append(h("span", "epinote", `${terms.length} circle${terms.length === 1 ? "" : "s"}: `));
+        shown.forEach((c, i) => {
+          const it = h("span", "legend");
+          const lab = c.latex ? `k=${c.k}:\ ${c.latex}` : `k=${c.k}:\ ${fmtC(c.re, c.im)}`;
+          it.insertAdjacentHTML("beforeend", tex(lab));
+          cap.append(it, i < shown.length - 1 ? document.createTextNode(" ") : "");
+        });
+        if (terms.length > shown.length) cap.append(h("span", "epinote", `… (${terms.length - shown.length} more)`));
+        cap.append(h("div", "epinote", "The circles' radii and phases are the coefficients' modulus and argument; the trace is the sum. Sampling is numeric."));
+      } else if (cell.plot.series.length > 1) {
         cell.plot.series.forEach((s, i) => {
           const it = h("span", `legend c${i % CURVE_COLOURS}`);
           it.append(h("i", "swatch")); it.insertAdjacentHTML("beforeend", tex(s.latex));
@@ -1777,7 +1907,10 @@ function sendToScene(cell: Cell, target?: number | "new") {
   }
   if (cell.plot) {
     const k = cell.plot.series.length;
-    const g = mk("Graph", cell.outLatex, "Create", 2.0, `Plot of ${k > 1 ? `${k} functions` : "the function"} over [${cell.plot.from}, ${cell.plot.to}], sampled by the engine.`);
+    const epi = !!cell.plot.terms?.length;
+    const g = epi
+      ? mk("Epicycles", cell.outLatex, "Create", 8.0, `${cell.plot.terms!.length} circles tip to tail, each spinning at its frequency; the tip traces the curve over one period.`)
+      : mk("Graph", cell.outLatex, "Create", 2.0, `Plot of ${k > 1 ? `${k} functions` : "the function"} over [${cell.plot.from}, ${cell.plot.to}], sampled by the engine.`);
     g.plot = cell.plot;
     shots.push(g);
   }
@@ -1831,6 +1964,40 @@ function manimSceneCode(scene: Scene | null): string {
   let first = true;
   for (const s of on) {
     L.push(`        # ${q(s.label)}`);
+    if (s.plot?.terms?.length) {
+      // epicycles: one rotating vector per term, tip to tail, and a traced path
+      const pl = s.plot;
+      const terms = pl.terms!;
+      const reach = terms.reduce((a, c) => a + Math.hypot(c.re, c.im), 0) || 1;
+      if (!first) L.push("        self.play(FadeOut(expr), run_time=0.3)");
+      L.push(`        terms = [${terms.map((c) => `(${c.k}, ${c.re.toFixed(6)}, ${c.im.toFixed(6)})`).join(", ")}]  # (k, Re c_k, Im c_k)`);
+      L.push(`        scale = ${(3.0 / reach).toFixed(6)}`);
+      L.push("        t = ValueTracker(0.0)");
+      L.push("        def tip_at(u):");
+      L.push("            x, y = 0.0, 0.0");
+      L.push("            for k, re, im in terms:");
+      L.push("                r, ph = np.hypot(re, im), np.arctan2(im, re)");
+      L.push("                x += r * np.cos(k * u + ph); y += r * np.sin(k * u + ph)");
+      L.push("            return np.array([x * scale, y * scale, 0.0])");
+      L.push("        def arms():");
+      L.push("            g = VGroup(); x, y = 0.0, 0.0; u = t.get_value()");
+      L.push("            for k, re, im in terms:");
+      L.push("                r, ph = np.hypot(re, im), np.arctan2(im, re)");
+      L.push("                nx, ny = x + r * np.cos(k * u + ph), y + r * np.sin(k * u + ph)");
+      L.push("                if k != 0: g.add(Circle(radius=r * scale, stroke_opacity=0.35, stroke_width=1).move_to([x * scale, y * scale, 0]))");
+      L.push("                g.add(Line([x * scale, y * scale, 0], [nx * scale, ny * scale, 0], stroke_width=1.5))");
+      L.push("                x, y = nx, ny");
+      L.push("            return g");
+      L.push("        circles = always_redraw(arms)");
+      L.push("        trace = TracedPath(lambda: tip_at(t.get_value()), stroke_color=YELLOW, stroke_width=2.5)");
+      L.push(`        label = MathTex(r"${s.tex}", font_size=30).to_corner(UR)`);
+      L.push("        self.add(circles, trace)");
+      L.push(`        self.play(t.animate.set_value(2 * np.pi), FadeIn(label), run_time=${s.dur.toFixed(1)}, rate_func=linear)`);
+      L.push("        expr = VGroup(circles, trace, label)");
+      first = false;
+      L.push("");
+      continue;
+    }
     if (s.plot) {
       const pl = s.plot;
       const ys = pl.series.flatMap((c) => c.points.map((pt) => pt[1])).filter((y): y is number => y !== null);
@@ -2042,7 +2209,8 @@ function renderStage() {
       gbox = h("div", "plotshot"); gbox.dataset.shot = String(cur.id); center.append(gbox);
     }
     const avail = Math.max(240, Math.min(720, stage.clientWidth - 52));
-    gbox.innerHTML = ""; gbox.append(plotSvg(cur.plot, avail, Math.round(avail * 0.45), p));
+    const epi = !!cur.plot.terms?.length;
+    gbox.innerHTML = ""; gbox.append(plotSvg(cur.plot, avail, Math.round(avail * (epi || cur.plot.series.some((s) => s.parametric) ? 0.6 : 0.45)), p, epi ? p : undefined));
     if (stageShot !== cur.id || !foot.childElementCount) {
       stageShot = cur.id; foot.innerHTML = "";
       foot.append(h("span", "caption", cur.label));

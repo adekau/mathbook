@@ -386,7 +386,18 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
   - Summands mentioning `i` now sort last (`sumRank` via `hasI`), so Euler reads `cos θ + i sin θ`.
   - Checked against the article: `c_3 = −2i/(3π)`, `c_2 = 0`, the symbolic `−i/k + i e^{−iπk}/k`,
     `∫e^{ix}dx = −i e^{ix}`, and `expand(exptotrig(2i/π(e^{−it} − e^{it}) + …)) = 4 sin t/π + 4/3 sin 3t/π`.
-- Stage B, the visuals — TODO: complex numeric evaluation; `plot` of a complex parametric curve;
-  an `epicycles` cell (the (k, c_k) read off a finite Fourier sum, animated tip-to-tail); `dft(points)`
-  as numeric presentation; Import SVG… sampling a path; a studio shot.
+- Stage B, the visuals — DONE 2026-09-16. `MathEngine/Fourier.lean` (presentation, unverified, and the
+  notebook says so): `CF`, a complex float with the arithmetic and principal functions; `evalNumericC`,
+  the numeric evaluator over ℂ — `N` uses it when a term mentions `i` or has no finite real value
+  (`N(sqrt(-1)) = i`, `N(exp(iπ/4))`); integer powers multiply out so `(1+2i)^2` is exactly `−3+4i`.
+  `plot` of a complex-valued curve is drawn in the plane (a `parametric` series, `[re, im]` samples,
+  equal scales). `epicycles(f, t)` reads the `(k, c_k)` off a finite Fourier sum (`fourierTerms`,
+  distributing first since the pipeline never does) and the notebook animates circles tip to tail
+  — radius |c_k|, phase arg c_k, k turns per period — with the tip tracing the curve; the exact
+  coefficients are in the legend. `dft(points[, modes])` is the O(N²) discrete Fourier transform of
+  sample points (complex numbers or `[x, y]` pairs), keeping the `modes` largest; File → Import SVG
+  as epicycles samples a file's paths at equal arc lengths (the article's `getPointAtLength` loop)
+  into a `dft` cell. The studio has an Epicycles shot, and the Manim export emits a `ValueTracker`
+  with `always_redraw` arms and a `TracedPath`. Checked: the square wave's partial sum traces a
+  segment on the real axis (the article's "line"), a heart SVG draws with 21 circles.
 - Stage C, the chapter — TODO: `m11b-fourier-series`, after echelon form.

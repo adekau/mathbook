@@ -142,6 +142,10 @@ def tests : TestM Unit := do
   check "sign of numerals" (evalText "sign(-3) + sign(0) + sign(5/2)") "0"
   check "sign stays symbolic" (evalText "sign(sin(t))") "sign(sin(t))"
   check "N of sign" (evalText "N(sign(-2.5))") "-1"
+  check "N over the complex numbers" (evalText "N(exp(i*pi/4))") "0.707106781186548 + 0.707106781186548*i"
+  check "N of a complex power" (evalText "N((1+2i)^2)") "-3 + 4*i"
+  check "N falls back to ℂ when the real value is not finite" (evalText "N(sqrt(-1))") "i"
+  check "N of ln(-1)" (evalText "N(ln(-1))") "3.14159265358979*i"
   check "parse 8/2/2 is a rational" (roundtrip "8/2/2") "2"
   check "parse a - b - c" (roundtrip "a - b - c") "a - b - c"
   -- parser: implicit multiplication and calls

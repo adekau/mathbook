@@ -3,6 +3,7 @@ import MathEngine.DiffRules
 import MathEngine.LinAlg
 import MathEngine.ExpandRules
 import MathEngine.Numeric
+import MathEngine.Fourier
 import MathEngine.Antiderivative
 import MathEngine.RadicalRules
 import MathEngine.ComplexRules
@@ -81,7 +82,9 @@ def cmdN : PlainRule :=
   { name := "cmd.N", apply := fun e => Option.map checked <|
       match e with
       | .fn "N" [a] =>
-        match evalNumeric [] a >>= floatToExpr with
+        -- over ℝ unless the term mentions `i` or has no finite real value (sqrt(−1), ln(−1)): then over ℂ
+        let real := evalNumeric [] a >>= floatToExpr
+        match (if mentionsI a || real.toOption.isNone then evalNumericC [] a >>= cfToExpr else real) with
         | .ok v => some ⟨v, "Numerical approximation in IEEE-754 double precision.", none, none⟩
         | .error msg => some ⟨a, "", none, some msg⟩
       | .fn "N" _ => some (refuse "N takes one argument")

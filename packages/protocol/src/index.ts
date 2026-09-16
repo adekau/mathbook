@@ -171,13 +171,19 @@ export interface ExplainResult {
  *  `engine.explain` works on it), and samples each curve on a uniform grid. Drawing is the
  *  frontend's; a sample is `null` where the curve has no finite value. Optional method (rule 5). */
 export interface PlotParams { sessionId: string; cellId: string; source: string; showWork?: boolean; paths?: boolean }
-/** One curve: its normalized term (rendered) and its samples. */
-export interface PlotSeries { rendered: Rendered; points: [number, number | null][] }
+/** One curve: its normalized term (rendered) and its samples. A `parametric` curve is complex-valued
+ *  and its samples are `[re, im]` — a point in the plane rather than `[t, y]`. */
+export interface PlotSeries { rendered: Rendered; points: [number, number | null][]; parametric?: boolean }
+/** `epicycles(f, t)` / `dft(points)`: one rotating circle — frequency `k`, coefficient `c_k` as a
+ *  number (and as the exact term when the sum was symbolic). */
+export interface Epicycle { k: number; re: number; im: number; rendered?: Rendered }
 export interface PlotResult {
   ok: true; kind: "plot";
   value: WireExpr; rendered: Rendered;
   var: string; from: number; to: number;
   series: PlotSeries[];
+  /** Non-empty for `epicycles` and `dft`: the circles, in frequency order. */
+  terms?: Epicycle[];
   derivation?: Derivation; inputRendered?: Rendered; label?: number;
 }
 

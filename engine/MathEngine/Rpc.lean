@@ -224,9 +224,12 @@ def plot (st : Store) (params : Json) : Store × Json :=
       let paths := params.getBool "paths"
       let ptsJson (pts : Array (Float × Option Float)) : Json :=
         .arr (pts.map fun (t, y) => Json.arr #[floatJson t, match y with | some v => floatJson v | none => .null])
-      let series := pl.series.map fun (g, pts) => Json.obj #[("rendered", Rendered.toJson g false), ("points", ptsJson pts)]
+      let series := pl.series.map fun sr => Json.obj #[("rendered", Rendered.toJson sr.term false), ("points", ptsJson sr.points), ("parametric", .bool sr.parametric)]
+      let terms := pl.terms.map fun (k, c, ex) => Json.obj (#[("k", .num (toString k)), ("re", floatJson c.re), ("im", floatJson c.im)] ++
+        (match ex with | some e => #[("rendered", Rendered.toJson e false)] | none => #[]))
       let res := #[("ok", .bool true), ("kind", .str "plot"), ("value", out.toJson), ("rendered", Rendered.toJson out paths),
-        ("var", .str pl.var), ("from", floatJson pl.from_), ("to", floatJson pl.to), ("series", .arr series)]
+        ("var", .str pl.var), ("from", floatJson pl.from_), ("to", floatJson pl.to), ("series", .arr series),
+        ("terms", .arr terms)]
       let res := if params.getBool "showWork" then
           (res.push ("derivation", d.toJson paths)).push ("inputRendered", Rendered.toJson d.input paths)
         else res

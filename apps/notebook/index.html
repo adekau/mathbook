@@ -225,6 +225,10 @@ svg .curve { fill:none; stroke:var(--acc); stroke-width:2; stroke-linejoin:round
 svg .curve.c1 { stroke:var(--curve1); } svg .curve.c2 { stroke:var(--curve2); } svg .curve.c3 { stroke:var(--curve3); } svg .curve.c4 { stroke:var(--curve4); } svg .curve.c5 { stroke:var(--curve5); }
 .plotcap .legend { display:inline-flex; align-items:center; gap:7px; margin:2px 18px 2px 0; cursor:pointer; }
 .plotcap .legend:hover { color:var(--p-ink-strong); }
+svg .epicircle { fill:none; stroke:var(--ink-mut); stroke-width:1; opacity:0.55; }
+svg .epiarm { stroke:var(--ink-2); stroke-width:1.2; }
+svg .epitip { fill:var(--acc); }
+.plotcap .epinote { font-size:11px; color:var(--p-mut); font-family:var(--font); display:inline-block; margin-right:6px; }
 .plotcap .swatch { display:inline-block; width:16px; height:3px; border-radius:2px; background:var(--acc); }
 .plotcap .legend.c1 .swatch { background:var(--curve1); } .plotcap .legend.c2 .swatch { background:var(--curve2); } .plotcap .legend.c3 .swatch { background:var(--curve3); } .plotcap .legend.c4 .swatch { background:var(--curve4); } .plotcap .legend.c5 .swatch { background:var(--curve5); }
 .plotshot { display:flex; justify-content:center; padding:12px; }
