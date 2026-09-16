@@ -1,6 +1,7 @@
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.Basic
 import Mathlib.Analysis.SpecialFunctions.Log.Base
+import Mathlib.Data.Real.Sign
 import MathEngine
 /-!
 # ℝ-valued semantics
@@ -37,6 +38,7 @@ def applyFn (f : String) (x : ℝ) : ℝ :=
   | "log" => Real.logb 10 x
   | "sqrt" => Real.sqrt x
   | "abs" => |x|
+  | "sign" => Real.sign x
   | _ => 0
 
 @[simp] theorem applyFn_sin (x : ℝ) : applyFn "sin" x = Real.sin x := by simp [applyFn]
@@ -45,6 +47,7 @@ def applyFn (f : String) (x : ℝ) : ℝ :=
 @[simp] theorem applyFn_ln (x : ℝ) : applyFn "ln" x = Real.log x := by simp [applyFn]
 @[simp] theorem applyFn_sqrt (x : ℝ) : applyFn "sqrt" x = Real.sqrt x := by simp [applyFn]
 @[simp] theorem applyFn_abs (x : ℝ) : applyFn "abs" x = |x| := by simp [applyFn]
+@[simp] theorem applyFn_sign (x : ℝ) : applyFn "sign" x = Real.sign x := by simp [applyFn]
 
 /-- The constants: `π` is `Real.pi`; any other 0-ary function node (`i`, which has no real
 meaning) is the junk value 0. Shared by `evalR` and `evalD`, so the two agree definitionally. -/

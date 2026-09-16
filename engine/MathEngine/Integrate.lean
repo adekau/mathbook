@@ -35,9 +35,40 @@ def pipelineRules : List PlainRule := pipelineRulesWith checkNorm
 /-- Every rule of the notebook pipeline decreases `μ` on a node whose children are normal. -/
 theorem pipelineOrdered : Ordered pipelineRules := pipelineOrderedWith checkNorm
 
-/-- **The checker's claim.** Whatever `integrate(f, x)` returns without error, differentiating it
-gives a normal form `g` which, expanded and normalized, is the same term as `f` expanded and
-normalized. Nothing about the finder is assumed. -/
+/-- `findAnti` fails only with a refusal. -/
+theorem findAnti_error (norm : Norm) {f : Expr} {x : String} {r : RuleResult}
+    (h : findAnti norm f x = .error r) : r.error ≠ none := by
+  unfold findAnti at h
+  (repeat' split at h) <;> first | (cases h; simp [refuse]) | cases h
+
+/-- **The finder's claim.** Whatever `findAnti` accepts, differentiating it gives a normal form `g`
+which, expanded and normalized, is the same term as `f` expanded and normalized. Nothing about
+the finder is assumed. -/
+theorem findAnti_spec (norm : Norm) {f : Expr} {x : String} {F : Expr} {steps : Array Step}
+    (h : findAnti norm f x = .ok (F, steps)) :
+    ∃ g sub g' s₁ s₂, norm (D F x) = .ok (g, sub) ∧
+      norm (Expand.dist (Expand.identNorm g)) = .ok (g', s₁) ∧
+      norm (Expand.dist (Expand.identNorm f)) = .ok (g', s₂) := by
+  unfold findAnti at h
+  split at h
+  · cases h
+  · rename_i F₀ steps₀ _
+    split at h
+    · cases h
+    · rename_i F' _ _
+      split at h
+      · cases h
+      · rename_i g sub hn
+        split at h
+        · rename_i g' subg f' s₂ hg hf
+          split at h
+          · rename_i heq
+            cases h
+            exact ⟨g, sub, g', subg, s₂, hn, hg, by rw [hf, Expr.beq_eq g' f' heq]⟩
+          · cases h
+        · cases h
+
+/-- **The checker's claim** for `integrate(f, x)`: an accepted result is a `findAnti` result. -/
 theorem cmdIntegrate_spec (norm : Norm) {f : Expr} {x : String} {res : RuleResult}
     (h : (cmdIntegrate norm).apply (.fn "integrate" [f, .var x]) = some res) (hok : res.error = none) :
     ∃ g sub g' s₁ s₂, norm (D res.result x) = .ok (g, sub) ∧
@@ -48,21 +79,51 @@ theorem cmdIntegrate_spec (norm : Norm) {f : Expr} {x : String} {res : RuleResul
   obtain ⟨hrr, -⟩ := checked_spec rfl hok
   rw [hrr] at hok ⊢
   split at hr
+  · rename_i hfind
+    cases hr; exact absurd hok (findAnti_error norm hfind)
+  · rename_i F steps hfind
+    cases hr
+    exact findAnti_spec norm hfind
+
+/-- **The definite integral's claim**: `integrate(f, x, a, b)` returns `F[x := b] − F[x := a]` for
+an `F` the checker accepted for `f` — the same claim as above, plus the two substitutions. -/
+theorem cmdIntegrate_definite_spec (norm : Norm) {f a b : Expr} {x : String} {res : RuleResult}
+    (h : (cmdIntegrate norm).apply (.fn "integrate" [f, .var x, a, b]) = some res) (hok : res.error = none) :
+    ∃ F, res.result = definite F x a b ∧
+      ∃ g sub g' s₁ s₂, norm (D F x) = .ok (g, sub) ∧
+        norm (Expand.dist (Expand.identNorm g)) = .ok (g', s₁) ∧
+        norm (Expand.dist (Expand.identNorm f)) = .ok (g', s₂) := by
+  unfold cmdIntegrate at h; simp only [Option.map_eq_some_iff] at h
+  obtain ⟨r, hr, rfl⟩ := h
+  obtain ⟨hrr, -⟩ := checked_spec rfl hok
+  rw [hrr] at hok ⊢
+  split at hr
   · cases hr; simp [refuse] at hok
-  · rename_i F₀ steps _
-    split at hr
-    · cases hr; simp [refuse] at hok
-    · rename_i F _ _
-      split at hr
-      · cases hr; simp [refuse] at hok
-      · rename_i g sub hn
-        split at hr
-        · rename_i g' subg f' s₂ hg hf
-          split at hr
-          · rename_i heq
-            cases hr
-            exact ⟨g, sub, g', subg, s₂, hn, hg, by rw [hf, Expr.beq_eq g' f' heq]⟩
-          · cases hr; simp [refuse] at hok
-        · cases hr; simp [refuse] at hok
+  · split at hr
+    · rename_i hfind
+      cases hr; exact absurd hok (findAnti_error norm hfind)
+    · rename_i F steps hfind
+      cases hr
+      exact ⟨F, rfl, findAnti_spec norm hfind⟩
+
+/-- **`sum`'s claim**: the result is the list of substituted terms, summed. -/
+theorem cmdSum_spec {f : Expr} {k : String} {a b : Q} {res : RuleResult}
+    (h : cmdSum.apply (.fn "sum" [f, .var k, .num a, .num b]) = some res) (hok : res.error = none) :
+    res.result = Expr.addN (sumTerms f k a.val.num b.val.num) := by
+  unfold cmdSum at h; simp only [Option.map_eq_some_iff] at h
+  obtain ⟨r, hr, rfl⟩ := h
+  obtain ⟨hrr, -⟩ := checked_spec rfl hok
+  rw [hrr] at hok ⊢
+  (repeat' split at hr) <;> first | (cases hr; simp [refuse] at hok; done) | (cases hr; rfl) | (simp_all; done) | (cases hr; simp_all)
+
+/-- **`exptotrig`'s claim**: the result is `expToTrig` of the argument. -/
+theorem cmdExpToTrig_spec {a : Expr} {res : RuleResult}
+    (h : cmdExpToTrig.apply (.fn "exptotrig" [a]) = some res) (hok : res.error = none) :
+    res.result = expToTrig a := by
+  unfold cmdExpToTrig at h; simp only [Option.map_eq_some_iff] at h
+  obtain ⟨r, hr, rfl⟩ := h
+  obtain ⟨hrr, -⟩ := checked_spec rfl hok
+  rw [hrr] at hok ⊢
+  (repeat' split at hr) <;> first | (cases hr; simp [refuse] at hok; done) | (cases hr; rfl) | (simp_all; done) | (cases hr; simp_all)
 
 end MathEngine

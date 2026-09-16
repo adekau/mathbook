@@ -10,6 +10,25 @@ partial def substitute (bindings : List (String × Expr)) : Expr → Expr
   | .var x => (bindings.lookup x).getD (.var x)
   | e => withChildren e ((children e).map (substitute bindings))
 
+mutual
+  /-- `e[x := v]`, structurally (so proofs can unfold it, unlike `substitute`). There are no binders
+  in the scalar language, so every occurrence of `x` is free. -/
+  def substVar (x : String) (v : Expr) : Expr → Expr
+    | .num q => .num q
+    | .var y => if y == x then v else .var y
+    | .add es => .add (substVarList x v es)
+    | .mul es => .mul (substVarList x v es)
+    | .pow b e => .pow (substVar x v b) (substVar x v e)
+    | .fn f es => .fn f (substVarList x v es)
+    | .matrix rows => .matrix (substVarRows x v rows)
+  def substVarList (x : String) (v : Expr) : List Expr → List Expr
+    | [] => []
+    | e :: es => substVar x v e :: substVarList x v es
+  def substVarRows (x : String) (v : Expr) : List (List Expr) → List (List Expr)
+    | [] => []
+    | r :: rs => substVarList x v r :: substVarRows x v rs
+end
+
 /-- A session function: its parameters and (normalized) body. -/
 abbrev FnDef := List String × Expr
 
@@ -36,6 +55,7 @@ def constants : List (String × Float) := [("π", 3.141592653589793), ("e", 2.71
 
 private def fns : List (String × (Float → Float)) :=
   [("sin", Float.sin), ("cos", Float.cos), ("tan", Float.tan), ("exp", Float.exp), ("ln", Float.log),
+   ("sign", fun x => if x > 0 then 1 else if x < 0 then -1 else 0),
    ("log", Float.log10), ("sqrt", Float.sqrt), ("abs", Float.abs)]
 
 /-- IEEE-754 double value. Fails on unbound variables, unevaluated commands and matrices. -/

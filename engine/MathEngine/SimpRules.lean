@@ -430,6 +430,8 @@ def functionApply : Expr → Option RuleResult
   | .fn "sin" [a] => if isZero a then some ⟨Expr.zero, "$\\sin 0 = 0$.", none, none⟩ else none
   | .fn "cos" [a] => if isZero a then some ⟨Expr.one, "$\\cos 0 = 1$.", none, none⟩ else none
   | .fn "abs" [.num q] => some ⟨.num q.abs, "Absolute value of a constant.", none, none⟩
+  | .fn "sign" [.num q] =>
+    some ⟨.num (if q.isNeg then Q.minusOne else if q.isZero then Q.zero else Q.one), "The sign of a constant: $-1$, $0$ or $1$.", none, none⟩
   | _ => none
 
 /-- Closes a leaf of a rule proof: either the arm returned `none`, or substitute the result and

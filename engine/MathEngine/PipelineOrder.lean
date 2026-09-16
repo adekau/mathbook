@@ -26,10 +26,10 @@ variable {norm : Norm}
 -- ---------------------------------------------------------------------------
 
 theorem mem_pipeline_iff (r : PlainRule) : r ∈ (pipelineRulesWith norm) ↔
-    r = cmdSimplify ∨ r = cmdExpand ∨ r = cmdRref ∨ r = cmdN ∨ r = cmdSubst ∨ r = cmdIntegrate norm ∨
+    r = cmdSimplify ∨ r = cmdExpand ∨ r = cmdRref ∨ r = cmdN ∨ r = cmdSubst ∨ r = cmdIntegrate norm ∨ r = cmdSum ∨ r = cmdExpToTrig ∨
     r = diffHigherOrder ∨ r = diffConstant ∨ r = diffVariable ∨ r = diffSum ∨ r = diffConstMul ∨
     r = diffProduct ∨ r = diffPower ∨ r = diffChain ∨ r = diffMatrix ∨
-    r = laAdd ∨ r = laScalarMul ∨ r = laMul ∨ r = laTranspose ∨ r = laDet ∨ r = laPow ∨
+    r = laAdd ∨ r = laScalarMul ∨ r = laMul ∨ r = laTranspose ∨ r = laDet ∨ r = laPow ∨ r = laDot ∨ r = laNorm ∨ r = laConj ∨
     r = scalarOnly iPower ∨ r = scalarOnly cxArith ∨ r = scalarOnly cxPow ∨ r = scalarOnly cxConj ∨ r = scalarOnly cxReIm ∨
     r = scalarOnly cxAbs ∨ r = scalarOnly exactTrig ∨ r = scalarOnly euler ∨ r = scalarOnly eulerPower ∨
     r = scalarOnly flatten.toPlain ∨ r = scalarOnly identity.toPlain ∨ r = scalarOnly foldConstants.toPlain ∨
@@ -199,7 +199,7 @@ theorem not_noFire_of_cmd {f : String} {es : List Expr} (h : cmdNames.contains f
     ¬ NoFire (pipelineRulesWith norm) (.fn f es) := by
   intro hnf
   simp [cmdNames] at h
-  rcases h with rfl | rfl | rfl | rfl | rfl | rfl
+  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · have := hnf cmdSimplify ((mem_pipeline_iff _).2 (by simp))
     match es, this with
     | [_], h => simp [cmdSimplify] at h
@@ -228,10 +228,14 @@ theorem not_noFire_of_cmd {f : String} {es : List Expr} (h : cmdNames.contains f
     | [_, .matrix _, _], h => simp [cmdSubst] at h
     | [], h | [_], h | [_, _], h | _ :: _ :: _ :: _ :: _, h => simp [cmdSubst] at h
   · have := hnf (cmdIntegrate norm) ((mem_pipeline_iff _).2 (by simp))
-    match es, this with
-    | [_, .var _], h => simp only [cmdIntegrate, Option.map_eq_none_iff] at h; split at h <;> (try split at h) <;> (try split at h) <;> (try split at h) <;> (try split at h) <;> simp at h
-    | [_, .num _], h | [_, .add _], h | [_, .mul _], h | [_, .pow _ _], h | [_, .fn _ _], h | [_, .matrix _], h => simp [cmdIntegrate] at h
-    | [], h | [_], h | _ :: _ :: _ :: _, h => simp [cmdIntegrate] at h
+    simp only [cmdIntegrate, Option.map_eq_none_iff] at this
+    (repeat' split at this) <;> simp_all
+  · have := hnf cmdSum ((mem_pipeline_iff _).2 (by simp))
+    simp only [cmdSum, Option.map_eq_none_iff] at this
+    (repeat' split at this) <;> simp_all
+  · have := hnf cmdExpToTrig ((mem_pipeline_iff _).2 (by simp))
+    simp only [cmdExpToTrig, Option.map_eq_none_iff] at this
+    (repeat' split at this) <;> simp_all
 
 /-- A `diff` of the wrong arity is never normal. -/
 theorem not_noFire_of_d3 {es : List Expr} (h : es.length ≠ 2) : ¬ NoFire (pipelineRulesWith norm) (.fn "diff" es) := by
@@ -380,13 +384,23 @@ theorem dec_cmdSubst : Dec norm cmdSubst := dec_cmd
 theorem dec_cmdIntegrate : Dec norm (cmdIntegrate norm) := dec_cmd
   (fun e res h => by
     unfold cmdIntegrate at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
-    split at h
-    · split at h <;> (try split at h) <;> (try split at h) <;> (try split at h) <;> (try split at h) <;> exact ⟨_, _, rfl, by decide⟩
-    · exact ⟨_, _, rfl, by decide⟩
-    · exact ⟨_, _, rfl, by decide⟩
-    · simp at h)
+    (repeat' split at h) <;> first | exact ⟨_, _, rfl, by decide⟩ | simp at h)
   (fun e res h => by
     unfold cmdIntegrate at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
+
+theorem dec_cmdSum : Dec norm cmdSum := dec_cmd
+  (fun e res h => by
+    unfold cmdSum at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
+    (repeat' split at h) <;> first | exact ⟨_, _, rfl, by decide⟩ | simp at h)
+  (fun e res h => by
+    unfold cmdSum at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
+
+theorem dec_cmdExpToTrig : Dec norm cmdExpToTrig := dec_cmd
+  (fun e res h => by
+    unfold cmdExpToTrig at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
+    (repeat' split at h) <;> first | exact ⟨_, _, rfl, by decide⟩ | simp at h)
+  (fun e res h => by
+    unfold cmdExpToTrig at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
 
 -- ---------------------------------------------------------------------------
 -- Tier 2: diff.higher-order
@@ -512,6 +526,30 @@ theorem dec_laPow : Dec norm laPow := dec_lit
     · exact ⟨rfl, rfl⟩
     · simp at h)
   (fun e res h => by unfold laPow at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
+
+theorem dec_laDot : Dec norm laDot := dec_lit
+  (fun e res h => by
+    unfold laDot at h; obtain ⟨r₀, h, _⟩ := lit_apply h
+    split at h
+    · exact ⟨by simp [cmdOwn, cmdNames], by simp [d3Own]⟩
+    · simp at h)
+  (fun e res h => by unfold laDot at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
+
+theorem dec_laNorm : Dec norm laNorm := dec_lit
+  (fun e res h => by
+    unfold laNorm at h; obtain ⟨r₀, h, _⟩ := lit_apply h
+    split at h
+    · exact ⟨by simp [cmdOwn, cmdNames], by simp [d3Own]⟩
+    · simp at h)
+  (fun e res h => by unfold laNorm at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
+
+theorem dec_laConj : Dec norm laConj := dec_lit
+  (fun e res h => by
+    unfold laConj at h; obtain ⟨r₀, h, _⟩ := lit_apply h
+    split at h
+    · exact ⟨by simp [cmdOwn, cmdNames], by simp [d3Own]⟩
+    · simp at h)
+  (fun e res h => by unfold laConj at h; obtain ⟨r₀, _, rfl⟩ := lit_apply h; exact ⟨r₀, rfl⟩)
 
 theorem target_spec {e : Expr} {p : Expr × String} (h : target e = some p) : e = .fn "diff" [p.1, .var p.2] := by
   unfold target at h
@@ -1934,6 +1972,13 @@ theorem dec_functionRules : Dec norm (scalarOnly functionRules.toPlain) := dec_s
     obtain ⟨he, _⟩ := clean_of_scalar hcn hm (by simp [cmdOwn, cmdNames]) (by simp [d3Own]) rfl
     apply muLt_of_clean (Clean.num _) he
     left; rw [M.fn₁ (by decide)]; have := M.pos (.num q); have := M_num_le_four q.abs; omega
+  -- sign (num q)
+  · rename_i q
+    simp only [Option.some.injEq] at happ; subst happ; (try dsimp only)
+    obtain ⟨he, _⟩ := clean_of_scalar hcn hm (by simp [cmdOwn, cmdNames]) (by simp [d3Own]) rfl
+    apply muLt_of_clean (Clean.num _) he
+    left; rw [M.fn₁ (by decide)]; have := M.pos (.num q)
+    have := M_num_le_four (if q.isNeg then Q.minusOne else if q.isZero then Q.zero else Q.one); omega
   · simp at happ
 
 -- simp.power -----------------------------------------------------------------
@@ -2657,13 +2702,15 @@ theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := 
   rw [mem_pipeline_iff] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
     rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact dec_cmdSimplify
   · exact dec_cmdExpand
   · exact dec_cmdRref
   · exact dec_cmdN
   · exact dec_cmdSubst
   · exact dec_cmdIntegrate
+  · exact dec_cmdSum
+  · exact dec_cmdExpToTrig
   · exact dec_diffHigherOrder
   · exact dec_diffConstant
   · exact dec_diffVariable
@@ -2679,6 +2726,9 @@ theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := 
   · exact dec_laTranspose
   · exact dec_laDet
   · exact dec_laPow
+  · exact dec_laDot
+  · exact dec_laNorm
+  · exact dec_laConj
   · exact dec_iPower
   · exact dec_cxArith
   · exact dec_cxPow

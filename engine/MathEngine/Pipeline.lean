@@ -46,7 +46,7 @@ def parityPlain : List PlainRule := parityRules.map scalarOnly
 def radicalPlain : List PlainRule := radicalRules.map scalarOnly
 def complexPlain : List PlainRule := complexRules.map scalarOnly
 
-/-- Notebook commands: `simplify`, `expand`, `rref`, `N`, `subst`, `integrate`. -/
+/-- Notebook commands: `simplify`, `expand`, `rref`, `N`, `subst`, `integrate`, `sum`, `exptotrig`. -/
 def cmdSimplify : PlainRule :=
   { name := "cmd.simplify", apply := fun e => Option.map checked <|
       match e with
@@ -94,42 +94,94 @@ def cmdSubst : PlainRule :=
       | .fn "subst" _ => some (refuse "subst takes (expression, variable, value)")
       | _ => none }
 
+/-- `sum(f, k, a, b)` for integer numerals `a ≤ b`: the terms `f[k := a] + … + f[k := b]`, which the
+pipeline then collects. A definition, not a theorem: `cmdSum_spec` says the result is exactly that
+list of substitutions, and `sum_soundR` reads it as a finite sum over ℝ. -/
+def sumTerms (f : Expr) (k : String) (a b : Int) : List Expr :=
+  (List.range (b - a + 1).toNat).map fun (j : Nat) => substVar k (.num (Q.ofInt (a + j))) f
+
+def cmdSum : PlainRule :=
+  { name := "cmd.sum", apply := fun e => Option.map checked <|
+      match e with
+      | .fn "sum" [f, .var k, .num a, .num b] =>
+        if !a.isInt || !b.isInt then some (refuse "sum: the bounds must be integers")
+        else if b.val.num < a.val.num then some (refuse "sum: the upper bound is below the lower bound (an empty sum is 0; write 0)")
+        else if b.val.num - a.val.num > 1000 then some (refuse "sum: at most 1001 terms")
+        else some ⟨addN (sumTerms f k a.val.num b.val.num),
+          s!"$\\sum_\{{k}={a.toText}}^\{{b.toText}}$: one term per integer value of ${k}$, substituted.", none, none⟩
+      | .fn "sum" [_, .var _, _, _] => some (refuse "sum: the bounds must be integer numerals")
+      | .fn "sum" _ => some (refuse "sum takes (term, variable, from, to)")
+      | _ => none }
+
+/-- `exptotrig(e)`: Euler's formula applied to every `exp(θ·i)` at once (`expToTrig`), then the
+pipeline collects. The general formula duplicates θ, so it cannot be a simplification rule; as a
+command it runs once. Proved sound over ℂ (`expToTrig_soundC`). -/
+def cmdExpToTrig : PlainRule :=
+  { name := "cmd.exptotrig", apply := fun e => Option.map checked <|
+      match e with
+      | .fn "exptotrig" [a] => some ⟨expToTrig a, "Euler's formula $e^{i\\theta} = \\cos\\theta + i\\sin\\theta$, applied to every exponential with a pure-imaginary argument.", none, none⟩
+      | .fn "exptotrig" _ => some (refuse "exptotrig takes one argument")
+      | _ => none }
+
 /-- A normalizer with its derivation, as the `integrate` command needs one. -/
 abbrev Norm := Expr → Except String (Expr × Option Derivation)
 
-/-- `integrate(f, x)`: a candidate from the unverified finder (`Antiderivative.lean`), normalized,
+/-! `integrate(f, x)`: a candidate from the unverified finder (`Antiderivative.lean`), normalized,
 then accepted only if its derivative and the integrand have the same normal form *after
 distribution*: `norm (dist (identNorm (norm (diff F x)))) = norm (dist (identNorm f))`. Distribution is there because the
 pipeline never distributes a numeral over a sum (the ordering forbids it), so `-(a + b) + b` is a
 normal form; `Expand.dist` is proved sound, so expanding both sides first weakens nothing. The
 claim is `cmdIntegrate_spec` (Integrate.lean); the finder's steps are the sub-derivation, ending
-with the `int.check` step that carries the differentiation and the `int.compare` step. -/
+with the `int.check` step that carries the differentiation and the `int.compare` step.
+
+The four-argument form `integrate(f, x, a, b)` is the definite integral: the same checked
+antiderivative, evaluated at the bounds (`definite`, the fundamental theorem of calculus; its
+reading over ℝ is `integrate_definite` in the proofs). -/
+/-- The antiderivative search and check shared by the two forms of `integrate`: the accepted
+candidate `F` with the finder's steps, `int.check` and `int.compare`, or the refusal. -/
+def findAnti (norm : Norm) (f : Expr) (x : String) : Except RuleResult (Expr × Array Step) :=
+  match Anti.anti (fun e => (norm e).toOption.map (·.1)) x 3 f with
+  | none => .error (refuse s!"integrate: no antiderivative of {f.toText} found by the available rules (sums, constant factors, powers, the elementary table, linear substitution, u-substitution, integration by parts)")
+  | some (F₀, steps) =>
+    match norm F₀ with
+    | .error msg => .error (refuse s!"integrate: the candidate {F₀.toText} could not be simplified: {msg}")
+    | .ok (F, _) =>
+      match norm (D F x) with
+      | .error msg => .error (refuse s!"integrate: the candidate {F.toText} could not be differentiated: {msg}")
+      | .ok (g, sub) =>
+        match norm (Expand.dist (Expand.identNorm g)), norm (Expand.dist (Expand.identNorm f)) with
+        | .ok (g', subg), .ok (f', _) =>
+          if equal g' f' then
+            let check : Step := ⟨"int.check", s!"Check: $\\frac\{d}\{d{x}}$ of the candidate, simplified. This step carries the claim; the finder's steps above are unverified guesses.", [], D F x, g, sub⟩
+            let compare : Step := ⟨"int.compare", s!"Both the derivative and the integrand are rewritten with $\\cos^2 u = 1 - \\sin^2 u$ and $(e^u)^k = e^\{ku}$ (`Expand.identNorm`), expanded (`Expand.dist`) and simplified — the two rewrites are proved sound — and they agree: ${f'.toText}$. The candidate is accepted.", [], g, g', subg⟩
+            .ok (F, (steps.push check).push compare)
+          else .error (refuse s!"integrate: the candidate {F.toText} was rejected: its derivative simplifies to {g.toText}, not to {f.toText}")
+        | _, _ => .error (refuse s!"integrate: the candidate {F.toText} could not be compared with the integrand")
+
+/-- The definite integral's value from an accepted antiderivative: `F[x := b] − F[x := a]`. -/
+def definite (F : Expr) (x : String) (a b : Expr) : Expr := Expr.sub (substVar x b F) (substVar x a F)
+
 def cmdIntegrate (norm : Norm) : PlainRule :=
   { name := "cmd.integrate", apply := fun e => Option.map checked <|
       match e with
       | .fn "integrate" [f, .var x] =>
-        match Anti.anti (fun e => (norm e).toOption.map (·.1)) x 3 f with
-        | none => some (refuse s!"integrate: no antiderivative of {f.toText} found by the available rules (sums, constant factors, powers, the elementary table, linear substitution, u-substitution, integration by parts)")
-        | some (F₀, steps) =>
-          match norm F₀ with
-          | .error msg => some (refuse s!"integrate: the candidate {F₀.toText} could not be simplified: {msg}")
-          | .ok (F, _) =>
-            match norm (D F x) with
-            | .error msg => some (refuse s!"integrate: the candidate {F.toText} could not be differentiated: {msg}")
-            | .ok (g, sub) =>
-              match norm (Expand.dist (Expand.identNorm g)), norm (Expand.dist (Expand.identNorm f)) with
-              | .ok (g', subg), .ok (f', _) =>
-                if equal g' f' then
-                  let check : Step := ⟨"int.check", s!"Check: $\\frac\{d}\{d{x}}$ of the candidate, simplified. This step carries the claim; the finder's steps above are unverified guesses.", [], D F x, g, sub⟩
-                  let compare : Step := ⟨"int.compare", s!"Both the derivative and the integrand are rewritten with $\\cos^2 u = 1 - \\sin^2 u$ and $(e^u)^k = e^\{ku}$ (`Expand.identNorm`), expanded (`Expand.dist`) and simplified — the two rewrites are proved sound — and they agree: ${f'.toText}$. The candidate is accepted.", [], g, g', subg⟩
-                  some ⟨F, "Antiderivative found by the integration rules and accepted because its derivative simplifies back to the integrand (no constant of integration).", some ⟨Anti.integral f x, (steps.push check).push compare, F⟩, none⟩
-                else some (refuse s!"integrate: the candidate {F.toText} was rejected: its derivative simplifies to {g.toText}, not to {f.toText}")
-              | _, _ => some (refuse s!"integrate: the candidate {F.toText} could not be compared with the integrand")
-      | .fn "integrate" [_, _] => some (refuse "integrate: the second argument must be a variable")
-      | .fn "integrate" _ => some (refuse "integrate takes an integrand and a variable")
+        match findAnti norm f x with
+        | .error r => some r
+        | .ok (F, steps) =>
+          some ⟨F, "Antiderivative found by the integration rules and accepted because its derivative simplifies back to the integrand (no constant of integration).", some ⟨Anti.integral f x, steps, F⟩, none⟩
+      | .fn "integrate" [f, .var x, a, b] =>
+        if (freeVars a).contains x || (freeVars b).contains x then some (refuse s!"integrate: the bounds may not mention the variable {x}")
+        else match findAnti norm f x with
+        | .error r => some r
+        | .ok (F, steps) =>
+          let out := definite F x a b
+          let bounds : Step := ⟨"int.bounds", s!"The fundamental theorem of calculus: $\\int_a^b f = F(b) - F(a)$ for the antiderivative $F$ just checked, so the value is $F$ at ${b.toText}$ minus $F$ at ${a.toText}$; the pipeline simplifies it.", [], F, out, none⟩
+          some ⟨out, "Definite integral: the checked antiderivative evaluated at the bounds.", some ⟨.fn "integrate" [f, .var x, a, b], steps.push bounds, out⟩, none⟩
+      | .fn "integrate" [_, _] | .fn "integrate" [_, _, _, _] => some (refuse "integrate: the second argument must be a variable")
+      | .fn "integrate" _ => some (refuse "integrate takes an integrand and a variable, optionally with the bounds: integrate(f, x, a, b)")
       | _ => none }
 
-def commandRulesWith (norm : Norm) : List PlainRule := [cmdSimplify, cmdExpand, cmdRref, cmdN, cmdSubst, cmdIntegrate norm]
+def commandRulesWith (norm : Norm) : List PlainRule := [cmdSimplify, cmdExpand, cmdRref, cmdN, cmdSubst, cmdIntegrate norm, cmdSum, cmdExpToTrig]
 
 /-- The matrix rules precede `simp` as in the reference (so `A·A` is a product, not `A^2`); the
 catch-all `la.context` must come after every rule that handles a literal, so it is last. -/

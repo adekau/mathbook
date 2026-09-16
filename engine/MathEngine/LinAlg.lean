@@ -135,7 +135,48 @@ def laPow : PlainRule :=
         else some (refuse "a matrix can only be raised to a positive integer power")
       | _ => none }
 
-def matrixRules : List PlainRule := [laAdd, laScalarMul, laMul, laTranspose, laDet, laPow]
+/-- A row or column vector's entries. -/
+def asVector : Expr → Option (List Expr)
+  | .matrix [row] => some row
+  | .matrix rows => if rows.all (·.length == 1) then some (rows.filterMap List.head?) else none
+  | _ => none
+
+/-- `dot(u, v) = Σ uᵢ·vᵢ`, bilinear as Mathematica's `Dot`: the Hermitian inner product of complex
+vectors is `dot(u, conj(v))`. -/
+def laDot : PlainRule :=
+  { name := "la.dot", apply := fun e => Option.map (checkedLit e) <|
+      match e with
+      | .fn "dot" [u, v] =>
+        match asVector u, asVector v with
+        | some us, some vs =>
+          if us.length != vs.length then some (refuse s!"dot: the vectors have different lengths ({us.length} and {vs.length})")
+          else if us.isEmpty then some (refuse "dot: empty vectors")
+          else some ⟨.add ((us.zip vs).map fun (a, b) => .mul [a, b]), "$\\langle u, v\\rangle = \\sum_i u_i v_i$: multiply matching entries and add.", none, none⟩
+        | _, _ => if (children e).any isMatrix then some (refuse "dot takes two vectors (one-row or one-column matrices)") else none
+      | _ => none }
+
+/-- `norm(v) = (Σ vᵢ²)^(1/2)`, the Euclidean length; for a complex vector use `norm` of the
+entries' moduli, or `sqrt(dot(v, conj(v)))`. -/
+def laNorm : PlainRule :=
+  { name := "la.norm", apply := fun e => Option.map (checkedLit e) <|
+      match e with
+      | .fn "norm" [v] =>
+        match asVector v with
+        | some vs =>
+          if vs.isEmpty then some (refuse "norm: empty vector")
+          else some ⟨.pow (.add (vs.map fun a => .pow a (.num (Q.ofInt 2)))) (.num (Q.ofInt 1 / Q.ofInt 2)), "$\\|v\\| = \\sqrt{\\sum_i v_i^2}$: the Pythagorean length.", none, none⟩
+        | none => if (children e).any isMatrix then some (refuse "norm takes a vector (a one-row or one-column matrix)") else none
+      | _ => none }
+
+/-- `conj` of a matrix is entrywise. -/
+def laConj : PlainRule :=
+  { name := "la.conj", apply := fun e => Option.map (checkedLit e) <|
+      match e with
+      | .fn "conj" [.matrix rows] =>
+        some ⟨.matrix (rows.map fun r => r.map fun a => .fn "conj" [a]), "The conjugate of a matrix is taken entrywise.", none, none⟩
+      | _ => none }
+
+def matrixRules : List PlainRule := [laAdd, laScalarMul, laMul, laTranspose, laDet, laPow, laDot, laNorm, laConj]
 
 /-- The catch-all: a matrix literal anywhere no rule above handles it is an error, not junk. -/
 def laContext : PlainRule :=

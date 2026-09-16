@@ -157,6 +157,10 @@ mutual
         if T.times != "*" then (s!"\\frac\{d}\{d{x}}\\left({a}\\right)", P_MUL) else (T.fn name as, P_ATOM)
       | "integrate", [_, .var _], [a, x] =>
         if T.times != "*" then (s!"\\int {a} \\, d{x}", P_MUL) else (T.fn name as, P_ATOM)
+      | "integrate", [_, .var _, _, _], [a, x, lo, hi] =>
+        if T.times != "*" then (s!"\\int_\{{lo}}^\{{hi}} {a} \\, d{x}", P_MUL) else (T.fn name as, P_ATOM)
+      | "sum", [_, .var _, _, _], [a, k, lo, hi] =>
+        if T.times != "*" then (s!"\\sum_\{{k}={lo}}^\{{hi}} {a}", P_MUL) else (T.fn name as, P_ATOM)
       -- the order-theory world
       | "set", _, _ =>
         let inner := ", ".intercalate as

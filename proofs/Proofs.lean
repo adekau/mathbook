@@ -8,6 +8,7 @@ import Proofs.Expand
 import Proofs.Radical
 import Proofs.Cx
 import Proofs.CxRules
+import Proofs.Fourier
 /-!
 # Proofs about the engine (skeleton)
 

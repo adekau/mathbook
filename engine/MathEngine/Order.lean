@@ -134,7 +134,7 @@ theorem countList_eq_of_rel (own : Expr → Nat) :
 
 -- The three counting tiers.
 
-def cmdNames : List String := ["simplify", "expand", "rref", "N", "subst", "integrate"]
+def cmdNames : List String := ["simplify", "expand", "rref", "N", "subst", "integrate", "sum", "exptotrig"]
 
 def cmdOwn : Expr → Nat | .fn f _ => if cmdNames.contains f then 1 else 0 | _ => 0
 def d3Own : Expr → Nat | .fn f es => if f = "diff" ∧ es.length ≠ 2 then 1 else 0 | _ => 0

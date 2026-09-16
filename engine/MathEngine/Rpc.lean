@@ -58,6 +58,12 @@ def ruleStatus : Json :=
     entry "expand.distribute" "verified" "Multiplying out a product of sums and collecting like monomials: dist_sound.",
     entry "expand.power" "verified" "A power of a sum is the sum multiplied by itself: dist_sound.",
     entry "cmd.integrate" "verified" "Accepted only when the candidate's derivative normalizes to the integrand, exactly (cmdIntegrate_spec); integrate_deriv reads that as deriv F = f wherever the differentiation steps shown are sound. The finder's own steps are guesses.",
+    entry "int.bounds" "verified" "The fundamental theorem of calculus: the checked antiderivative evaluated at the bounds, F(b) − F(a) (cmdIntegrate_definite_spec; integrate_definite reads it as the interval integral over ℝ, for an integrand continuous on [a, b]).",
+    entry "cmd.sum" "verified" "A definition: one substituted term per integer value of the index (cmdSum_spec); sum_soundR reads the result as the finite sum over ℝ.",
+    entryC "cmd.exptotrig" "unverified" "Euler's formula has no content over ℝ, where i is the junk value 0." "verified" "exp(iθ) = cos θ + i sin θ for every complex θ (expToTrig_soundC).",
+    entry "la.dot" "verified" "Σ uᵢvᵢ by definition; a matrix has no value in the ℝ semantics, so the claim is the definition (bilinear, as Mathematica's Dot — the Hermitian product is dot(u, conj(v))).",
+    entry "la.norm" "verified" "(Σ vᵢ²)^(1/2) by definition, the Pythagorean length.",
+    entry "la.conj" "verified" "Entrywise by definition.",
     entry "int.check" "verified" "The differentiation of the candidate: this step carries the claim, with the statuses of its own steps.",
     entry "int.compare" "verified" "Derivative and integrand are rewritten with cos²u = 1 − sin²u and (eᵘ)ᵏ = eᵏᵘ (identNorm), expanded (dist) and simplified before comparison — both rewrites proved sound, and needed because the pipeline applies neither identity nor distributes a numeral over a sum; the statuses of the simplification steps apply.",
     entry "int.constant" "checked" "A guess from the finder; nothing is proved about it. Accepted only because int.check verifies the result by differentiation.",
@@ -98,7 +104,7 @@ def ruleStatus : Json :=
 
 def capabilities : Json :=
   .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m8"), ("verified", .bool true),
-         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate", .str "plot", .str "lambda", .str "order"]),
+         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate", .str "plot", .str "lambda", .str "order", .str "sum", .str "exptotrig"]),
          ("ruleStatus", ruleStatus),
          ("termination", .obj #[("status", .str "proven"), ("theorem", .str "MathEngine.pipelineOrdered"),
            ("summary", .str "Cell evaluation has no step budget: every pipeline rule decreases a five-tier ordering (commands, higher-order diff, matrix literals, the weight M, size) on nodes whose children are normal.")])]

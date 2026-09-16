@@ -357,3 +357,36 @@ Complex numbers (2026-09-14, Alex: the logo `e^(π i)` could not be computed; ch
    wraps in `\text` under `\ifmmode`. Also: unicode-math's `\setminus` is U+29F5, absent from Latin Modern Math
    (`\smallsetminus`, U+2216, instead); ℯ is absent from DejaVu, so the Try-it box writes `\e`. The log has zero
    "Missing character" lines.
+
+## M9 — Fourier: drawing llamas with circles (from Alex's 2020 article)
+
+Goal: re-derive the article (inner products → orthogonality → the square wave's Fourier coefficients
+→ the DFT → epicycles) with the engine doing the calculus, and draw the pictures in the notebook.
+
+- Stage A, the exact engine work — DONE 2026-09-16.
+  - `integrate(f, x, a, b)`: the definite integral. The same finder and checker (`findAnti`, factored
+    out of `cmdIntegrate`), then `F[x := b] − F[x := a]` (`definite`, one `int.bounds` step). Claim:
+    `cmdIntegrate_definite_spec`; reading: `integrate_definite` (Fourier.lean), the fundamental theorem
+    of calculus through the engine — `∫_a^b f = F(b) − F(a)` where `F` is differentiable on `[a, b]`,
+    `f` interval-integrable, and the checker's normalizations sound (the M8 hypotheses). The
+    differentiability hypothesis is real: `deriv` of a non-differentiable function is junk 0.
+  - `sum(f, k, a, b)`: integer bounds, one substituted term per index, collected by the pipeline
+    (`cmdSum_spec`, `sum_soundR`). Needed a *structural* substitution `substVar` (the old `substitute`
+    is `partial`, so nothing could be proved about it): `substVar_soundR`/`soundC`.
+  - `exptotrig(e)`: Euler's formula everywhere at once (`expToTrig`), as a command because the
+    general rewrite duplicates θ and no simplification rule could pay for it. A negated angle is
+    folded there (`cos(−θ) = cos θ`, `sin(−θ) = −sin θ`) because `sin(−t) → −sin t` is a tie in every
+    tier of the ordering. Proved over ℂ (`expToTrig_soundC`, `Complex.exp_mul_I`); over ℝ it has no
+    content (`i` is junk 0). Write `expand(exptotrig(…))`: the pipeline never distributes a numeral
+    over a sum, and `Expand.dist` is proved over ℝ only — its ℂ soundness is open (the generic `Sem`
+    in Proofs/Expand.lean is ℝ-specific; parametrizing it over a field is the fix).
+  - `dot(u, v)` (bilinear, like Mathematica's `Dot`; the Hermitian product is `dot(u, conj(v))`),
+    `norm(v)`, entrywise `conj` of a matrix (`la.dot`, `la.norm`, `la.conj`); `sign(x)` with numeric
+    evaluation and a numeral fold (`Real.sign` added to `applyFn`; `sign_fold_soundR`).
+  - Summands mentioning `i` now sort last (`sumRank` via `hasI`), so Euler reads `cos θ + i sin θ`.
+  - Checked against the article: `c_3 = −2i/(3π)`, `c_2 = 0`, the symbolic `−i/k + i e^{−iπk}/k`,
+    `∫e^{ix}dx = −i e^{ix}`, and `expand(exptotrig(2i/π(e^{−it} − e^{it}) + …)) = 4 sin t/π + 4/3 sin 3t/π`.
+- Stage B, the visuals — TODO: complex numeric evaluation; `plot` of a complex parametric curve;
+  an `epicycles` cell (the (k, c_k) read off a finite Fourier sum, animated tip-to-tail); `dft(points)`
+  as numeric presentation; Import SVG… sampling a path; a studio shot.
+- Stage C, the chapter — TODO: `m11b-fourier-series`, after echelon form.

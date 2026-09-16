@@ -250,6 +250,45 @@ def imagArg : Expr → Option Expr
   | .mul fs => if (fs.filter isI).length == 1 then some (mulN (fs.filter (fun f => !isI f))) else none
   | _ => none
 
+/-- `−θ` written as `θ` negated: a negative numeral, or a product led by one, gives the
+positive counterpart; anything else is `none`. -/
+def negOf : Expr → Option Expr
+  | .num q => if q.isNeg then some (.num (Q.zero - q)) else none
+  | .mul (.num q :: rest) => if q.isNeg then some (mulN (if (Q.zero - q).isOne then rest else .num (Q.zero - q) :: rest)) else none
+  | _ => none
+
+mutual
+  /-- Euler's formula applied everywhere at once, as the `exptotrig` command does it: every
+  `exp(u)` with a pure-imaginary argument `u = θ·i` becomes `cos θ + sin θ · i`. The general
+  rewrite duplicates `θ`, which the ordering cannot pay for as a simplification rule; as a command
+  it runs once, and the pipeline collects what it leaves. -/
+  def expToTrig : Expr → Expr
+    | .num q => .num q
+    | .var x => .var x
+    | .add es => .add (expToTrigList es)
+    | .mul es => .mul (expToTrigList es)
+    | .pow b e => .pow (expToTrig b) (expToTrig e)
+    | .fn f es =>
+      match f, expToTrigList es with
+      | "exp", [u] =>
+        match imagArg u with
+        | some θ =>
+          -- a negated angle: cos(−θ) = cos θ and sin(−θ) = −sin θ, applied here because the
+          -- pipeline cannot afford `sin(−θ) → −sin θ` (a tie in every tier of the ordering)
+          match negOf θ with
+          | some θ' => .add [.fn "cos" [θ'], .mul [Expr.minusOne, .fn "sin" [θ'], iE]]
+          | none => .add [.fn "cos" [θ], .mul [.fn "sin" [θ], iE]]
+        | none => .fn "exp" [u]
+      | f', es' => .fn f' es'
+    | .matrix rows => .matrix (expToTrigRows rows)
+  def expToTrigList : List Expr → List Expr
+    | [] => []
+    | e :: es => expToTrig e :: expToTrigList es
+  def expToTrigRows : List (List Expr) → List (List Expr)
+    | [] => []
+    | r :: rs => expToTrigList r :: expToTrigRows rs
+end
+
 /-- `s·i` in normal form: nothing, `i`, or the factors of `s` with `i` appended. -/
 def imagOf (s : Expr) : Expr := if s.isZero then Expr.zero else if s.isOne then iE else mulN (unMul s ++ [iE])
 

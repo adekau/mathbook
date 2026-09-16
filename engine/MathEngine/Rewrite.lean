@@ -178,9 +178,15 @@ def coeffRest : Expr → Q × Expr
 
 def cmpRat (a b : Rat) : Ordering := if a < b then .lt else if a == b then .eq else .gt
 def leMul (a b : Expr) : Bool := compare a b != Ordering.gt
-/-- The rank of a summand's rest for sums: as `kindRank`, except that a pure imaginary term
-(`b·i`) sorts after the numerals, so a Gaussian numeral reads `a + b·i`. -/
-def sumRank (r : Expr) : Nat := match r with | .fn "i" [] => 0 | _ => kindRank r + 1
+/-- Does `i` occur in a term? (Also `ComplexRules.mentionsI`, which imports this file.) -/
+partial def hasI : Expr → Bool
+  | .fn "i" [] => true
+  | e => (children e).any hasI
+
+/-- The rank of a summand's rest for sums: as `kindRank`, except that a term mentioning `i` sorts
+after everything real, so a Gaussian numeral reads `a + b·i` and Euler's formula reads
+`cos θ + i·sin θ`. -/
+def sumRank (r : Expr) : Nat := if hasI r then 0 else kindRank r + 1
 
 /-- Sums: highest degree first, constants last, otherwise the structural order. -/
 def leAdd (a b : Expr) : Bool :=
