@@ -349,3 +349,11 @@ Complex numbers (2026-09-14, Alex: the logo `e^(π i)` could not be computed; ch
    `.outval` is `overflow-x:auto`, which makes `overflow-y` auto too, and KaTeX's vlist struts extend the scroll
    height a few px past the strut that bounds the visible render (nothing visible goes past it — measured). Now
    `overflow-y:hidden`, as `.step .el` already was; the panel's selection line likewise.
+- book: code-block glyphs and the CI build — DONE 2026-09-16. Every ρ ∀ → ≤ in a Lean listing was blank in the PDF:
+   the preamble asked fontspec for "DejaVu Sans Mono" by name, fontconfig on a machine without the system font
+   cannot see TeX Live's copy, and the `\IfFontExistsTF` guard silently fell back to Latin Modern Mono. Now loaded
+   by file name, which kpathsea resolves inside TeX Live itself (so CI and local agree). CI (LaTeX 2026-06) failed on
+   `\lc{evalR}` inside math — `\ttfamily` in math mode is an error there, a warning on TeX Live 2020 — so `\lc`
+   wraps in `\text` under `\ifmmode`. Also: unicode-math's `\setminus` is U+29F5, absent from Latin Modern Math
+   (`\smallsetminus`, U+2216, instead); ℯ is absent from DejaVu, so the Try-it box writes `\e`. The log has zero
+   "Missing character" lines.

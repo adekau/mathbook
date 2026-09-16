@@ -9,10 +9,12 @@
 % ── Fonts & encoding ────────────────────────────────────────
 \usepackage{fontspec}
 \IfFontExistsTF{Latin Modern Roman}{\setmainfont{Latin Modern Roman}}{}
-% DejaVu Sans Mono has every glyph the Lean listings need (⊔ ⊓ λ ⋖ ≤ ⁻¹); fall back to Latin Modern Mono.
-\IfFontExistsTF{DejaVu Sans Mono}
-  {\setmonofont[Scale=0.82]{DejaVu Sans Mono}}
-  {\IfFontExistsTF{Latin Modern Mono}{\setmonofont[Scale=0.9]{Latin Modern Mono}}{}}
+% DejaVu Sans Mono has every glyph the Lean listings need (ρ ∀ → ≤ ⊔ ⊓ λ ⋖ ⁻¹); Latin Modern Mono
+% does not. It is loaded by file name, which kpathsea resolves inside TeX Live itself, because on a
+% machine where the font is not installed system-wide fontconfig cannot see it and the by-name
+% lookup silently fell back to Latin Modern Mono — blank glyphs in every code block.
+\setmonofont{DejaVuSansMono}[Extension=.ttf, UprightFont=*, BoldFont=*-Bold, ItalicFont=*-Oblique,
+  BoldItalicFont=*-BoldOblique, Scale=0.82]
 
 % ── Layout ──────────────────────────────────────────────────
 \usepackage[top=1in, bottom=1.15in, left=1.1in, right=1.1in, headheight=14pt]{geometry}
@@ -29,6 +31,8 @@
 \usepackage{mathtools}
 \usepackage{unicode-math}
 \IfFontExistsTF{Latin Modern Math}{\setmathfont{Latin Modern Math}}{}
+% unicode-math's \setminus is U+29F5, which Latin Modern Math lacks; \smallsetminus is U+2216, which it has.
+\AtBeginDocument{\let\setminus\smallsetminus}
 
 % ── Theorems ────────────────────────────────────────────────
 \usepackage{amsthm}
@@ -59,7 +63,8 @@
   bgcolor=gray!6, frame=lines, framesep=4pt, rulecolor=gray!40,
   fontsize=\small, breaklines=true, linenos=false, xleftmargin=8pt,
 }
-\newcommand{\lc}[1]{\mintinline{lean}{#1}}
+% In math mode the code is wrapped in \text, since \ttfamily is an error there (LaTeX 2026-06).
+\newcommand{\lc}[1]{\ifmmode\text{\mintinline{lean}{#1}}\else\mintinline{lean}{#1}\fi}
 % Lean names in box titles (minted cannot run in a moving argument)
 \newcommand{\lcn}[1]{\texttt{\detokenize{#1}}}
 
