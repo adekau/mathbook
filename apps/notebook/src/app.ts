@@ -968,7 +968,7 @@ function renderSidebar() {
       row.addEventListener("click", () => {
         if (S.tab !== "notebook") switchTab("notebook");
         const c = S.cells[S.active];
-        if (c?.input) { c.input.value = d.examples[0] ?? `${d.name}(`; c.src = c.input.value; c.input.focus(); renderCellBody(c); renderSidebar(); }
+        if (c?.input) { c.input.value = d.examples[0] ?? `${d.name}(`; c.src = c.input.value; c.input.focus(); syncHighlight(c); updateSigHelp(c); renderCellBody(c); renderSidebar(); }
       });
       row.addEventListener("mouseenter", (ev) => showHover(d, ev as MouseEvent));
       row.addEventListener("mouseleave", hideHover);
@@ -1430,7 +1430,7 @@ function toggleCellMenu(cell: Cell, anchor: HTMLElement) {
     renderCellBody(cell); renderChrome(); renderSidebar(); autosave();
   } : null);
   item("Delete cell", () => {
-    if (S.cells.length === 1) { const c = S.cells[0]!; c.src = ""; if (c.input) c.input.value = ""; delete c.outLatex; delete c.outText; delete c.echoLatex; delete c.error; c.steps = []; c.label = null; }
+    if (S.cells.length === 1) { const c = S.cells[0]!; c.src = ""; if (c.input) { c.input.value = ""; syncHighlight(c); } delete c.outLatex; delete c.outText; delete c.echoLatex; delete c.error; c.steps = []; c.label = null; }
     else S.cells.splice(i, 1);
     S.active = Math.min(S.active, S.cells.length - 1);
     renderCells(); renderSidebar(); renderChrome(); autosave();
@@ -1459,7 +1459,7 @@ function renderReference() {
       b.addEventListener("click", () => {
         switchTab("notebook");
         const c = S.cells[S.cells.length - 1] ?? addCell();
-        if (c.input) { c.input.value = e; c.src = e; }
+        if (c.input) { c.input.value = e; c.src = e; syncHighlight(c); }
         focusCell(S.cells.indexOf(c)); void runCell(c);
       });
       ex.append(b);
@@ -2305,7 +2305,7 @@ function acceptCompletion() {
   const pos = start + insert.length;
   input.setSelectionRange(pos, pos);
   cell.src = input.value;
-  hideCompletions(); renderSidebar();
+  hideCompletions(); syncHighlight(cell); updateSigHelp(cell); renderSidebar();
   return true;
 }
 
@@ -2574,7 +2574,7 @@ function onKey(ev: KeyboardEvent, cell: Cell, i: number) {
       input.value = before.slice(0, before.length - m[0].length) + sym + tail + input.value.slice(caret);
       const pos = caret - m[0].length + sym.length + tail.length;
       input.setSelectionRange(pos, pos);
-      cell.src = input.value; hideCompletions(); renderSidebar();
+      cell.src = input.value; hideCompletions(); syncHighlight(cell); renderSidebar();
       return;
     }
   }
