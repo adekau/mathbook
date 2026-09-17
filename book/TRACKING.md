@@ -413,3 +413,10 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
   were refused. Book: 174 pages, zero missing characters. Open: `(√2)^{-2}` does not simplify (powers of
   radicals with an integer outer exponent), so the inner-product Try-it uses (3/5, 4/5) instead of the article's
   (1/√2, 1/√2).
+- notebook: syntax highlighting with bound variables — DONE 2026-09-17. The input's text is transparent over an
+   overlay with the same metrics (the input keeps caret, selection and horizontal scroll, mirrored by a transform).
+   Tokens: numbers, `let`, commands (only when a parenthesis follows), built-in functions, constants, operators;
+   names bound in the session by `let` in their own colour; and, as Mathematica colours `Plot[f, {n, …}]`'s `n`,
+   the variable a binder command binds — `diff`, `integrate`, `plot`, `epicycles`, `sum`, `subst` — is marked over
+   that call's parentheses, `let f(x, y) = …`'s parameters over the line, `λx y.` over the term. View → Syntax
+   highlighting toggles it (`chalkmath.highlight`).

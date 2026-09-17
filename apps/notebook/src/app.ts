@@ -145,6 +145,8 @@ function migratePlot(p: PlotData | { var: string; from: number; to: number; poin
 interface Cell {
   id: string;
   src: string;
+  /** The syntax-highlight overlay under the input (presentation). */
+  hl?: HTMLElement;
   plot?: PlotData;
   /** λ-cells: the result with de Bruijn indices, and what it reads as (a Church numeral or boolean). */
   outDeBruijn?: string;
@@ -240,6 +242,8 @@ const S = {
   /** A call site dismissed with Esc stays quiet until the caret leaves it. */
   sigDismissed: null as string | null,
   sigHelp: (() => { try { return localStorage.getItem("chalkmath.sighelp") !== "off"; } catch { return true; } })(),
+  /** Syntax highlighting in the inputs, with bound variables marked (View menu toggles it). */
+  highlight: (() => { try { return localStorage.getItem("chalkmath.highlight") !== "off"; } catch { return true; } })(),
   theme: "dark" as "dark" | "light",
   docName: "untitled.chalk",
   deBruijn: false,
@@ -341,6 +345,8 @@ async function runCell(cell: Cell) {
         log("ok", `bound ${r.bound.join(", ")}`);
         const k = `${sessionId}:${r.bound[0]}`;
         if (r.params?.length) USER_FNS.set(k, r.params); else USER_FNS.delete(k);
+        USER_NAMES.add(k);
+        renderHighlights();
       }
     } else {
       cell.label = r.label ?? cell.label ?? nextLabel++;
@@ -602,6 +608,7 @@ async function restartKernel() {
   if (client) { try { await client.call("engine.resetSession", { sessionId }); } catch (e) { log("err", String(e)); } }
   clearOutputs();
   for (const k of [...USER_FNS.keys()]) if (k.startsWith(`${sessionId}:`)) USER_FNS.delete(k);
+  for (const k of [...USER_NAMES]) if (k.startsWith(`${sessionId}:`)) USER_NAMES.delete(k);
   log("ok", "kernel restarted: the session is empty");
 }
 
@@ -845,6 +852,7 @@ function renderChrome() {
     Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
     View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }],
       [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("chalkmath.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }],
+      [`${S.highlight ? "✓ " : ""}Syntax highlighting`, () => { S.highlight = !S.highlight; try { localStorage.setItem("chalkmath.highlight", S.highlight ? "on" : "off"); } catch { /* private mode */ } document.documentElement.classList.toggle("nohl", !S.highlight); renderHighlights(); renderChrome(); }],
       [`${S.sigHelp ? "✓ " : ""}Signature help`, () => { S.sigHelp = !S.sigHelp; try { localStorage.setItem("chalkmath.sighelp", S.sigHelp ? "on" : "off"); } catch { /* private mode */ } if (!S.sigHelp) hideSigHelp(); renderChrome(); }],
       ...(["s", "m", "l"] as const).map((sz): [string, () => void] => [`${S.outSize === sz ? "✓ " : "   "}Math size: ${{ s: "small", m: "normal", l: "large" }[sz]}`, () => {
         S.outSize = sz; document.documentElement.dataset["outsize"] = sz;
@@ -1143,12 +1151,17 @@ function renderCells() {
     input.spellcheck = false;
     cell.input = input;
     input.addEventListener("focus", () => { S.active = i; renderChrome(); renderSidebar(); markActive(); });
-    input.addEventListener("input", () => { cell.src = input.value; updateCompletions(cell); updateSigHelp(cell); renderSidebar(); renderTabs(); });
-    input.addEventListener("keyup", () => updateSigHelp(cell));     // caret moves without an input event
+    input.addEventListener("input", () => { cell.src = input.value; updateCompletions(cell); updateSigHelp(cell); syncHighlight(cell); renderSidebar(); renderTabs(); });
+    input.addEventListener("keyup", () => { updateSigHelp(cell); syncHighlight(cell); });   // caret moves without an input event
     input.addEventListener("click", () => updateSigHelp(cell));
+    input.addEventListener("scroll", () => syncHighlight(cell));
     input.addEventListener("blur", () => { hideCompletions(); hideSigHelp(); });
     input.addEventListener("keydown", (ev) => onKey(ev, cell, i));
-    mid.append(input);
+    // the highlight overlay sits under the transparent text of the input; the input keeps caret and selection
+    const hl = h("div", "hl"); hl.setAttribute("aria-hidden", "true");
+    cell.hl = hl;
+    mid.append(hl, input);
+    syncHighlight(cell);
 
     const body = h("div", "cellbody");
     mid.append(body);
@@ -2318,6 +2331,110 @@ function renderCompletions() {
   document.body.append(box);
 }
 
+// --- Syntax highlighting: tokens, and the variables a call binds ---------------------------------
+
+/** Names bound in a session by `let` (values and functions), keyed `session:name`. */
+const USER_NAMES = new Set<string>();
+
+/** Commands whose argument at `arg` is a variable bound over the call: `diff(f, x)`, `plot(f, x, …)`. */
+const BINDERS: Record<string, number> = { diff: 1, integrate: 1, plot: 1, epicycles: 1, sum: 1, subst: 1 };
+const BUILTIN_FN = new Set(["sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs", "conj", "re", "im", "sign", "det", "rref", "transpose", "dot", "norm", "solve"]);
+const COMMANDS = new Set(["diff", "integrate", "plot", "epicycles", "dft", "sum", "exptotrig", "expand", "simplify", "N", "subst", "poset", "map", "monotone", "lfp", "gfp", "fixpoints", "hasse", "join", "meet", "sup", "inf", "upper", "lower", "top", "bottom", "maximal", "minimal", "lattice", "le", "divisors", "subsets", "chain"]);
+const CONSTANTS = new Set(["pi", "π", "e", "ℯ", "i", "phi", "φ"]);
+
+type Tok = { kind: "id" | "num" | "op" | "ws" | "kw"; text: string; start: number };
+function tokenize(src: string): Tok[] {
+  const out: Tok[] = [];
+  const re = /(\s+)|(\d+(?:\.\d+)?)|([A-Za-z_\u0370-\u03FFℯ][A-Za-z0-9_\u0370-\u03FFℯ']*)|(:=|->|[^\sA-Za-z0-9_])/gu;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    if (m[1] !== undefined) out.push({ kind: "ws", text: m[0], start: m.index });
+    else if (m[2] !== undefined) out.push({ kind: "num", text: m[0], start: m.index });
+    else if (m[3] !== undefined) out.push({ kind: m[0] === "let" ? "kw" : "id", text: m[0], start: m.index });
+    else out.push({ kind: "op", text: m[0], start: m.index });
+  }
+  return out;
+}
+
+/** For each identifier token: is it bound at that position? A binder command's variable argument is
+ *  bound over the call's parentheses; `let f(x, y) = …` binds its parameters over the line; a
+ *  λ-cell's `λx y.` binds over the term that follows. Returns the set of token indices. */
+function boundTokens(src: string, toks: Tok[]): Set<number> {
+  const bound = new Set<number>();
+  const bindOver = (names: Set<string>, from: number, to: number) => {
+    toks.forEach((t, k) => { if (t.kind === "id" && t.start >= from && t.start < to && names.has(t.text)) bound.add(k); });
+  };
+  // `let f(x, y) = body`
+  const mlet = /^\s*let\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*=/.exec(src);
+  if (mlet) bindOver(new Set(mlet[2]!.split(",").map((p) => p.trim()).filter(Boolean)), 0, src.length);
+  // binder commands: find `name(`, its matching `)`, and the top-level arguments
+  for (let k = 0; k < toks.length; k++) {
+    const t = toks[k]!;
+    if (t.kind !== "id" || !(t.text in BINDERS)) continue;
+    let j = k + 1; while (j < toks.length && toks[j]!.kind === "ws") j++;
+    if (toks[j]?.text !== "(") continue;
+    const open = toks[j]!.start;
+    let depth = 0, close = src.length; const args: [number, number][] = []; let argStart = open + 1;
+    for (let p = open; p < src.length; p++) {
+      const c = src[p]!;
+      if (c === "(" || c === "[" || c === "{") depth++;
+      else if (c === ")" || c === "]" || c === "}") { depth--; if (depth === 0) { args.push([argStart, p]); close = p + 1; break; } }
+      else if (c === "," && depth === 1) { args.push([argStart, p]); argStart = p + 1; }
+    }
+    if (close === src.length && depth > 0) args.push([argStart, src.length]);
+    const a = args[BINDERS[t.text]!];
+    if (!a) continue;
+    const name = src.slice(a[0], a[1]).trim();
+    if (/^[A-Za-z_\u0370-\u03FF][A-Za-z0-9_\u0370-\u03FF]*$/u.test(name)) bindOver(new Set([name]), open, close);
+  }
+  // λx y. body — bound to the end of the enclosing parenthesis or the line
+  const lam = /[λ\\]\s*((?:[A-Za-z_][A-Za-z0-9_']*\s*)+)\./gu;
+  let m: RegExpExecArray | null;
+  while ((m = lam.exec(src))) {
+    let depth = 0, end = src.length;
+    for (let p = m.index + m[0].length; p < src.length; p++) { const c = src[p]!; if (c === "(") depth++; else if (c === ")") { if (depth === 0) { end = p; break; } depth--; } }
+    bindOver(new Set(m[1]!.trim().split(/\s+/)), m.index, end);
+  }
+  return bound;
+}
+
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** The overlay's HTML for a source line. */
+function highlightHtml(src: string): string {
+  const toks = tokenize(src);
+  const bound = boundTokens(src, toks);
+  const lambdaCell = /[λ\\]|:=/.test(src);
+  let out = "";
+  toks.forEach((t, k) => {
+    let cls = "";
+    if (t.kind === "num") cls = "hnum";
+    else if (t.kind === "kw") cls = "hkw";
+    else if (t.kind === "op") cls = /^[()\[\]{};,]$/.test(t.text) ? "hpun" : "hop";
+    else if (bound.has(k)) cls = "hbound";
+    else if (USER_NAMES.has(`${sessionId}:${t.text}`)) cls = "hdef";
+    else if (CONSTANTS.has(t.text)) cls = "hconst";
+    else if (!lambdaCell && (COMMANDS.has(t.text) || BUILTIN_FN.has(t.text))) {
+      // a name is a call only when a parenthesis follows
+      let j = k + 1; while (j < toks.length && toks[j]!.kind === "ws") j++;
+      cls = toks[j]?.text === "(" ? (COMMANDS.has(t.text) ? "hcmd" : "hfn") : "hvar";
+    } else cls = "hvar";
+    out += cls ? `<span class="${cls}">${esc(t.text)}</span>` : esc(t.text);
+  });
+  return out || "&nbsp;";
+}
+
+function syncHighlight(cell: Cell) {
+  const hl = cell.hl, input = cell.input;
+  if (!hl || !input) return;
+  if (!S.highlight) { hl.innerHTML = ""; return; }
+  const html = highlightHtml(input.value);
+  if (hl.dataset["src"] !== input.value) { hl.innerHTML = `<span class="hlin">${html}</span>`; hl.dataset["src"] = input.value; }
+  (hl.firstElementChild as HTMLElement | null)?.style.setProperty("transform", `translateX(${-input.scrollLeft}px)`);
+}
+/** Redraw every overlay (a name became bound, the toggle changed). */
+function renderHighlights() { for (const c of S.cells) { if (c.hl) delete c.hl.dataset["src"]; syncHighlight(c); } }
+
 // --- Signature help: the call around the caret, its parameters, the current one in bold ---------
 
 /** Session-defined functions (`let f(x, y) = e`), keyed by session and name, for signature help. */
@@ -2472,6 +2589,7 @@ function onKey(ev: KeyboardEvent, cell: Cell, i: number) {
 
 initTheme();
 document.documentElement.dataset["outsize"] = S.outSize;
+document.documentElement.classList.toggle("nohl", !S.highlight);
 shell();
 renderChrome();
 renderSidebar();
