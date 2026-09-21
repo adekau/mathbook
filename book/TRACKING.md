@@ -494,3 +494,12 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    introduction with 100 circles; the static figures with a live counterpart (the line, square and fish, e^{it},
    the square wave, sin t, cos·sin, the modes animation) are cells now. Left as images: the frequency-domain
    magnitude plot and the vector diagrams, which have no function yet.
+- notebook: import as a value, Mathematica-shaped — DONE 2026-09-21. `import("url")`, `⟦name⟧` and `let x =`
+   either are image-valued cells: the cell shows the image (the fetched SVG as a data URL — a raw file server
+   sends SVG as text/plain, which <img src=url> will not render), and the name is bound. `samplePoints(x)` is the
+   explicit step to numbers (a 400×2 matrix); where points are expected the image is accepted too. Two bugs the
+   llama exposed: a literal `-0.036` parsed as (−1)·0.036, so a bare 402-row matrix came back with 381
+   fold-constants steps each carrying the whole matrix twice — a 63 MB reply that killed the page (0 steps and
+   194 KB now: a negative literal is one numeral; `-2^2` is still −4); and the square cell's coefficients — a
+   square traced at constant speed has c_k at k = 1, −3, 5, −7, all the same sign, falling as 1/k² (I had a sign
+   wrong). The fish is now the fish curve x = cos t − sin²t/√2, y = cos t sin t: four circles and a constant.

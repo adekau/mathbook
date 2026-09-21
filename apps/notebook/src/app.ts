@@ -32,7 +32,7 @@ const DOCS: Doc[] = [
   { name: "exptotrig", sig: "exptotrig(e)", blurb: "Euler's formula exp(iθ) = cos θ + i sin θ applied to every exponential with a pure-imaginary argument, at once (Mathematica's ExpToTrig). It is a command rather than a simplification rule because the general formula makes the term bigger; wrap it in expand to distribute and collect. Proved sound over ℂ.", examples: ["exptotrig(exp(i*t))", "expand(exptotrig(exp(-i*t) - exp(i*t)))"] },
   { name: "dot", sig: "dot(u, v) · norm(v)", blurb: "The dot product Σ uᵢvᵢ of two vectors (one-row or one-column matrices), bilinear like Mathematica's Dot — the Hermitian inner product of complex vectors is dot(u, conj(v)). norm(v) is the Euclidean length √(Σ vᵢ²).", examples: ["dot([1,2,3],[4,5,6])", "dot([i,1], conj([i,1]))", "norm([3,4])"] },
   { name: "epicycles", sig: "epicycles(f, t[, n]) · epicycles(points[, modes]) · dft(points[, modes])", blurb: "Draw a finite Fourier sum Σ c_k·exp(i k t) with circles: one per term, radius |c_k| and phase arg c_k, spinning at k turns per period, tip to tail; the tip traces the curve. Given a list of points instead — [x, y; …] or complex numbers — it computes their coefficients numerically (the discrete Fourier transform, dft, keeping the modes largest) and draws the same way. The drawing is numeric presentation; the sum's algebra is the engine's.", examples: ["epicycles(exp(i*t) + 1/2*exp(-3i*t), t)", "epicycles(sum(2i/(k*pi)*(exp(-i*k*t) - exp(i*k*t)), k, 1, 3), t)", "dft([1, i, -1, -i])"] },
-  { name: "import", sig: "import(\"url\") · ⟦file.svg⟧", blurb: "A file as a value. ⟦name⟧ refers to a file attached to the notebook (File → Attach file…, or paste an image into a cell); import(\"url\") fetches one from the web. In a Markdown cell an image shows; in a math cell an SVG becomes the 400 points sampled along its paths at equal arc lengths, centred and scaled to [-1, 1] — a 400×2 matrix, so let x = ⟦llama.svg⟧ binds it and epicycles(x, 60) draws it with 60 circles. Other file types have no conversion to a value yet.", examples: ["let llama = import(\"https://raw.githubusercontent.com/adekau/fourier/master/src/assets/llama.svg\")", "epicycles(llama, 60)"] },
+  { name: "import", sig: "import(\"url\") · ⟦file.svg⟧ · samplePoints(image)", blurb: "A file as a value, as in Mathematica. ⟦name⟧ refers to a file attached to the notebook (File → Attach file…, or paste an image into a cell); import(\"url\") fetches one from the web. A cell whose value is an image shows the image, and let x = import(…) binds it. samplePoints(x) is the image as numbers: for an SVG, 400 points sampled along its paths at equal arc lengths, centred and scaled to [-1, 1] — a 400×2 matrix. Where points are expected (epicycles, dft), an image is accepted and sampled the same way. In a Markdown cell ⟦name⟧ shows the image. Other file types have no conversion to a value yet.", examples: ["let llama = import(\"https://raw.githubusercontent.com/adekau/fourier/master/src/assets/llama.svg\")", "samplePoints(llama)", "epicycles(llama, 60)"] },
   { name: "sign", sig: "sign(x)", blurb: "The sign function: −1, 0 or 1. Folds on numerals and stays symbolic otherwise, so sign(sin(t)) is the square wave.", examples: ["sign(-3)", "plot(sign(sin(t)), t, -pi, pi)"] },
   { name: "poset", sig: "poset({a,b,c}; a<b, a<c) · divisors(n) · subsets({…}) · chain(n)", blurb: "A finite partial order: the reflexive-transitive closure of the relation given, checked for antisymmetry. Bind it with let and ask about it: hasse, join, meet, sup, inf, upper, lower, top, bottom, maximal, minimal, lattice, le.", examples: ["let D = divisors(12)", "join(D, 4, 6)", "lattice(D)", "le(D, 2, 12)", "let P = poset({a,b,c,d}; a<b, a<c, b<d, c<d)"] },
   { name: "map", sig: "map(P; a->b, c->d, …) · monotone(P, f) · lfp(P, f) · gfp(P, f) · fixpoints(P, f)", blurb: "A map on a poset given as a table (other elements are fixed). monotone checks every pair; lfp and gfp iterate from ⊥ and ⊤ and show the Kleene chain, which is proved to end at the least (greatest) fixed point.", examples: ["let f = map(D; 1->2, 3->6)", "monotone(D, f)", "lfp(D, f)"] },
@@ -162,6 +162,9 @@ interface Cell {
   /** The syntax-highlight overlay under the input (presentation). */
   hl?: HTMLElement;
   plot?: PlotData;
+  /** An image-valued cell (`import("url")`, `⟦name⟧`, or `let x =` one of them): the image to show as
+   *  the output, in place of the points it stands for. Recomputed on each run. */
+  image?: { src: string; name: string };
   /** λ-cells: the result with de Bruijn indices, and what it reads as (a Church numeral or boolean). */
   outDeBruijn?: string;
   reading?: string;
@@ -364,6 +367,10 @@ async function runCell(cell: Cell) {
       cell.echoLatex = r.inputRendered?.latex;
       // an image's points are hundreds of rows: the interpretation names the image instead
       if (notes.length) cell.echoLatex = `\\text{${notes.map((n) => n.replace(/[\\{}]/g, "")).join("; ")}}`;
+      if (/\bsamplePoints\s*\(/.test(src)) cell.echoLatex = `\\text{samplePoints: the image's points along its paths}`;
+      const ref = imageRef(src);
+      const shown = ref && imageToShow(ref);
+      if (shown) cell.image = shown; else delete cell.image;
       // a dft cell's input is a long list of sample points: say how many rather than typeset them
       if (/^\s*dft\s*\(\s*\[/.test(src)) {
         // a literal list is long: say how many points rather than typeset them. Rows `[x, y; …]` are
@@ -391,7 +398,7 @@ async function runCell(cell: Cell) {
       }
     } else {
       cell.label = r.label ?? cell.label ?? nextLabel++;
-      delete cell.outLatex; delete cell.outText; delete cell.echoLatex; delete cell.plot; cell.steps = [];
+      delete cell.outLatex; delete cell.outText; delete cell.echoLatex; delete cell.plot; delete cell.image; cell.steps = [];
       cell.error = r.error;
       log("err", `${r.error.code}: ${r.error.message}`);
     }
@@ -876,6 +883,25 @@ async function openNotebookLink(hash: string): Promise<boolean> {
 
 const ASSET_RE = /⟦([^⟧]+)⟧/g;
 const IMPORT_RE = /\bimport\(\s*(["'])([^"']*)\1\s*\)/g;
+/** The text of every SVG fetched by `import`, by URL, so an image-valued cell can show it (a raw
+ *  file server may serve SVG as text/plain, which an <img src=url> will not render). */
+const SVG_TEXT = new Map<string, string>();
+
+/** A cell whose value is an image: `import("url")`, `⟦name⟧`, or `let x =` one of them. */
+function imageRef(src: string): { url?: string; name?: string } | null {
+  const m = /^\s*(?:let\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?(?:import\(\s*(["'])([^"']*)\1\s*\)|⟦([^⟧]+)⟧)\s*$/.exec(src);
+  if (!m) return null;
+  return m[2] !== undefined ? { url: m[2] } : { name: m[3]! };
+}
+/** What an image-valued cell shows: the attachment, or the fetched SVG as a data URL. */
+function imageToShow(ref: { url?: string; name?: string }): { src: string; name: string } | undefined {
+  if (ref.url !== undefined) {
+    const xml = SVG_TEXT.get(ref.url);
+    return { src: xml ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}` : ref.url, name: ref.url.split("/").pop() || ref.url };
+  }
+  const u = assetUrl(ref.name!);
+  return u ? { src: u, name: ref.name! } : undefined;
+}
 /** Points sampled from an SVG, by its text (an attached image) or its URL (an import), so a re-run
  *  neither re-samples nor re-fetches. */
 const SAMPLE_CACHE = new Map<string, string>();
@@ -974,10 +1000,14 @@ async function resolveImages(src: string): Promise<{ src: string; notes: string[
         xml = await r.text();
       } catch (e) { throw new Error(`import("${url}") failed: ${e instanceof Error ? e.message : String(e)} — the server must allow cross-origin reads; attach the file instead`); }
       if (!/<svg[\s>]/i.test(xml)) throw new Error(`import("${url}"): not an SVG (only SVG images can be traced)`);
+      SVG_TEXT.set(url, xml);
       SAMPLE_CACHE.set(`url:${url}`, sample(`svgtext:${xml}`, xml, url.split("/").pop() || url));
     } else notes.push(`${url.split("/").pop() || url}: ${SAMPLE_CACHE.get(`url:${url}`)!.split(";").length} points`);
   }
   out = out.replace(IMPORT_RE, (_m, _q, url: string) => SAMPLE_CACHE.get(`url:${url}`)!);
+  // samplePoints(image) is the image's points — which is what an image already stands for here;
+  // the function is the explicit, Mathematica-shaped way to say it (the engine never sees it)
+  out = out.replace(/\bsamplePoints\s*\(/g, "(");
   return { src: out, notes };
 }
 
@@ -1103,7 +1133,7 @@ function focusCell(i: number) {
 }
 
 function clearOutputs() {
-  for (const c of S.cells) { delete c.outLatex; delete c.outText; delete c.echoLatex; delete c.error; delete c.plot; c.steps = []; c.label = null; c.ms = undefined; }
+  for (const c of S.cells) { delete c.outLatex; delete c.outText; delete c.echoLatex; delete c.error; delete c.plot; delete c.image; c.steps = []; c.label = null; c.ms = undefined; }
   nextLabel = 1; S.sel = null;
   renderCells(); renderSidebar(); renderPanel();
   log("ok", "outputs cleared");
@@ -1905,6 +1935,14 @@ function renderCellBody(cell: Cell) {
       const cap = h("div", "plotcap", cell.summary ?? "");
       val.classList.add("isplot");
       val.append(box, cap);
+    } else if (cell.image) {
+      const box = h("div", "plotbox imgbox");
+      const img = document.createElement("img"); img.src = cell.image.src; img.alt = cell.image.name; img.className = "outimg";
+      box.append(img);
+      const cap = h("div", "plotcap");
+      cap.append(h("span", "epinote", `${cell.image.name} — an image. samplePoints(…) is its points along its paths; where points are expected, the image is sampled the same way.`));
+      val.classList.add("isplot");
+      val.append(box, cap);
     } else if (cell.plot) {
       const epi = !!cell.plot.terms?.length;
       const box = epi ? epicycleBox(cell.plot, 520, 320) : h("div", "plotbox");
@@ -1945,7 +1983,7 @@ function renderCellBody(cell: Cell) {
       wireTerm(val, cell, { kind: "output" });
     }
     // the output form: a per-cell choice of typesetting, like Mathematica's //MatrixForm
-    if (!cell.hasse && !cell.plot) {
+    if (!cell.hasse && !cell.plot && !cell.image) {
       const forms = formsFor(cell);
       const fs = document.createElement("select"); fs.className = "formsel"; fs.title = "Output form";
       for (const [v, label] of forms) { const o = document.createElement("option"); o.value = v; o.textContent = label; o.selected = (cell.form ?? forms[0]![0]) === v; fs.append(o); }
@@ -3145,7 +3183,7 @@ const USER_NAMES = new Set<string>();
 /** Commands whose argument at `arg` is a variable bound over the call: `diff(f, x)`, `plot(f, x, …)`. */
 const BINDERS: Record<string, number> = { diff: 1, integrate: 1, plot: 1, epicycles: 1, sum: 1, subst: 1 };
 const BUILTIN_FN = new Set(["sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs", "conj", "re", "im", "sign", "det", "rref", "transpose", "dot", "norm", "solve"]);
-const COMMANDS = new Set(["diff", "integrate", "plot", "epicycles", "dft", "import", "sum", "exptotrig", "expand", "simplify", "N", "subst", "poset", "map", "monotone", "lfp", "gfp", "fixpoints", "hasse", "join", "meet", "sup", "inf", "upper", "lower", "top", "bottom", "maximal", "minimal", "lattice", "le", "divisors", "subsets", "chain"]);
+const COMMANDS = new Set(["diff", "integrate", "plot", "epicycles", "dft", "import", "samplePoints", "sum", "exptotrig", "expand", "simplify", "N", "subst", "poset", "map", "monotone", "lfp", "gfp", "fixpoints", "hasse", "join", "meet", "sup", "inf", "upper", "lower", "top", "bottom", "maximal", "minimal", "lattice", "le", "divisors", "subsets", "chain"]);
 const CONSTANTS = new Set(["pi", "π", "e", "ℯ", "i", "phi", "φ"]);
 
 type Tok = { kind: "id" | "num" | "op" | "ws" | "kw" | "asset" | "str"; text: string; start: number };

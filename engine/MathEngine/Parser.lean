@@ -122,7 +122,15 @@ mutual
     pure lhs
   partial def unary : PM Expr := do
     let t ← peek
-    if isOp t "-" then discard next; pure (Expr.neg (← unary)) else power
+    if isOp t "-" then
+      discard next
+      -- a negative literal is one numeral, not (−1)·numeral: a matrix of 400 sampled points would
+      -- otherwise cost a fold-constants step per negative entry (and `-2^2` is still −(2²): `power`
+      -- returns a `pow`, not a numeral)
+      match ← unary with
+      | .num q => pure (.num q.neg)
+      | e => pure (Expr.neg e)
+    else power
   partial def power : PM Expr := do
     let b ← atom
     let t ← peek

@@ -20,24 +20,24 @@
       "label": null
     },
     {
-      "src": "So you can draw a straight line using a shape that is about as far opposite from a straight line as possible: two circles of equal radius spinning opposite ways, $e^{it} + e^{-it} = 2\\cos t$, a segment on the real axis. By modifying the circles you can change the shape that is drawn. For example, by decreasing the radius of the outer circle and increasing the speed it spins at, we can draw a square (the first three terms of a square's Fourier series):",
+      "src": "So you can draw a straight line using a shape that is about as far opposite from a straight line as possible: two circles of equal radius spinning opposite ways, $e^{it} + e^{-it} = 2\\cos t$, a segment on the real axis. By modifying the circles you can change the shape that is drawn. For example, by decreasing the radius of the outer circle and increasing the speed it spins at, we can draw a square. A square traced at constant speed has coefficients only at $k = 1, -3, 5, -7, \\ldots$, falling off as $1/k^2$ — the first three terms, all with the same phase, give a square on its corner:",
       "type": "markdown",
       "showWork": false,
       "label": null
     },
     {
-      "src": "epicycles(exp(i*t) - 1/9*exp(-3i*t) + 1/25*exp(5i*t), t)",
+      "src": "epicycles(exp(i*t) + 1/9*exp(-3i*t) + 1/25*exp(5i*t), t)",
       "showWork": false,
       "label": null
     },
     {
-      "src": "So what happens, then, if we add a third circle? It will allow our curves to get more sophisticated.",
+      "src": "So what happens, then, if we add more circles? It will allow our curves to get more sophisticated. The *fish curve* $x = \\cos t - \\tfrac{\\sin^2 t}{\\sqrt 2},\\ y = \\cos t \\sin t$ is, by Euler's formula, four circles at frequencies $\\pm 1$ and $\\pm 2$ (and a constant):",
       "type": "markdown",
       "showWork": false,
       "label": null
     },
     {
-      "src": "epicycles(exp(i*t) + 1/2*exp(-2i*t) + 1/6*exp(3i*t), t)",
+      "src": "epicycles(-1/(2*sqrt(2)) + 1/2*exp(i*t) + 1/2*exp(-i*t) + (1/4 + 1/(4*sqrt(2)))*exp(2i*t) + (1/(4*sqrt(2)) - 1/4)*exp(-2i*t), t)",
       "showWork": false,
       "label": null
     },
@@ -541,13 +541,24 @@
       "label": null
     },
     {
-      "src": "Now the llama. `import` samples $400$ points along the paths of the article's `llama.svg` (centred and scaled so the larger extent is $[-1, 1]$) — a $400 \\times 2$ matrix, bound to a name so the transforms below can share it. (An SVG can also be attached or pasted into a cell, where it appears as `⟦llama.svg⟧`.)",
+      "src": "Now the llama. `import` fetches the article's `llama.svg` from its repository; the cell shows the image, and the name is bound to it. (An SVG can also be attached or pasted into a cell, where it appears as `⟦llama.svg⟧`.)",
       "type": "markdown",
       "showWork": false,
       "label": null
     },
     {
       "src": "let llama = import(\"https://raw.githubusercontent.com/adekau/fourier/master/src/assets/llama.svg\")",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "`samplePoints` is the image as numbers: $400$ points sampled along its paths at equal arc lengths, centred and scaled so the larger extent is $[-1, 1]$ — a $400 \\times 2$ matrix. Anywhere points are expected, the image itself is accepted and sampled the same way.",
+      "type": "markdown",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "samplePoints(llama)",
       "showWork": false,
       "label": null
     },
