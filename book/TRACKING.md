@@ -432,3 +432,10 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    Goal: the llama article written in ChalkMath. Fixed on the way: the epicycle trace ran 2 % ahead of the dot
    (a fudge factor in place of the sample index — now the trace ends at the tip itself), and `dft`'s echo
    counted `;` only, so a row of complex points was "1 sample point".
+- notebook: show-work rows read for people — DONE 2026-09-20. The row's headline is the rule's own name for
+   itself (the lead of its explanation, "Power rule: …", or a table for the ones that do not lead with a name);
+   the machine name (`expand.distribute`) moves to the tooltip and the panel. A diff in place between steps: the
+   subterm a step rewrote is tinted green in its row and red in the row before (the input's rendering for the
+   first step); a rewrite at the root tints nothing, the whole line changed. Hovering a subterm now lights only
+   the innermost one (`:hover:not(:has([data-path]:hover))`) — before, every ancestor lit with it, so a hovered
+   `2` in `2·d` was indistinguishable from the product.

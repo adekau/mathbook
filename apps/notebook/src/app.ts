@@ -1450,6 +1450,48 @@ function plainWhy(md: string): string {
   return out.replace(/`([^`]*)`/g, "$1").replace(/\s+([.,;:])/g, "$1").trim();
 }
 
+/** A step's headline and the rest of its explanation. The rules name themselves ("Power rule: …",
+ *  "Distributive law: …"); the machine name (`diff.power`) is for the tooltip and the panel. When an
+ *  explanation has no such lead, the name is read off the rule id: `simp.fold-constants` → "Fold constants". */
+function stepTitle(st: Step): { title: string; rest: string } {
+  const plain = plainWhy(st.explanation);
+  const m = /^([^:$]{3,44}?):\s+(.*)$/s.exec(plain);
+  if (m) return { title: m[1]!, rest: m[2]! };
+  const tail = st.rule.split(".").pop() ?? st.rule;
+  return { title: RULE_NAMES[st.rule] ?? tail.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase()), rest: plain };
+}
+/** Names for the rules whose explanations do not name them. */
+const RULE_NAMES: Record<string, string> = {
+  "diff.chain": "Chain rule", "diff.sum": "Sum rule", "diff.product": "Product rule", "diff.power": "Power rule", "diff.variable": "Derivative of the variable",
+  "diff.constant": "Derivative of a constant", "diff.constant-multiple": "Constant multiple rule", "diff.higher-order": "Higher derivative", "diff.matrix": "Entrywise derivative",
+  "simp.power": "Power identity", "simp.identity": "Identity", "simp.flatten": "Flatten", "simp.sort": "Reorder", "simp.function": "Function value",
+  "simp.fold-constants": "Arithmetic on constants", "simp.collect-like-terms": "Collect like terms", "simp.collect-powers": "Collect powers", "simp.collect-radicals": "Collect radicals",
+  "simp.radical": "Radical", "simp.exp-product": "Exponentials multiply", "expand.distribute": "Distribute", "expand.power": "Expand the power",
+  "cx.euler": "Euler's formula", "cx.euler-power": "Euler's formula", "cx.arithmetic": "Complex arithmetic", "cx.i-power": "Power of i", "cx.re-im": "Real and imaginary parts",
+  "cx.conjugate": "Conjugate", "cx.abs": "Modulus", "cx.exact-trig": "Exact value", "cx.power": "Complex power",
+  "la.row-swap": "Swap rows", "la.row-scale": "Scale a row", "la.row-add": "Add a multiple of a row", "la.det": "Determinant", "la.mul": "Matrix product", "la.add": "Matrix sum",
+  "la.scalar-mul": "Scalar multiple", "la.transpose": "Transpose", "la.pow": "Matrix power", "la.dot": "Dot product", "la.norm": "Norm", "la.conj": "Conjugate", "la.context": "Matrix context",
+  "int.check": "Check by differentiating", "int.compare": "Compare with the integrand", "int.bounds": "Evaluate at the bounds", "int.table": "Table integral", "int.power": "Power rule for integrals",
+  "int.variable": "Integral of the variable", "int.constant": "Integral of a constant", "int.constant-multiple": "Constant multiple", "int.sum": "Sum rule for integrals",
+  "int.exponential": "Exponential integral", "int.exp-power": "Exponential of a power", "int.substitution": "Substitution", "int.linear-substitution": "Linear substitution",
+  "int.by-parts": "Integration by parts", "int.trig-power": "Trigonometric power",
+  "cmd.rref": "Row reduce", "cmd.integrate": "Integrate", "cmd.expand": "Expand", "cmd.subst": "Substitute", "cmd.simplify": "Simplify", "cmd.sum": "Sum", "cmd.exptotrig": "Euler's formula",
+};
+
+/** A diff between consecutive steps, in place: the subterm a step rewrote is tinted in its own row
+ *  (new) and in the row before it — or the input's rendering for the first step — (old). A rewrite
+ *  at the root changes the whole line, which needs no tint. */
+function markChanges(rows: HTMLElement[], steps: Step[], before?: HTMLElement) {
+  steps.forEach((st, n) => {
+    if (!st.path.length) return;
+    const key = st.path.join(".");
+    const now = rows[n]?.querySelector<HTMLElement>(`.el [data-path="${key}"]`);
+    const was = (n === 0 ? before : rows[n - 1]?.querySelector<HTMLElement>(".el"))?.querySelector<HTMLElement>(`[data-path="${key}"]`);
+    if (now) { now.classList.add("chg-new"); now.title = "what this step produced"; }
+    if (was) { was.classList.add("chg-old"); was.title = `what step ${n + 1} rewrites`; }
+  });
+}
+
 /** Re-render everything below a cell's input, leaving the input element untouched. */
 function renderCellBody(cell: Cell) {
   const el = cell.el; if (!el) return;
@@ -1461,11 +1503,13 @@ function renderCellBody(cell: Cell) {
   const body = mid.querySelector(".cellbody") as HTMLElement;
   body.innerHTML = "";
 
+  let echoEl: HTMLElement | undefined;
   if (cell.echoLatex && S.showEcho) {
     const echo = h("div", "echo");
     echo.innerHTML = tex(cell.echoLatex, true);
     wireTerm(echo, cell, { kind: "input" });
     body.append(echo);
+    echoEl = echo;
   }
 
 
@@ -1486,11 +1530,14 @@ function renderCellBody(cell: Cell) {
       const rulecol = h("span", "rulecol");
       const rule = h("span", "rule");
       const mark = h("span", `vmark ${status}`);
+      const { title, rest } = stepTitle(st);
+      // the headline is the rule's own name for itself ("Power rule"); the machine name lives in the tooltip and the panel
       mark.title = ruleStatusIn(st.rule, cellComplex(cell)).note;
-      rule.append(mark, document.createTextNode(st.rule));
+      rule.append(mark, document.createTextNode(title));
+      rule.title = `${st.rule} — ${ruleStatusIn(st.rule, cellComplex(cell)).note}`;
       rulecol.append(rule);
       // what the rule did, in the row itself (the panel repeats it in full)
-      if (st.explanation) { const why = inlineMath(plainWhy(st.explanation), "why"); why.title = plainWhy(st.explanation).replace(/\$/g, ""); rulecol.append(why); }
+      if (rest) { const why = inlineMath(rest, "why"); why.title = rest.replace(/\$/g, ""); rulecol.append(why); }
       row.append(rulecol);
       const el = h("span", "el");
       const shown = S.deBruijn && st.afterDeBruijn ? st.afterDeBruijn : st.afterRendered;
@@ -1516,6 +1563,7 @@ function renderCellBody(cell: Cell) {
     // Nested derivations (rref's row operations, integrate's finder and its check) render below
     // their step, indented one level per depth and numbered 1.2, 1.2.3, …
     const renderSub = (st: Step, label: string, top: number, depth: number) => {
+      const rows: HTMLElement[] = [];
       st.sub?.steps.forEach((sub, k) => {
         const l = `${label}.${k + 1}`;
         const srow = stepRow(sub, l, statusOf(sub, cellComplex(cell)), undefined, { steps: st.sub!.steps, index: k, top });
@@ -1524,15 +1572,20 @@ function renderCellBody(cell: Cell) {
         srow.title = sub.explanation.replace(/\$/g, "");
         srow.addEventListener("click", (ev) => { ev.stopPropagation(); selectSubStep(cell, st.sub!.steps, k, l, top); });
         work.append(srow);
+        rows.push(srow);
         renderSub(sub, l, top, depth + 1);
       });
+      if (st.sub) markChanges(rows, st.sub.steps);
     };
+    const rows: HTMLElement[] = [];
     cell.steps.forEach((st, n) => {
       const row = stepRow(st, String(n + 1), statusOf(st, cellComplex(cell)), { kind: "step", index: n });
       row.addEventListener("click", () => void explain(cell, { kind: "step", index: n }, []));
       work.append(row);
+      rows.push(row);
       renderSub(st, String(n + 1), n, 1);
     });
+    markChanges(rows, cell.steps, echoEl);
     body.append(work);
   }
 

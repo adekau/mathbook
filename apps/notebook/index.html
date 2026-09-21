@@ -39,6 +39,7 @@
   --p-br-idle:#4a4a45; --p-br-hov:#63635d; --p-br-act:#d98b33; --p-br-out:#444440; --p-input-br:#42423d;
   --p-acc:#f0a45c; --p-acc-2:#e2872f; --p-acc-ink:#ffdcb4;
   --p-acc-bg:rgba(226,135,47,0.15); --p-acc-bg2:rgba(226,135,47,0.2); --p-acc-br:rgba(226,135,47,0.42); --p-acc-chip:rgba(240,164,92,0.16); --p-sel:rgba(226,135,47,0.28); --p-hov:rgba(226,135,47,0.12);
+  --p-add-bg:rgba(112,196,120,0.2); --p-add-br:rgba(112,196,120,0.45); --p-del-bg:rgba(230,110,95,0.2); --p-del-br:rgba(230,110,95,0.45);
   --p-row-bg:rgba(233,226,208,0.035); --p-no-bg:rgba(233,226,208,0.09);
   --p-cell-active:rgba(233,226,208,0.05); --p-cell-hover:rgba(233,226,208,0.024); --p-input-bg:rgba(233,226,208,0.055);
   --p-err:#f09a8e; --p-err-line:#c05a48; --p-err-bg:rgba(192,90,72,0.14);
@@ -69,6 +70,7 @@ html[data-theme="light"] {
   --p-br-idle:#ddd2bd; --p-br-hov:#b8a88e; --p-br-act:#c06a1c; --p-br-out:#e0d6c2; --p-input-br:#e8dfcd;
   --p-acc:#a8541a; --p-acc-2:#8f4512; --p-acc-ink:#3a1c05;
   --p-acc-bg:rgba(200,120,40,0.14); --p-acc-bg2:rgba(200,120,40,0.2); --p-acc-br:rgba(168,84,26,0.42); --p-acc-chip:rgba(168,84,26,0.14); --p-sel:rgba(226,135,47,0.3); --p-hov:rgba(200,120,40,0.12);
+  --p-add-bg:rgba(60,150,80,0.16); --p-add-br:rgba(60,150,80,0.4); --p-del-bg:rgba(210,80,60,0.14); --p-del-br:rgba(210,80,60,0.4);
   --p-row-bg:rgba(84,72,48,0.045); --p-no-bg:rgba(84,72,48,0.1);
   --p-cell-active:rgba(120,96,48,0.05); --p-cell-hover:rgba(120,96,48,0.025); --p-input-bg:rgba(255,255,255,0.85);
   --p-err:#8c3628; --p-err-line:#b0533f; --p-err-bg:rgba(176,74,58,0.09);
@@ -356,7 +358,11 @@ svg .epitip { fill:var(--acc); }
 .katex [data-path] { cursor:pointer; border-radius:3px; padding:0 1px; }
 /* a matrix (or any tall subterm) is taller than its line box; let the highlight follow the content */
 .katex [data-path]:has(.mtable) { display:inline-block; }
-.katex [data-path]:hover { background:var(--p-hov); }
+/* the innermost hovered subterm only: an ancestor is hovered too, but must not light up with it */
+.katex [data-path]:hover:not(:has([data-path]:hover)) { background:var(--p-hov); box-shadow:0 0 0 1px var(--p-acc-br); }
+/* the diff between steps: what a step produced, and what the next step rewrites */
+.katex [data-path].chg-new { background:var(--p-add-bg); box-shadow:0 0 0 1px var(--p-add-br); }
+.katex [data-path].chg-old { background:var(--p-del-bg); box-shadow:0 0 0 1px var(--p-del-br); }
 .katex [data-path].sel { background:var(--p-sel); box-shadow:0 0 0 1px var(--p-acc-2); }
 
 /* --- reference view ------------------------------------------------------- */
