@@ -351,8 +351,9 @@ async function runCell(cell: Cell) {
       cell.semantics = "semantics" in r && r.semantics === "complex" ? "complex" : "real";
       cell.echoLatex = r.inputRendered?.latex;
       // a dft cell's input is a long list of sample points: say how many rather than typeset them
-      if (/^\s*dft\s*\(/.test(src)) {
-        // rows `[x, y; …]` are points; a single row `[z₁, z₂, …]` is complex points
+      if (/^\s*dft\s*\(\s*\[/.test(src)) {
+        // a literal list is long: say how many points rather than typeset them. Rows `[x, y; …]` are
+        // points; a single row `[z₁, z₂, …]` is complex points. A bound name (`dft(llama, 60)`) echoes as itself.
         const body = /\[([^\]]*)\]/.exec(src)?.[1] ?? "";
         const n = body.includes(";") ? body.split(";").length : body.split(",").length;
         cell.echoLatex = `\\text{dft of ${n} sample point${n === 1 ? "" : "s"}}`;
@@ -585,10 +586,19 @@ interface ChalkFile {
 /** A cell's source as the user has it now: the live editor's text when there is one. */
 const cellSrc = (c: Cell) => c.input?.value ?? c.ta?.value ?? c.src;
 
+/** A cell's steps are kept in a file only up to this size: a long derivation of a big term (a sum
+ *  of integrals, with the nested checks) runs to megabytes, and the notebook re-runs every cell
+ *  when it opens a file anyway — the steps come back then. The output itself is always kept. */
+const STEPS_BUDGET = 256 * 1024;
+function stepsToSave(c: Cell): Step[] | undefined {
+  if (!c.steps?.length) return c.steps;
+  return JSON.stringify(c.steps).length <= STEPS_BUDGET ? c.steps : undefined;
+}
+
 function serializeNotebook(): string {
   const doc: ChalkFile = {
     chalk: 1, name: S.docName,
-    cells: S.cells.map((c) => ({ src: cellSrc(c), type: c.type, collapsed: c.collapsed || undefined, showWork: c.showWork, label: c.label, outLatex: c.outLatex, outText: c.outText, form: c.form, semantics: c.semantics, echoLatex: c.echoLatex, steps: c.steps, error: c.error, plot: c.plot })),
+    cells: S.cells.map((c) => ({ src: cellSrc(c), type: c.type, collapsed: c.collapsed || undefined, showWork: c.showWork, label: c.label, outLatex: c.outLatex, outText: c.outText, form: c.form, semantics: c.semantics, echoLatex: c.echoLatex, steps: stepsToSave(c), error: c.error, plot: c.plot })),
     scenes: ST.scenes,
   };
   return JSON.stringify(doc, null, 2);
@@ -1152,12 +1162,14 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1, t01?: number): S
     const pad = (y1 - y0) * 0.08; y0 -= pad; y1 += pad;
   }
   if (parametric) {
-    // the x range is the real parts', and both axes share one scale; the epicycles' reach counts too
+    // the x range is the real parts', and both axes share one scale; the epicycles' reach counts too —
+    // measured, not the sum of all radii (a worst case a llama of 60 circles never comes near)
     const xs = p.series.filter((s) => s.parametric).flatMap((s) => s.points.filter((q) => q[1] !== null).map((q) => q[0]));
-    const reach = (p.terms ?? []).reduce((a, c) => a + Math.hypot(c.re, c.im), 0);
-    const c0 = p.terms?.find((c) => c.k === 0);
-    x0 = Math.min(...xs, c0 ? c0.re - reach : Infinity); x1 = Math.max(...xs, c0 ? c0.re + reach : -Infinity);
-    if (p.terms?.length) { y0 = Math.min(y0, (c0?.im ?? 0) - reach); y1 = Math.max(y1, (c0?.im ?? 0) + reach); }
+    x0 = Math.min(...xs); x1 = Math.max(...xs);
+    if (p.terms?.length) {
+      const e = epiExtent(p.terms);
+      x0 = Math.min(x0, e[0]); x1 = Math.max(x1, e[1]); y0 = Math.min(y0, e[2]); y1 = Math.max(y1, e[3]);
+    }
     if (!isFinite(x0) || !isFinite(x1)) { x0 = -1; x1 = 1; }
     if (x1 - x0 < 1e-9) { x0 -= 1; x1 += 1; }
     const padx = (x1 - x0) * 0.08; x0 -= padx; x1 += padx;
@@ -1178,7 +1190,9 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1, t01?: number): S
     const e = document.createElementNS(NS, "text");
     e.setAttribute("x", String(x)); e.setAttribute("y", String(y)); e.setAttribute("class", cls); e.textContent = t; svg.append(e);
   };
-  const nice = (v: number) => Math.abs(v) < 1e-9 ? "0" : (Math.abs(v) >= 1000 || Math.abs(v) < 0.01 ? v.toExponential(1) : String(Math.round(v * 100) / 100));
+  // a tick within a thousandth of the span of zero is zero (an off-centre frame lands one at −4.3e-3)
+  const span = Math.max(x1 - x0, y1 - y0);
+  const nice = (v: number) => Math.abs(v) < Math.max(1e-9, span * 1e-3) ? "0" : (Math.abs(v) >= 1000 || Math.abs(v) < 0.01 ? v.toExponential(1) : String(Math.round(v * 100) / 100));
   // frame and axes
   line(L, T, L, hgt - B, "axis"); line(L, hgt - B, w - R, hgt - B, "axis");
   if (y0 < 0 && y1 > 0) line(L, sy(0), w - R, sy(0), "zero");
@@ -1237,6 +1251,23 @@ function epiTip(terms: Epicycle[], t: number): [number, number] {
   let x = 0, y = 0;
   for (const c of terms) { const r = Math.hypot(c.re, c.im), ph = Math.atan2(c.im, c.re); x += r * Math.cos(c.k * t + ph); y += r * Math.sin(c.k * t + ph); }
   return [x, y];
+}
+
+/** How far the epicycles actually swing: the box around every joint of the chain, each padded by
+ *  the circle it carries, over 96 phases of the lap — `[x0, x1, y0, y1]`. */
+function epiExtent(terms: Epicycle[]): [number, number, number, number] {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  const polar = terms.map((c) => [Math.hypot(c.re, c.im), Math.atan2(c.im, c.re), c.k] as const);
+  for (let j = 0; j < 96; j++) {
+    const t = (2 * Math.PI * j) / 96;
+    let x = 0, y = 0;
+    for (const [r, ph, k] of polar) {
+      x0 = Math.min(x0, x - r); x1 = Math.max(x1, x + r); y0 = Math.min(y0, y - r); y1 = Math.max(y1, y + r);
+      x += r * Math.cos(k * t + ph); y += r * Math.sin(k * t + ph);
+    }
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  return [x0, x1, y0, y1];
 }
 
 /** The epicycle animation in a cell: redraw at the phase of a 12-second loop while the box is on
@@ -1457,6 +1488,9 @@ function stepTitle(st: Step): { title: string; rest: string } {
   const plain = plainWhy(st.explanation);
   const m = /^([^:$]{3,44}?):\s+(.*)$/s.exec(plain);
   if (m) return { title: m[1]!, rest: m[2]! };
+  // diff.chain on a bare variable is just the function's derivative ("sin' = cos."): say so
+  const fn = st.rule === "diff.chain" ? /^(\w+)' = /.exec(plain) : null;
+  if (fn) return { title: `Derivative of ${fn[1]}`, rest: plain };
   const tail = st.rule.split(".").pop() ?? st.rule;
   return { title: RULE_NAMES[st.rule] ?? tail.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase()), rest: plain };
 }

@@ -450,3 +450,19 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    pipeline canonicalizes silently between recorded steps (flattens `(2·x)·sin x`, reorders), so a step's `before`
    is not the previous row's `after` and the "old" could not be cut from the row above. Every step now carries
    `beforeRendered` (Wire.lean) and the old is cut from the step's own rendering of what it started from.
+- notebooks/llamas.chalk — DONE 2026-09-20. Alex's 2020 article "Fourier Analysis: Drawing Llamas with Circles"
+   as a ChalkMath notebook: 8 sections, 40 Markdown cells (the article's prose and equations, figures by URL from
+   adekau.github.io), 49 math cells for everything it computes — the intro's line/square/fish as `epicycles`,
+   complex arithmetic, the (u, v, w) dot products and the exact recombination `c1*u + c2*v = [7/10, 6/5]`,
+   symbolic `dot` over ℝ and ℂ, Euler as `exptotrig`, `diff(exp(i*t), t)`, the orthogonality integrals, the
+   square wave's `c(k)` as two definite integrals (k symbolic, then k = −3…3, and `c(0)` directly), the partial
+   sums, `expand(exptotrig(sum(…)))` to `4/π sin t + 4/(3π) sin 3t`, the 7-term plot, and the llama itself:
+   400 points sampled from the article's `llama.svg`, bound with `let`, then `dft(llama, 10 | 60 | all)`. Every
+   math cell runs clean in the native engine and in the wasm notebook (0 errors). Saved as sources only: with
+   outputs the file was 11 MB — the `sum(c(k)…)` cells' steps alone are 3 MB each (every step carries the whole
+   term twice, plus the nested integrate checks) — and the notebook re-runs on open regardless. Fixed on the way:
+   steps past 256 KB are no longer persisted (file or autosave, which was past localStorage's quota); the
+   epicycle frame is measured (joints padded by their circles over a lap) instead of summing all radii, so a
+   60-circle llama fills its box; `dft(name, …)` echoes as itself; near-zero ticks print 0. Engine gaps the
+   article exposed: `sqrt(2)^2`, `sqrt(74)^2` and `sqrt(x)^2` do not simplify (products `sqrt(2)*sqrt(2)` do), so
+   `u` is written with `sqrt(2)/2` and the norm is shown as `dot(u, u)`; `p(j)` in a `sum` reads as `p·j`.
