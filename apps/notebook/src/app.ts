@@ -142,9 +142,21 @@ function migratePlot(p: PlotData | { var: string; from: number; to: number; poin
   return { var: p.var, from: p.from, to: p.to, series: [{ latex: "", text: p.text, points: p.points }] };
 }
 
+/** What a cell is: mathematics for the engine (the default), Markdown prose with `$…$` and code, or a
+ *  section heading that groups the cells below it (run together, collapsible). */
+type CellType = "math" | "markdown" | "section";
+
 interface Cell {
   id: string;
   src: string;
+  /** Absent for a math cell. */
+  type?: Exclude<CellType, "math">;
+  /** A Markdown cell shows its source while editing and its rendering otherwise. */
+  editing?: boolean;
+  /** A section whose cells are folded away. */
+  collapsed?: boolean;
+  /** The Markdown cell's editor. */
+  ta?: HTMLTextAreaElement;
   /** The syntax-highlight overlay under the input (presentation). */
   hl?: HTMLElement;
   plot?: PlotData;
@@ -308,8 +320,17 @@ async function connect() {
 }
 
 async function runCell(cell: Cell) {
+  // prose renders; a section heading is a label, not an evaluation
+  if (cell.type === "markdown") {
+    cell.src = cellSrc(cell);
+    cell.editing = false;
+    renderCellBody(cell); renderSidebar(); queueMicrotask(autosave);
+    if (cell === S.cells[S.cells.length - 1]) { addCell(); renderSidebar(); }
+    return;
+  }
+  if (cell.type === "section") { cell.src = cellSrc(cell); return; }
   if (!client || S.busy) return;
-  const src = cell.input?.value ?? cell.src;
+  const src = cellSrc(cell);
   cell.src = src;
   if (!src.trim()) return;
   S.busy = true;
@@ -330,7 +351,12 @@ async function runCell(cell: Cell) {
       cell.semantics = "semantics" in r && r.semantics === "complex" ? "complex" : "real";
       cell.echoLatex = r.inputRendered?.latex;
       // a dft cell's input is a long list of sample points: say how many rather than typeset them
-      if (/^\s*dft\s*\(/.test(src)) { const n = (src.match(/;/g)?.length ?? 0) + 1; cell.echoLatex = `\\text{dft of ${n} sample point${n === 1 ? "" : "s"}}`; }
+      if (/^\s*dft\s*\(/.test(src)) {
+        // rows `[x, y; …]` are points; a single row `[z₁, z₂, …]` is complex points
+        const body = /\[([^\]]*)\]/.exec(src)?.[1] ?? "";
+        const n = body.includes(";") ? body.split(";").length : body.split(",").length;
+        cell.echoLatex = `\\text{dft of ${n} sample point${n === 1 ? "" : "s"}}`;
+      }
       cell.steps = r.derivation?.steps ?? [];
       delete cell.error;
       delete cell.plot; delete cell.outDeBruijn; delete cell.reading; delete cell.kind; delete cell.hasse; delete cell.summary;
@@ -501,7 +527,7 @@ function docDirty(d: Nb): boolean {
 
 /** A new notebook nobody has typed in: the natural place to open a file into. */
 function docPristine(d: Nb): boolean {
-  return d.name === "untitled.chalk" && d.scenes.length === 0 && d.cells.every((c) => !(c.input?.value ?? c.src).trim() && !c.outLatex);
+  return d.name === "untitled.chalk" && d.scenes.length === 0 && d.cells.every((c) => !cellSrc(c).trim() && !c.outLatex);
 }
 
 /** Close a tab; an unsaved notebook asks first. The last tab closing leaves a fresh one. */
@@ -552,14 +578,17 @@ function renderTabs() {
 interface ChalkFile {
   /** Format version. Files written as `.lemma` before the rename carry `lemma: 1` instead and still open. */
   chalk?: 1; lemma?: 1; name: string;
-  cells: { src: string; showWork: boolean; label: number | null; outLatex?: string | undefined; outText?: string | undefined; form?: string | undefined; semantics?: "real" | "complex" | undefined; echoLatex?: string | undefined; steps?: Step[] | undefined; error?: Cell["error"] | undefined; plot?: PlotData | undefined }[];
+  cells: { src: string; type?: Cell["type"] | undefined; collapsed?: boolean | undefined; showWork: boolean; label: number | null; outLatex?: string | undefined; outText?: string | undefined; form?: string | undefined; semantics?: "real" | "complex" | undefined; echoLatex?: string | undefined; steps?: Step[] | undefined; error?: Cell["error"] | undefined; plot?: PlotData | undefined }[];
   scenes: Scene[];
 }
+
+/** A cell's source as the user has it now: the live editor's text when there is one. */
+const cellSrc = (c: Cell) => c.input?.value ?? c.ta?.value ?? c.src;
 
 function serializeNotebook(): string {
   const doc: ChalkFile = {
     chalk: 1, name: S.docName,
-    cells: S.cells.map((c) => ({ src: c.input?.value ?? c.src, showWork: c.showWork, label: c.label, outLatex: c.outLatex, outText: c.outText, form: c.form, semantics: c.semantics, echoLatex: c.echoLatex, steps: c.steps, error: c.error, plot: c.plot })),
+    cells: S.cells.map((c) => ({ src: cellSrc(c), type: c.type, collapsed: c.collapsed || undefined, showWork: c.showWork, label: c.label, outLatex: c.outLatex, outText: c.outText, form: c.form, semantics: c.semantics, echoLatex: c.echoLatex, steps: c.steps, error: c.error, plot: c.plot })),
     scenes: ST.scenes,
   };
   return JSON.stringify(doc, null, 2);
@@ -588,7 +617,9 @@ async function loadNotebook(text: string, name?: string) {
 /** Cells from a file's records (no DOM yet). */
 function cellsFromFile(doc: ChalkFile): Cell[] {
   return doc.cells.map((c) => {
-    const cell = freshCell(c.src);
+    const cell = freshCell(c.src, c.type === "markdown" || c.type === "section" ? c.type : "math");
+    if (cell.type === "markdown") cell.editing = !c.src.trim();   // prose comes back rendered; an empty cell opens for typing
+    if (c.collapsed) cell.collapsed = true;
     cell.showWork = c.showWork ?? false; cell.label = c.label ?? null;
     if (c.outLatex) cell.outLatex = c.outLatex;
     if (c.outText) cell.outText = c.outText;
@@ -602,7 +633,26 @@ function cellsFromFile(doc: ChalkFile): Cell[] {
   });
 }
 
-async function runAll() { for (const c of [...S.cells]) if ((c.input?.value ?? c.src).trim()) await runCell(c); }
+async function runAll() { for (const c of [...S.cells]) if (cellSrc(c).trim()) await runCell(c); }
+
+/** The cells a section heads: from the one after it to the next section (or the end). */
+function sectionRange(i: number): [number, number] {
+  let j = i + 1;
+  while (j < S.cells.length && S.cells[j]!.type !== "section") j++;
+  return [i + 1, j];
+}
+/** The section containing cell `i` (the nearest heading at or above it), or −1 when it is above the first. */
+function sectionOf(i: number): number {
+  for (let k = Math.min(i, S.cells.length - 1); k >= 0; k--) if (S.cells[k]?.type === "section") return k;
+  return -1;
+}
+/** Run every cell of the section headed by cell `i`, in order. */
+async function runSection(i: number) {
+  const [a, b] = sectionRange(i);
+  const cells = S.cells.slice(a, b);
+  log("ok", `running section “${cellSrc(S.cells[i]!) || "untitled"}”: ${cells.length} cell${cells.length === 1 ? "" : "s"}`);
+  for (const c of cells) if (cellSrc(c).trim()) await runCell(c);
+}
 
 async function restartKernel() {
   if (client) { try { await client.call("engine.resetSession", { sessionId }); } catch (e) { log("err", String(e)); } }
@@ -703,6 +753,68 @@ function importNotebook() {
   });
   inp.click();
 }
+// --- Notebook as a link: the sources, deflated and base64url-encoded in the fragment -------------
+
+/** What a link carries: the name and every cell's text and kind. Outputs are not included: the
+ *  engine recomputes them when the link opens, which is the point of a verified notebook. */
+interface LinkDoc { v: 1; n: string; c: { s: string; t?: "markdown" | "section"; w?: 1; f?: 1 }[] }
+
+async function deflate(text: string): Promise<Uint8Array> {
+  const cs = new CompressionStream("deflate-raw");
+  const w = cs.writable.getWriter(); void w.write(new TextEncoder().encode(text)); void w.close();
+  return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+}
+async function inflate(bytes: Uint8Array): Promise<string> {
+  const ds = new DecompressionStream("deflate-raw");
+  const w = ds.writable.getWriter(); void w.write(new Uint8Array(bytes) as Uint8Array<ArrayBuffer>); void w.close();
+  return new Response(ds.readable).text();
+}
+function b64url(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function unb64url(s: string): Uint8Array {
+  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length / 4) * 4, "="));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+/** A link that opens this notebook: `…#nb=<deflated JSON>` (≈ a third of the sources' size). */
+async function notebookLink(): Promise<string> {
+  const doc: LinkDoc = {
+    v: 1, n: S.docName,
+    c: S.cells.filter((c) => cellSrc(c).trim()).map((c) => ({ s: cellSrc(c), ...(c.type ? { t: c.type } : {}), ...(c.showWork ? { w: 1 as const } : {}), ...(c.collapsed ? { f: 1 as const } : {}) })),
+  };
+  const json = JSON.stringify(doc);
+  const payload = typeof CompressionStream === "function" ? `nb=${b64url(await deflate(json))}` : `nbj=${b64url(new TextEncoder().encode(json))}`;
+  return `${location.origin}${location.pathname}#${payload}`;
+}
+async function copyNotebookLink() {
+  try {
+    const url = await notebookLink();
+    await navigator.clipboard.writeText(url);
+    log("ok", `copied a link to ${S.docName} (${url.length.toLocaleString()} characters); it opens the sources and re-runs them`);
+  } catch (e) { log("err", `could not copy the link: ${e instanceof Error ? e.message : String(e)}`); }
+}
+/** Open the notebook a link carries (the page's fragment), then drop the fragment so a reload does not open it again. */
+async function openNotebookLink(hash: string): Promise<boolean> {
+  const m = /^#(nb|nbj)=([A-Za-z0-9_-]+)$/.exec(hash); if (!m) return false;
+  try {
+    const bytes = unb64url(m[2]!);
+    const json = m[1] === "nb" ? await inflate(bytes) : new TextDecoder().decode(bytes);
+    const doc = JSON.parse(json) as LinkDoc;
+    if (doc.v !== 1 || !Array.isArray(doc.c)) throw new Error("not a notebook link");
+    const file: ChalkFile = {
+      chalk: 1, name: doc.n || "shared.chalk",
+      cells: doc.c.map((c) => ({ src: String(c.s ?? ""), type: c.t === "markdown" || c.t === "section" ? c.t : undefined, collapsed: c.f ? true : undefined, showWork: !!c.w, label: null })),
+      scenes: [],
+    };
+    history.replaceState(null, "", location.pathname + location.search);
+    await loadNotebook(JSON.stringify(file), file.name);
+    return true;
+  } catch (e) { log("err", `the link did not open: ${e instanceof Error ? e.message : String(e)}`); return false; }
+}
+
 /** Import SVG…: sample the file's paths at evenly spaced arc lengths (the article's
  *  `getPointAtLength` loop), centre and scale them, and add a `dft([...])` cell — the discrete Fourier
  *  transform of the samples drives an epicycle drawing of the picture. Presentation, not exact. */
@@ -765,18 +877,42 @@ function restoreAutosave(): string | null {
 // Cell list operations
 // ---------------------------------------------------------------------------
 
-function freshCell(src = ""): Cell { return { id: `c${++cellSeq}`, src, label: null, showWork: false }; }
-function addCell(src = ""): Cell {
-  const cell: Cell = freshCell(src);
+function freshCell(src = "", type: CellType = "math"): Cell {
+  const cell: Cell = { id: `c${++cellSeq}`, src, label: null, showWork: false };
+  if (type === "markdown") { cell.type = "markdown"; cell.editing = true; }
+  if (type === "section") cell.type = "section";
+  return cell;
+}
+function addCell(src = "", type: CellType = "math"): Cell {
+  const cell: Cell = freshCell(src, type);
   S.cells.push(cell);
   renderCells();
   return cell;
+}
+/** Insert a fresh cell at `at` and put the caret in it. */
+function insertCell(at: number, type: CellType = "math") {
+  S.cells.splice(at, 0, freshCell("", type));
+  renderCells(); renderSidebar(); focusCell(at); autosave();
+}
+/** Make a cell another kind, keeping its text. A cell that stops being mathematics loses its output. */
+function convertCell(cell: Cell, type: CellType) {
+  const cur: CellType = cell.type ?? "math";
+  if (cur === type) return;
+  cell.src = cellSrc(cell);
+  if (type === "math") delete cell.type; else cell.type = type;
+  delete cell.editing; delete cell.collapsed;
+  if (type === "markdown") cell.editing = !cell.src.trim();
+  if (type !== "math") { delete cell.outLatex; delete cell.outText; delete cell.echoLatex; delete cell.error; delete cell.plot; delete cell.hasse; delete cell.summary; cell.steps = []; cell.label = null; }
+  if (type === "section") cell.src = cell.src.split("\n")[0]!.replace(/^#+\s*/, "");
+  renderCells(); renderSidebar(); renderChrome(); autosave();
 }
 
 function focusCell(i: number) {
   S.active = Math.max(0, Math.min(i, S.cells.length - 1));
   renderCells(); renderSidebar(); renderChrome();
-  S.cells[S.active]?.input?.focus();     // after the render: it rebuilds the inputs, and focus on the old one is lost
+  const c = S.cells[S.active];
+  // after the render: it rebuilds the inputs, and focus on the old one is lost
+  (c?.input ?? c?.ta ?? c?.el?.querySelector<HTMLElement>(".mdout"))?.focus();
 }
 
 function clearOutputs() {
@@ -848,8 +984,10 @@ function renderChrome() {
   brand.append(mark, h("span", "name", "ChalkMath"));
   const menus = h("div", "menus");
   const MENUS: Record<string, [string, () => void][]> = {
-    File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs], ["Export to file…", exportNotebook], ["Import from file…", importNotebook], ["Import SVG as epicycles…", importSvg]],
-    Edit: [["Add cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Clear outputs", clearOutputs]],
+    File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs], ["Export to file…", exportNotebook], ["Import from file…", importNotebook], ["Import SVG as epicycles…", importSvg], ["Copy link to notebook", () => void copyNotebookLink()]],
+    Edit: [["Add math cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Add Markdown cell", () => { addCell("", "markdown"); focusCell(S.cells.length - 1); }], ["Add section", () => { addCell("", "section"); focusCell(S.cells.length - 1); }],
+      ...(S.cells[S.active] ? CELL_TYPES.filter(([t]) => t !== (S.cells[S.active]!.type ?? "math")).map(([t, label]): [string, () => void] => [`Change to ${label.toLowerCase()}`, () => convertCell(S.cells[S.active]!, t)]) : []),
+      ["Clear outputs", clearOutputs]],
     View: [["Toggle light / dark", () => { applyTheme(S.theme === "light" ? "dark" : "light"); renderChrome(); }], ["Explanation panel", () => { S.panelOpen = !S.panelOpen; renderPanelHead(); renderPanel(); }], [`${S.deBruijn ? "✓ " : ""}de Bruijn indices (λ-cells)`, () => { S.deBruijn = !S.deBruijn; renderChrome(); renderCells(); }],
       [`${S.showEcho ? "✓ " : ""}Input interpretation`, () => { S.showEcho = !S.showEcho; try { localStorage.setItem("chalkmath.echo", S.showEcho ? "on" : "off"); } catch { /* private mode */ } renderChrome(); renderCells(); }],
       [`${S.highlight ? "✓ " : ""}Syntax highlighting`, () => { S.highlight = !S.highlight; try { localStorage.setItem("chalkmath.highlight", S.highlight ? "on" : "off"); } catch { /* private mode */ } document.documentElement.classList.toggle("nohl", !S.highlight); renderHighlights(); renderChrome(); }],
@@ -859,7 +997,8 @@ function renderChrome() {
         try { localStorage.setItem("chalkmath.outsize", sz); } catch { /* private mode */ }
         renderChrome();
       }])],
-    Run: [["Run all", () => void runAll()], ["Run cell", () => { const c = S.cells[S.active]; if (c) void runCell(c); }]],
+    Run: [["Run all", () => void runAll()], ["Run cell", () => { const c = S.cells[S.active]; if (c) void runCell(c); }],
+      ...(sectionOf(S.active) >= 0 ? [[`Run section “${(cellSrc(S.cells[sectionOf(S.active)]!) || "untitled").slice(0, 24)}”`, () => void runSection(sectionOf(S.active))] as [string, () => void]] : [])],
     Kernel: [["Restart kernel", () => void restartKernel()], ["Restart and run all", async () => { await restartKernel(); await runAll(); }]],
     Help: [["Reference", () => switchTab("reference")], ["Manim Studio", () => switchTab("studio")]],
   };
@@ -952,12 +1091,28 @@ function renderSidebar() {
   side.append(h("h2", undefined, S.rail === "outline" ? "Notebook outline" : "Engine commands"));
   const list = h("div", "list");
   if (S.rail === "outline") {
+    let inSection = false, folded = false;
     S.cells.forEach((c, i) => {
-      const row = h("div", `olrow${i === S.active ? " on" : ""}`);
-      row.append(h("span", "num", c.label ? `[${c.label}]` : "—"));
-      const wrap = h("span");
-      wrap.append(h("span", "kind", c.kind ?? cellKind(c.src) ?? "empty"), h("span", "src", c.src || "…"));
-      row.append(wrap);
+      if (c.type === "section") { inSection = true; folded = !!c.collapsed; }
+      else if (folded) return;
+      const row = h("div", `olrow${i === S.active ? " on" : ""}${c.type ? ` ${c.type}` : ""}${inSection && c.type !== "section" ? " in" : ""}`);
+      if (c.type === "section") {
+        const [a, b] = sectionRange(i);
+        row.append(h("span", "num", c.collapsed ? "▸" : "§"));
+        const wrap = h("span");
+        wrap.append(h("span", "kind", c.src || "Untitled section"), h("span", "src", `${b - a} cell${b - a === 1 ? "" : "s"}${c.collapsed ? ", folded" : ""}`));
+        row.append(wrap);
+      } else if (c.type === "markdown") {
+        row.append(h("span", "num", "¶"));
+        const wrap = h("span");
+        wrap.append(h("span", "kind", "markdown"), h("span", "src", c.src.split("\n").find((l) => l.trim())?.replace(/^#+\s*/, "") || "…"));
+        row.append(wrap);
+      } else {
+        row.append(h("span", "num", c.label ? `[${c.label}]` : "—"));
+        const wrap = h("span");
+        wrap.append(h("span", "kind", c.kind ?? cellKind(c.src) ?? "empty"), h("span", "src", c.src || "…"));
+        row.append(wrap);
+      }
       row.addEventListener("click", () => { if (S.tab !== "notebook") switchTab("notebook"); focusCell(i); });
       list.append(row);
     });
@@ -1033,15 +1188,21 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1, t01?: number): S
     line(sx(x), hgt - B, sx(x), hgt - B + 4, "tick"); text(sx(x), hgt - 6, nice(x), "tl");
     line(L - 4, sy(y), L, sy(y), "tick"); text(L - 6, sy(y) + 3, nice(y), "tl r");
   }
+  // the epicycles' tip at phase t01: the trace is drawn up to the last sample at or before it and
+  // then to the tip itself, so the pen never runs ahead of (or lags) the dot
+  const tip = p.terms?.length && t01 !== undefined ? epiTip(p.terms, t01 * 2 * Math.PI) : null;
   // the curves, each in segments
   p.series.forEach((s, si) => {
-    const n = Math.max(0, Math.min(s.points.length, Math.round(s.points.length * frac)));
+    const n = tip && t01 !== undefined
+      ? Math.min(s.points.length, Math.floor(t01 * s.points.length) + 1)       // sample j is at t = 2πj/N
+      : Math.max(0, Math.min(s.points.length, Math.round(s.points.length * frac)));
     let d = "", pen = false;
     for (let i = 0; i < n; i++) {
       const [x, y] = s.points[i]!;
       if (y === null || (!s.parametric && (y < y0 || y > y1))) { pen = false; continue; }
       d += `${pen ? "L" : "M"}${sx(x).toFixed(1)} ${sy(y).toFixed(1)} `; pen = true;
     }
+    if (tip && pen) d += `L${sx(tip[0]).toFixed(1)} ${sy(tip[1]).toFixed(1)} `;
     const path = document.createElementNS(NS, "path");
     path.setAttribute("d", d); path.setAttribute("class", `curve c${si % CURVE_COLOURS}`); svg.append(path);
   });
@@ -1071,6 +1232,13 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1, t01?: number): S
   return svg;
 }
 
+/** Where the epicycles' tip is at angle `t`: `Σ c_k e^{i k t}`, the terms tip to tail. */
+function epiTip(terms: Epicycle[], t: number): [number, number] {
+  let x = 0, y = 0;
+  for (const c of terms) { const r = Math.hypot(c.re, c.im), ph = Math.atan2(c.im, c.re); x += r * Math.cos(c.k * t + ph); y += r * Math.sin(c.k * t + ph); }
+  return [x, y];
+}
+
 /** The epicycle animation in a cell: redraw at the phase of a 12-second loop while the box is on
  *  screen. Returns the box; the loop stops when the box leaves the document. */
 function epicycleBox(p: PlotData, w: number, hgt: number): HTMLElement {
@@ -1079,7 +1247,7 @@ function epicycleBox(p: PlotData, w: number, hgt: number): HTMLElement {
   let start = performance.now();
   const draw = () => {
     const t01 = ((performance.now() - start) % period) / period;
-    const svg = plotSvg(p, w, hgt, Math.min(1, t01 * 1.02), t01);
+    const svg = plotSvg(p, w, hgt, 1, t01);
     box.replaceChildren(svg);
   };
   draw();
@@ -1139,9 +1307,58 @@ function renderCells() {
   hideHover(); hideSigHelp();
   const host = $(".cells");
   host.innerHTML = "";
+  let folded = false;   // inside a collapsed section: its cells are not built
   S.cells.forEach((cell, i) => {
-    const el = h("div", `cell${i === S.active ? " active" : ""}${cell.label ? " done" : ""}`);
+    if (cell.type === "section") folded = !!cell.collapsed;
+    else if (folded) { delete cell.el; delete cell.input; delete cell.ta; delete cell.hl; return; }
+    const el = h("div", `cell${i === S.active ? " active" : ""}${cell.label ? " done" : ""}${cell.type ? ` ${cell.type}` : ""}`);
     cell.el = el;
+    delete cell.input; delete cell.ta; delete cell.hl;
+    if (cell.type === "markdown") {
+      el.append(h("div", "prompt", ""));
+      const mid = h("div", "mid");
+      el.append(mid);
+      const acts = h("div", "cellacts");
+      el.append(acts, h("div", "brk"));
+      insertGap(host, i);
+      host.append(el);
+      renderCellBody(cell);
+      return;
+    }
+    if (cell.type === "section") {
+      el.append(h("div", "prompt", "§"));
+      const mid = h("div", "mid");
+      const row = h("div", "sectrow");
+      const tog = h("span", "secttog", cell.collapsed ? "▸" : "▾");
+      tog.title = cell.collapsed ? "Show this section's cells" : "Fold this section's cells away";
+      tog.addEventListener("mousedown", (e) => e.preventDefault());
+      tog.addEventListener("click", () => { cell.collapsed = !cell.collapsed; S.active = i; renderCells(); renderSidebar(); autosave(); });
+      const input = document.createElement("input");
+      input.className = "sectin"; input.type = "text"; input.value = cell.src; input.placeholder = "Section title"; input.spellcheck = false;
+      cell.input = input;
+      input.addEventListener("focus", () => { S.active = i; renderChrome(); renderSidebar(); markActive(); });
+      input.addEventListener("input", () => { cell.src = input.value; renderSidebar(); renderTabs(); });
+      input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); cell.src = input.value; if (i === S.cells.length - 1) addCell(); focusCell(i + 1); autosave(); }
+        if (ev.key === "ArrowDown" && i < S.cells.length - 1) { ev.preventDefault(); focusCell(i + 1); }
+        if (ev.key === "ArrowUp" && i > 0) { ev.preventDefault(); focusCell(i - 1); }
+      });
+      row.append(tog, input);
+      const [a, b] = sectionRange(i);
+      if (cell.collapsed) row.append(h("span", "sectcount", `${b - a} cell${b - a === 1 ? "" : "s"} folded`));
+      mid.append(row);
+      el.append(mid);
+      const acts = h("div", "cellacts");
+      const run = h("span", undefined, "▶ Run section"); run.title = "Run every cell of this section, in order";
+      run.addEventListener("mousedown", (e) => e.preventDefault());
+      run.addEventListener("click", () => void runSection(i));
+      acts.append(run);
+      el.append(acts, h("div", "brk"));
+      insertGap(host, i);
+      host.append(el);
+      renderCellBody(cell);
+      return;
+    }
     el.append(h("div", "prompt", `In[${cell.label ?? " "}]:=`));
 
     const mid = h("div", "mid");
@@ -1185,14 +1402,35 @@ function renderCells() {
  *  click inserts a fresh cell there — Mathematica's cell insertion bar. */
 function insertGap(host: HTMLElement, at: number) {
   const gap = h("div", "gap");
-  const pill = h("span", "gappill", "+ cell");
-  gap.title = "Insert a cell here";
+  const pill = h("span", "gappill");
+  const main = h("span", "gapmain", "+ cell"); main.title = "Insert a math cell here";
+  const more = h("span", "gapmore", "▾"); more.title = "Insert a cell of another kind";
+  pill.append(main, more);
   gap.append(pill);
-  gap.addEventListener("click", () => {
-    S.cells.splice(at, 0, freshCell());
-    renderCells(); renderSidebar(); focusCell(at); autosave();
-  });
+  gap.addEventListener("click", (ev) => { if (ev.target === more) return; insertCell(at); });
+  more.addEventListener("click", (ev) => { ev.stopPropagation(); closeCellMenu(); typeMenu(more, (t) => insertCell(at, t)); });
   host.append(gap);
+}
+
+const CELL_TYPES: [CellType, string, string][] = [
+  ["math", "Math cell", "An input for the engine: In[n]:= …"],
+  ["markdown", "Markdown text", "Prose with $math$, $$display math$$, `code` and ``` blocks"],
+  ["section", "Section heading", "Groups the cells below it: run them together, fold them away"],
+];
+/** A small menu of the cell kinds under `anchor`; `pick` gets the chosen one. */
+function typeMenu(anchor: HTMLElement, pick: (t: CellType) => void, current?: CellType) {
+  const menu = h("div", "cellmenu typemenu");
+  for (const [t, label, hint] of CELL_TYPES) {
+    const it = h("div", `item${t === current ? " on" : ""}`);
+    it.append(h("span", undefined, `${t === current ? "✓ " : ""}${label}`), h("span", "hint", hint));
+    it.addEventListener("click", (ev) => { ev.stopPropagation(); closeCellMenu(); pick(t); });
+    menu.append(it);
+  }
+  document.body.append(menu);
+  const r = anchor.getBoundingClientRect(), mh = menu.offsetHeight;
+  const below = r.bottom + 4 + mh <= window.innerHeight - 8;
+  menu.style.top = `${below ? r.bottom + 4 : Math.max(8, r.top - 4 - mh)}px`;
+  menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8))}px`;
 }
 
 function markActive() {
@@ -1215,6 +1453,8 @@ function plainWhy(md: string): string {
 /** Re-render everything below a cell's input, leaving the input element untouched. */
 function renderCellBody(cell: Cell) {
   const el = cell.el; if (!el) return;
+  if (cell.type === "markdown") return renderMdCell(cell);
+  if (cell.type === "section") return appendMore(cell, el.querySelector(".cellacts")!);
   el.classList.toggle("done", !!cell.label);
   el.querySelector(".prompt")!.textContent = `In[${cell.label ?? " "}]:=`;
   const mid = el.querySelector(".mid")!;
@@ -1371,10 +1611,188 @@ function renderCellBody(cell: Cell) {
     tw.addEventListener("click", () => { cell.showWork = !cell.showWork; renderCellBody(cell); });
     acts.append(tw);
   }
+  appendMore(cell, acts);
+}
+
+/** The ⋮ button at the end of a cell's actions (replacing any there). */
+function appendMore(cell: Cell, acts: Element) {
+  acts.querySelector(".more")?.remove();
   const more = h("span", "more", "⋮"); more.title = "Cell actions";
   more.addEventListener("mousedown", (e) => e.preventDefault());
   more.addEventListener("click", (ev) => { ev.stopPropagation(); toggleCellMenu(cell, more); });
   acts.append(more);
+}
+
+/** A Markdown cell: its editor while editing (Shift+Enter renders), its rendering otherwise
+ *  (double-click or Enter edits). */
+function renderMdCell(cell: Cell) {
+  const el = cell.el; if (!el) return;
+  const i = S.cells.indexOf(cell);
+  const mid = el.querySelector(".mid") as HTMLElement; mid.innerHTML = "";
+  delete cell.ta;
+  const edit = () => { cell.editing = true; renderMdCell(cell); cell.ta?.focus(); };
+  const onFocus = () => { S.active = i; renderChrome(); renderSidebar(); markActive(); };
+  if (cell.editing) {
+    const ta = document.createElement("textarea");
+    ta.className = "mdin"; ta.value = cell.src; ta.rows = 1; ta.spellcheck = true;
+    ta.placeholder = "Markdown: # heading, *emphasis*, $x^2$ and $$∫ f$$, `code`, ``` blocks — Shift+Enter renders";
+    cell.ta = ta;
+    const grow = () => { ta.style.height = "auto"; ta.style.height = `${ta.scrollHeight + 2}px`; };
+    ta.addEventListener("focus", onFocus);
+    ta.addEventListener("input", () => { cell.src = ta.value; grow(); renderSidebar(); renderTabs(); });
+    ta.addEventListener("keydown", (ev) => {
+      if ((ev.key === "Enter" && (ev.shiftKey || ev.metaKey || ev.ctrlKey)) || ev.key === "Escape") { ev.preventDefault(); void runCell(cell); return; }
+      const caret = ta.selectionStart ?? 0;
+      if (ev.key === "ArrowDown" && i < S.cells.length - 1 && !ta.value.slice(caret).includes("\n")) { ev.preventDefault(); focusCell(i + 1); }
+      if (ev.key === "ArrowUp" && i > 0 && !ta.value.slice(0, caret).includes("\n")) { ev.preventDefault(); focusCell(i - 1); }
+    });
+    mid.append(ta);
+    grow();   // the cell is in the document already: scrollHeight is real
+  } else {
+    let out: HTMLElement;
+    if (cell.src.trim()) out = mdRender(cell.src);
+    else { out = h("div", "mdout"); out.append(h("span", "mdempty", "Empty Markdown cell — double-click to write")); }
+    out.tabIndex = 0;
+    out.addEventListener("focus", onFocus);
+    out.addEventListener("dblclick", edit);
+    out.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); edit(); }
+      if (ev.key === "ArrowDown" && i < S.cells.length - 1) { ev.preventDefault(); focusCell(i + 1); }
+      if (ev.key === "ArrowUp" && i > 0) { ev.preventDefault(); focusCell(i - 1); }
+    });
+    mid.append(out);
+  }
+  const acts = el.querySelector(".cellacts")!; acts.innerHTML = "";
+  const btn = h("span", undefined, cell.editing ? "▶ Render" : "✎ Edit");
+  btn.title = cell.editing ? "Render the Markdown (Shift+Enter)" : "Edit the text (double-click)";
+  btn.addEventListener("mousedown", (e) => e.preventDefault());
+  btn.addEventListener("click", () => { if (cell.editing) void runCell(cell); else edit(); });
+  acts.append(btn);
+  appendMore(cell, acts);
+}
+
+// ---------------------------------------------------------------------------
+// Markdown: a small renderer for prose cells — headings, paragraphs, lists, quotes, rules, fenced
+// code, `code`, *emphasis*, links and images, and mathematics in $…$ and $$…$$ (KaTeX). It builds
+// DOM nodes, never HTML from the text, so a cell cannot inject markup; KaTeX output is its own.
+// ---------------------------------------------------------------------------
+
+/** A block of mathematics, or an inline span, typeset by KaTeX. */
+function mdMath(src: string, display: boolean): HTMLElement {
+  const e = h(display ? "div" : "span", display ? "mdmath" : "mdimath");
+  e.innerHTML = katex.renderToString(src, { throwOnError: false, displayMode: display, strict: false });
+  return e;
+}
+/** Links keep http(s), mailto and relative targets; anything else (javascript:) is dropped. */
+function mdUrl(u: string): string {
+  return /^\s*(javascript|data|vbscript):/i.test(u) && !/^\s*data:image\//i.test(u) ? "#" : u;
+}
+const MD_LINK = /^!?\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/;
+
+/** Inline Markdown into `host`: code and math first (their text is verbatim), then emphasis, links, images. */
+function mdInline(host: HTMLElement, text: string) {
+  let buf = "";
+  const flush = () => { if (buf) { host.append(document.createTextNode(buf)); buf = ""; } };
+  for (let i = 0; i < text.length;) {
+    const c = text[i]!, next = text[i + 1];
+    if (c === "\\" && next !== undefined && "\\`*_$[]()#!".includes(next)) { buf += next; i += 2; continue; }
+    if (c === "`") {
+      const j = text.indexOf("`", i + 1);
+      if (j > i + 1) { flush(); host.append(h("code", "mdcode", text.slice(i + 1, j))); i = j + 1; continue; }
+    }
+    if (c === "$") {
+      if (next === "$") {
+        const j = text.indexOf("$$", i + 2);
+        if (j > i + 2) { flush(); host.append(mdMath(text.slice(i + 2, j), true)); i = j + 2; continue; }
+      } else if (next !== undefined && !/\s/.test(next)) {
+        const j = text.indexOf("$", i + 1);
+        if (j > i + 1 && !/\s/.test(text[j - 1]!)) { flush(); host.append(mdMath(text.slice(i + 1, j), false)); i = j + 1; continue; }
+      }
+    }
+    if (c === "!" && next === "[") {
+      const m = MD_LINK.exec(text.slice(i));
+      if (m) { flush(); const img = document.createElement("img"); img.src = mdUrl(m[2]!); img.alt = m[1]!; img.className = "mdimg"; host.append(img); i += m[0].length; continue; }
+    }
+    if (c === "[") {
+      const m = MD_LINK.exec(text.slice(i));
+      if (m) { flush(); const a = document.createElement("a"); a.href = mdUrl(m[2]!); a.target = "_blank"; a.rel = "noopener"; mdInline(a, m[1]!); host.append(a); i += m[0].length; continue; }
+    }
+    if ((c === "*" || c === "_") && !(c === "_" && i > 0 && /\w/.test(text[i - 1]!))) {
+      const mark = next === c ? c + c : c;
+      const j = text.indexOf(mark, i + mark.length);
+      const inner = text[i + mark.length];
+      if (j > i + mark.length && inner !== undefined && !/\s/.test(inner) && !/\s/.test(text[j - 1]!)) {
+        flush(); const e = h(mark.length === 2 ? "strong" : "em"); mdInline(e, text.slice(i + mark.length, j)); host.append(e); i = j + mark.length; continue;
+      }
+    }
+    if (c === "\n") { if (buf.endsWith("  ")) { buf = buf.trimEnd(); flush(); host.append(h("br")); } else buf += " "; i++; continue; }
+    buf += c; i++;
+  }
+  flush();
+}
+
+/** Block-level Markdown: the cell's rendering. */
+function mdRender(src: string): HTMLElement {
+  const out = h("div", "mdout");
+  const lines = src.replace(/\r\n?/g, "\n").split("\n");
+  const para: string[] = [];
+  const flush = () => {
+    if (!para.length) return;
+    const text = para.join("\n"); para.length = 0;
+    const fig = /^!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)$/.exec(text.trim());
+    if (fig) {   // a paragraph that is one image: a figure, its alt text the caption
+      const f = h("figure"); const img = document.createElement("img"); img.src = mdUrl(fig[2]!); img.alt = fig[1]!; f.append(img);
+      if (fig[1]) { const cap = h("figcaption"); mdInline(cap, fig[1]); f.append(cap); }
+      out.append(f); return;
+    }
+    const p = h("p"); mdInline(p, text); out.append(p);
+  };
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i]!;
+    const fence = /^\s*```\s*([\w+-]*)\s*$/.exec(line);
+    if (fence) {
+      flush(); const buf: string[] = []; i++;
+      while (i < lines.length && !/^\s*```\s*$/.test(lines[i]!)) buf.push(lines[i++]!);
+      i++;
+      const pre = h("pre", "mdpre"); pre.append(h("code", fence[1] ? `lang-${fence[1]}` : undefined, buf.join("\n"))); out.append(pre); continue;
+    }
+    if (/^\s*\$\$/.test(line)) {   // display math on its own lines; the closing $$ may carry a trailing label
+      flush();
+      let body = line.replace(/^\s*\$\$/, ""); let closed = false;
+      const end = body.indexOf("$$");
+      if (end >= 0) { body = body.slice(0, end); closed = true; }
+      i++;
+      while (!closed && i < lines.length) {
+        const l = lines[i++]!, k = l.indexOf("$$");
+        if (k >= 0) { body += `\n${l.slice(0, k)}`; closed = true; } else body += `\n${l}`;
+      }
+      out.append(mdMath(body.trim(), true)); continue;
+    }
+    if (!line.trim()) { flush(); i++; continue; }
+    const hd = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+    if (hd) { flush(); const e = h(`h${hd[1]!.length}`); mdInline(e, hd[2]!); out.append(e); i++; continue; }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { flush(); out.append(h("hr")); i++; continue; }
+    if (/^\s*>/.test(line)) {
+      flush(); const buf: string[] = [];
+      while (i < lines.length && /^\s*>/.test(lines[i]!)) buf.push(lines[i++]!.replace(/^\s*>\s?/, ""));
+      const q = h("blockquote"); q.append(...Array.from(mdRender(buf.join("\n")).childNodes)); out.append(q); continue;
+    }
+    const li = /^\s*(?:[-*+]|\d+[.)])\s+/.exec(line);
+    if (li) {
+      flush(); const ordered = /^\s*\d/.test(line);
+      const list = h(ordered ? "ol" : "ul");
+      while (i < lines.length) {
+        const m = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(lines[i]!); if (!m) break;
+        let item = m[1]!; i++;
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]!) && !/^\s*(?:[-*+]|\d+[.)])\s+/.test(lines[i]!)) item += `\n${lines[i++]!.trim()}`;   // a wrapped item
+        const e = h("li"); mdInline(e, item); list.append(e);
+      }
+      out.append(list); continue;
+    }
+    para.push(line); i++;
+  }
+  flush();
+  return out;
 }
 
 /** The ⋮ menu of a cell: send to a scene (any scene, or a new one), duplicate, delete, move, copy. */
@@ -1414,14 +1832,31 @@ function toggleCellMenu(cell: Cell, anchor: HTMLElement) {
     item("Send to scene", null, { sub });
   } else item("Send to scene", null);
   menu.append(h("div", "sep"));
+  // Change to ▸ — the other kinds of cell, the current one ticked
+  {
+    const sub = h("div", "submenu");
+    const cur: CellType = cell.type ?? "math";
+    for (const [t, label] of CELL_TYPES) {
+      const it = h("div", `item${t === cur ? " off" : ""}`, `${t === cur ? "✓ " : ""}${label}`);
+      if (t !== cur) it.addEventListener("click", (ev) => { ev.stopPropagation(); closeCellMenu(); convertCell(cell, t); });
+      else it.addEventListener("click", (ev) => ev.stopPropagation());
+      sub.append(it);
+    }
+    item("Change to", null, { sub });
+  }
+  if (cell.type === "section") {
+    item("Run section", () => void runSection(i));
+    item(cell.collapsed ? "Unfold section" : "Fold section", () => { cell.collapsed = !cell.collapsed; renderCells(); renderSidebar(); autosave(); });
+  } else if (sectionOf(i) >= 0) item("Run this section", () => void runSection(sectionOf(i)));
+  menu.append(h("div", "sep"));
   item("Duplicate cell", () => {
-    const c = freshCell(cell.input?.value ?? cell.src);
+    const c = freshCell(cellSrc(cell), cell.type ?? "math");
     S.cells.splice(i + 1, 0, c); renderCells(); renderSidebar(); focusCell(i + 1); autosave();
   });
   item("Move up", i > 0 ? () => { [S.cells[i - 1], S.cells[i]] = [S.cells[i]!, S.cells[i - 1]!]; renderCells(); renderSidebar(); focusCell(i - 1); autosave(); } : null);
   item("Move down", i < S.cells.length - 1 ? () => { [S.cells[i + 1], S.cells[i]] = [S.cells[i]!, S.cells[i + 1]!]; renderCells(); renderSidebar(); focusCell(i + 1); autosave(); } : null);
   menu.append(h("div", "sep"));
-  item("Copy input", copy(cell.input?.value ?? cell.src, "the input"));
+  item("Copy input", copy(cellSrc(cell), "the input"));
   item("Copy output", cell.outText !== undefined ? copy(cell.outText, "the output") : null);
   item("Copy output as LaTeX", cell.outLatex ? copy(stripPaths(cell.outLatex), "the output as LaTeX") : null);
   menu.append(h("div", "sep"));
@@ -2631,4 +3066,8 @@ if (!S.docs.length) {
 S.doc = -1;
 loadDoc(Math.min(restoredActive, S.docs.length - 1));
 if (!saved) { const d = currentDoc(); if (d) d.savedText = serializeNotebook(); }
-void connect().then(() => { const d = currentDoc(); if (d && !d.hydrated) hydrate(d); });
+void connect().then(async () => {
+  // a link with a notebook in its fragment opens that notebook (in its own tab unless the current one is untouched)
+  if (location.hash.startsWith("#nb") && await openNotebookLink(location.hash)) return;
+  const d = currentDoc(); if (d && !d.hydrated) hydrate(d);
+});

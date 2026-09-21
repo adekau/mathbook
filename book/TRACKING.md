@@ -420,3 +420,15 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    the variable a binder command binds — `diff`, `integrate`, `plot`, `epicycles`, `sum`, `subst` — is marked over
    that call's parentheses, `let f(x, y) = …`'s parameters over the line, `λx y.` over the term. View → Syntax
    highlighting toggles it (`chalkmath.highlight`).
+- notebook: Markdown and section cells, notebook links — DONE 2026-09-20. Three kinds of cell: math (the engine's),
+   Markdown (headings, paragraphs, lists, quotes, rules, fenced code and `code`, *emphasis*, links, images as
+   figures, `$…$` and `$$…$$` through KaTeX — a small renderer that builds DOM nodes, never HTML from the text) and
+   section headings, which group the cells below them: ▶ Run section runs them in order, ▾ folds them away, the
+   outline indents them. The `+ cell` bar between cells has a ▾ for the kind; the ⋮ menu and Edit change a
+   cell's kind (Jupyter's M/Y), keeping the text. Markdown cells edit in a growing textarea (Shift+Enter or Esc
+   renders; double-click or Enter edits), come back rendered from a file. File → Copy link to notebook puts the
+   sources (names, kinds, show-work, folds — no outputs) deflated and base64url-encoded in the fragment
+   (`#nb=…`, ≈ a third of the JSON); opening such a link opens the notebook in its own tab and re-runs it.
+   Goal: the llama article written in ChalkMath. Fixed on the way: the epicycle trace ran 2 % ahead of the dot
+   (a fudge factor in place of the sample index — now the trace ends at the tip itself), and `dft`'s echo
+   counted `;` only, so a row of complex points was "1 sample point".

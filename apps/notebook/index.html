@@ -185,8 +185,51 @@ button { font-family: var(--font); }
 .cell:hover { background:var(--p-cell-hover); }
 .gap { position:relative; height:12px; margin:-6px 0; cursor:pointer; z-index:2; }
 .gap::before { content:""; position:absolute; left:82px; right:30px; top:50%; border-top:1px solid var(--p-acc); opacity:0; transition:opacity .12s; }
-.gap .gappill { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-family:var(--code); font-size:10px; line-height:14px; padding:1px 9px; border-radius:9px; background:var(--p-acc); color:var(--on-acc); opacity:0; transition:opacity .12s; user-select:none; white-space:nowrap; }
+.gap .gappill { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; font-family:var(--code); font-size:10px; line-height:14px; border-radius:9px; background:var(--p-acc); color:var(--on-acc); opacity:0; transition:opacity .12s; user-select:none; white-space:nowrap; overflow:hidden; }
+.gap .gapmain { padding:1px 7px 1px 9px; }
+.gap .gapmore { padding:1px 7px 1px 5px; border-left:1px solid rgba(0,0,0,0.25); }
+.gap .gapmain:hover, .gap .gapmore:hover { background:rgba(255,255,255,0.18); }
 .gap:hover::before, .gap:hover .gappill { opacity:1; }
+.typemenu .item { flex-direction:column; align-items:flex-start; gap:1px; }
+.typemenu .item .hint { font-size:10.5px; color:var(--ink-mut); font-weight:400; }
+.typemenu .item.on { color:var(--acc-hi); }
+/* section headings: a title over a rule, folding the cells below */
+.cell.section { margin-top:14px; }
+.cell.section .prompt { color:var(--p-mut3); }
+.sectrow { display:flex; align-items:center; gap:4px; padding-right:150px; border-bottom:1px solid var(--p-br-idle); }
+.secttog { flex:0 0 18px; text-align:center; font-size:11px; color:var(--p-mut); cursor:pointer; user-select:none; }
+.secttog:hover { color:var(--p-acc); }
+.sectin { flex:1; min-width:0; background:transparent; border:0; border-radius:6px; padding:3px 8px; font-family:var(--serif); font-size:21px; font-weight:600; letter-spacing:-0.005em; color:var(--p-ink-strong); }
+.sectin::placeholder { color:var(--p-ph); font-weight:500; }
+.cell.active .sectin { background:var(--p-input-bg); box-shadow:inset 0 0 0 1px var(--p-input-br); }
+.sectcount { flex:0 0 auto; font-family:var(--code); font-size:10.5px; color:var(--p-mut); padding-right:6px; }
+/* markdown cells: an editor that grows with its text, and the rendering in the paper's serif */
+.mdin { display:block; width:100%; box-sizing:border-box; background:var(--p-input-bg); border:0; box-shadow:inset 0 0 0 1px var(--p-input-br); border-radius:6px; color:var(--p-ink); font-family:var(--code); font-size:13.5px; line-height:1.55; padding:6px 150px 6px 8px; resize:none; overflow:hidden; min-height:34px; }
+.mdin::placeholder { color:var(--p-ph); }
+.mdout { padding:4px 150px 4px 8px; border-radius:6px; outline:none; font-family:var(--serif); font-size:16.5px; line-height:1.62; color:var(--p-ink); max-width:76ch; overflow-wrap:anywhere; }
+.mdout:focus { box-shadow:inset 0 0 0 1px var(--p-input-br); }
+.mdout > :first-child { margin-top:0; }
+.mdout > :last-child { margin-bottom:0; }
+.mdout p, .mdout ul, .mdout ol, .mdout blockquote, .mdout pre, .mdout figure { margin:0 0 0.75em; }
+.mdout h1, .mdout h2, .mdout h3, .mdout h4, .mdout h5, .mdout h6 { margin:0.9em 0 0.4em; line-height:1.25; font-weight:600; color:var(--p-ink-strong); letter-spacing:-0.01em; }
+.mdout h1 { font-size:1.75em; } .mdout h2 { font-size:1.4em; } .mdout h3 { font-size:1.18em; } .mdout h4, .mdout h5, .mdout h6 { font-size:1em; }
+.mdout a { color:var(--p-acc); text-decoration:none; border-bottom:1px solid var(--p-br-hov); }
+.mdout a:hover { border-bottom-color:var(--p-acc); }
+.mdout code.mdcode { font-family:var(--code); font-size:0.86em; background:var(--p-input-bg); box-shadow:inset 0 0 0 1px var(--p-input-br); border-radius:4px; padding:1px 4px; }
+.mdout pre.mdpre { font-family:var(--code); font-size:12.5px; line-height:1.5; background:var(--p-input-bg); box-shadow:inset 0 0 0 1px var(--p-input-br); border-radius:6px; padding:9px 11px; overflow-x:auto; white-space:pre; }
+.mdout blockquote { padding:0 0 0 12px; border-left:3px solid var(--p-br-idle); color:var(--p-ink-3); }
+.mdout ul, .mdout ol { padding-left:1.6em; }
+.mdout li { margin:0.15em 0; }
+.mdout hr { border:0; border-top:1px solid var(--p-br-idle); margin:1em 0; }
+.mdout img { max-width:100%; height:auto; border-radius:4px; }
+.mdout figure { text-align:center; }
+.mdout figcaption { font-size:0.82em; color:var(--p-mut); margin-top:0.35em; }
+.mdout .mdmath { overflow-x:auto; overflow-y:hidden; margin:0.5em 0 0.8em; font-size:1.05em; }
+.mdout .mdmath .katex-display { margin:0.2em 0; }
+.mdout .mdempty { color:var(--p-ph); font-style:italic; font-size:0.9em; }
+.olrow.in { margin-left:12px; }
+.olrow.section .kind { color:var(--acc-hi); }
+.olrow.section .num, .olrow.markdown .num { font-size:12px; }
 .cell.active { background:var(--p-cell-active); }
 .cell .prompt { text-align:right; padding:5px 12px 0 0; line-height:23px; font-family:var(--code); font-size:11px; letter-spacing:0.01em; color:var(--p-mut3); user-select:none; }
 .cell.done .prompt { color:var(--p-acc); }
