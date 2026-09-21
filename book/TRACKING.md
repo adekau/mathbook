@@ -511,3 +511,11 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    normal form), unverified in the ledger: a/b + c/d = (ad + cb)/(bd) needs nonzero denominators. Not a
    factorization into irreducibles: x² − 1 stays. Printer: a rational coefficient's denominator now goes into
    the fraction's denominator (`x/(2π)`, not `½·x/π`), which also puts factor's result in the hand form.
+- printer: no display-time radical reduction — DONE 2026-09-21. `radicalParts` printed `4^(1/2)` as `2` and `12^(1/2)`
+   as `2√3` "the way a textbook writes it", so the step that actually reduces them (`simp.power`'s perfect power,
+   `simp.radical`'s base) showed a term identical to the one before it — Alex: "the wording is for if it were
+   showing sqrt(4) instead of 2". A base that is itself a perfect power (`4`, `8`, `16`) now prints as it is,
+   `√4`, and the step shows. The textbook form stays for the rest (`12^(1/2)` as `2√3`, `2^(3/2)` as `2√2`),
+   because there it is the printer's job: the ordering the rules decrease cannot turn one power into a
+   product (M(2·3^(1/2)) = 19 > M(12^(1/2)) = 11), so `12^(1/2)` is the normal form. "Perfect 2th power" is
+   "perfect square".

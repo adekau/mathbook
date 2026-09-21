@@ -478,7 +478,9 @@ def powNumeric (p q : Q) : Option RuleResult :=
   if q.isInt then some ⟨.num (p.zpow q.val.num), s!"Evaluate the numeric power: {p.toText}^{q.toText} = {(p.zpow q.val.num).toText}.", none, none⟩
   else if q.val.num == 1 then
     match exactRoot p.val q.val.den with
-    | some r => some ⟨.num (Q.ofRat r p.approx), s!"{p.toText} is a perfect {q.val.den}th power: ${p.toText}^\{1/{q.val.den}} = {r}$.", none, none⟩
+    | some r =>
+      let what := match q.val.den with | 2 => "square" | 3 => "cube" | n => s!"{n}th power"
+      some ⟨.num (Q.ofRat r p.approx), s!"{p.toText} is a perfect {what}: ${p.toText}^\{1/{q.val.den}} = {r}$.", none, none⟩
     | none => none
   else none
 

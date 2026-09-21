@@ -89,12 +89,30 @@ private def splitCoeff : Expr → Q × Option Expr × Option Nat
   | .mul (.num q :: rest@(_ :: _)) => (q, some (match rest with | [r] => r | rs => .mul rs), some 1)
   | e => (Q.one, some e, none)
 
+/-- Is `n ≥ 2` a perfect `k`-th power for some `k ≥ 2`? (`4`, `8`, `16`: yes; `12`, `50`: no.) -/
+private def isPerfectPower (n : Nat) : Bool :=
+  (List.range (Nat.log2 n + 1)).any fun k =>
+    k ≥ 2 &&
+    -- the k-th root by bisection, then a check
+    (let rec go (lo hi : Nat) (fuel : Nat) : Nat :=
+        match fuel with
+        | 0 => lo
+        | fuel + 1 => if lo ≥ hi then lo else
+            let mid := (lo + hi + 1) / 2
+            if mid ^ k ≤ n then go mid hi fuel else go lo (mid - 1) fuel
+      let r := go 1 (2 ^ (Nat.log2 n / k + 1)) 64
+      r ^ k == n)
+
 /-- `a^(p/q)` for an integer `a ≥ 2` and `0 < p/q` not an integer, the way a textbook writes it:
-the `q`-th-power part of `a` and the integer part of `p/q` come out as a coefficient
-(`2^(3/2)` is `2√2`, `12^(1/2)` is `2√3`). Display only — the term is unchanged. -/
+the `q`-th-power part of `a` and the integer part of `p/q` come out as a coefficient (`2^(3/2)` is
+`2√2`, `12^(1/2)` is `2√3`). Display only — the term is unchanged, and the ordering the rules
+decrease cannot turn one power into a product, so this is the printer's job — except for a base
+that is itself a perfect power (`4^(1/2)`, `8^(1/2)`): `simp.power` and `simp.radical` reduce those in
+a step of their own, so they print as they are, `√4`, `√8`, and that step shows. -/
 def radicalParts (a q : Q) : Option (Nat × String) :=
   if !(a.isInt && a.val.num ≥ 2 && !q.isInt && !q.isNeg && !q.isZero) then none else
   let n := a.val.num.toNat
+  if isPerfectPower n then none else
   let p := q.val.num.toNat
   let d := q.val.den
   let i := p / d
