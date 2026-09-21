@@ -446,3 +446,7 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    row operations and nested derivations mark too; the integration finder's guesses each start from the integral
    again (no chain), so they get no "old". Nested derivations now carry `inputRendered` (Wire.lean) so a
    sub-derivation's first step has its "old".
+- notebook: the step diff, third pass — DONE 2026-09-20. The `old → new` tooltip was missing on most steps: the
+   pipeline canonicalizes silently between recorded steps (flattens `(2·x)·sin x`, reorders), so a step's `before`
+   is not the previous row's `after` and the "old" could not be cut from the row above. Every step now carries
+   `beforeRendered` (Wire.lean) and the old is cut from the step's own rendering of what it started from.

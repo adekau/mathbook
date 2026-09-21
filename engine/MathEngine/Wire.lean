@@ -21,7 +21,9 @@ mutual
   partial def Step.toJson (s : Step) (paths : Bool := false) : Json :=
     let base := #[("rule", .str s.rule), ("explanation", .str s.explanation), ("path", Path.toJson s.path),
                   ("before", s.before.toJson), ("after", s.after.toJson),
-                  -- optional per protocol rule 5: the whole term after the step, rendered
+                  -- optional per protocol rule 5: the whole term after the step, rendered; and before it, since the
+                  -- pipeline canonicalizes silently between steps, so `before` need not be the previous `after`
+                  ("beforeRendered", .obj #[("text", .str s.before.toText), ("latex", .str (s.before.toLatex paths))]),
                   ("afterRendered", .obj #[("text", .str s.after.toText), ("latex", .str (s.after.toLatex paths))])]
     .obj (match s.sub with | some d => base.push ("sub", d.toJson paths) | none => base)
   partial def Derivation.toJson (d : Derivation) (paths : Bool := false) : Json :=

@@ -1501,20 +1501,18 @@ function changedPaths(a: WireExpr, b: WireExpr, path: Path = [], out: Path[] = [
 }
 
 /** What each step changed, in place: the subterms a step rewrote (`before` against `after`) are
- *  tinted in its row, and hovering one shows `old → new`. The old is cut from the row before —
- *  the derivation's input for the first step — when that is what the step started from (the
- *  integration finder's guesses each start from the integral again, so there it is not shown). A
- *  change at the root is the whole line: no tint. */
+ *  tinted in its row, and hovering one shows `old → new`, cut from the step's own renderings of
+ *  `before` and `after` (the row above is not always `before`: the pipeline flattens and reorders
+ *  silently between recorded steps). A change at the root is the whole line: no tint. */
 function markChanges(rows: HTMLElement[], d: Derivation) {
   d.steps.forEach((st, n) => {
     const el = rows[n]?.querySelector<HTMLElement>(".el"); if (!el) return;
-    const prev = n === 0 ? { term: d.input, latex: d.inputRendered?.latex } : { term: d.steps[n - 1]!.after, latex: d.steps[n - 1]!.afterRendered?.latex };
-    const chained = JSON.stringify(prev.term) === JSON.stringify(st.before);
+    const beforeLatex = st.beforeRendered?.latex ?? (n === 0 ? d.inputRendered?.latex : undefined);
     for (const p of changedPaths(st.before, st.after)) {
       if (!p.length) continue;
       const now = el.querySelector<HTMLElement>(`[data-path="${p.join(".")}"]`); if (!now) continue;
       now.classList.add("chg");
-      const old = chained && prev.latex ? pathLatex(prev.latex, p) : null;
+      const old = beforeLatex ? pathLatex(beforeLatex, p) : null;
       const neu = st.afterRendered ? pathLatex(st.afterRendered.latex, p) : null;
       if (old === null || neu === null) continue;
       now.addEventListener("mouseenter", () => showDiffTip(now, stripPaths(old), stripPaths(neu)));

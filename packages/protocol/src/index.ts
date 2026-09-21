@@ -41,6 +41,9 @@ export interface Step {
   path: Path;
   before: WireExpr;
   after: WireExpr;
+  /** `before`, rendered: what the step started from — not always the previous step's `after`, since the
+   *  pipeline canonicalizes (flattens, reorders) silently between recorded steps. */
+  beforeRendered?: Rendered;
   /** `after`, rendered (no path annotations). Optional; used by the notebook's Manim Studio to animate steps. */
   afterRendered?: Rendered;
   /** λ-cells: the same term after the step, with de Bruijn indices. */
