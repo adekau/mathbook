@@ -519,3 +519,6 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    because there it is the printer's job: the ordering the rules decrease cannot turn one power into a
    product (M(2·3^(1/2)) = 19 > M(12^(1/2)) = 11), so `12^(1/2)` is the normal form. "Perfect 2th power" is
    "perfect square".
+- notebook: hover under a radical — DONE 2026-09-21. KaTeX draws the radical sign as an SVG overlay on top of the
+   radicand (and the fraction and overline rules as overlays), which swallowed the pointer: a changed subterm
+   under a √ could never be hovered or clicked. The overlays are `pointer-events: none` now.

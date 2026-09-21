@@ -365,6 +365,9 @@ svg .epitip { fill:var(--acc); }
 .katex [data-path]:has(.mtable) { display:inline-block; }
 /* the innermost hovered subterm only: an ancestor is hovered too, but must not light up with it */
 .katex [data-path]:hover:not(:has([data-path]:hover)) { background:var(--p-hov); box-shadow:0 0 0 1px var(--p-acc-br); }
+/* KaTeX draws the radical sign (and the fraction and overline rules) as overlays on top of the content;
+   they must not swallow the pointer, or a subterm under a √ can never be hovered or clicked */
+.katex .sqrt .hide-tail, .katex .sqrt svg, .katex .frac-line, .katex .overline-line { pointer-events:none; }
 /* what a step changed; hovering it shows old → new */
 .katex [data-path].chg { background:var(--p-chg-bg); box-shadow:0 0 0 1px var(--p-chg-br); }
 .difftip { position:fixed; z-index:60; display:flex; align-items:center; gap:10px; padding:6px 12px; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; box-shadow:var(--pop); color:var(--ink); font-size:15px; pointer-events:none; white-space:nowrap; }
