@@ -40,6 +40,7 @@ const DOCS: Doc[] = [
   { name: "church", sig: "true false and or not if · zero succ add mul pow iszero · pair fst snd · id const K S I omega Y", blurb: "The Church library, available in every λ-cell; a normal form that is a Church numeral or boolean is read out beside the result.", examples: ["if (iszero 0) a b", "fst (pair 1 2)", "mul 2 3"] },
   { name: "plot", sig: "plot(f, x, from, to[, n])  ·  plot([f, g, …], x, from, to[, n])", blurb: "Graph of f — or of several functions, given as a list — over [from, to]. The engine simplifies each under the session (a derivative plots as the derivative), records the derivation, and samples every curve where it has a finite value; the notebook draws them with a legend.", examples: ["plot(sin(x)/x, x, -10, 10)", "plot([sin(x), cos(x)], x, 0, 2pi)", "plot([x^2, diff(x^2, x)], x, -3, 3)"] },
   { name: "expand", sig: "expand(e)", blurb: "Multiplies out products and powers of sums by repeated distribution.", ref: "https://mathworld.wolfram.com/Expand.html", examples: ["expand((x+1)^3)", "expand((a+b)^4)"] },
+  { name: "factor", sig: "factor(e)", blurb: "The shape a hand derivation ends in: expand and collect, put the sum over a common denominator (Mathematica's Together), and pull the numerator's common factor out — so a definite integral's ½·(−(i/k − i·e^{ikπ}/k) − i/k + i·e^{−ikπ}/k)/π becomes i·(e^{−ikπ} + e^{ikπ} − 2)/(2kπ). One presentation of the normal form; not a factorization into irreducibles (x² − 1 stays).", examples: ["factor(x^2 + 2*x)", "factor(a/x + b/y)", "factor(c(k))"] },
   { name: "simplify", sig: "simplify(e)", blurb: "Explicit request for the normal form. Every cell is simplified anyway; this names the intent.", examples: ["simplify(x + x)"] },
   { name: "rref", sig: "rref(M)", blurb: "Gauss–Jordan elimination to reduced row echelon form. Each row operation is recorded as its own step.", ref: "https://mathworld.wolfram.com/ReducedRowEchelonForm.html", examples: ["rref([1,2,3;4,5,6;7,8,10])", "rref([1,2;2,4])"] },
   { name: "det", sig: "det(M)", blurb: "Determinant by Laplace expansion along the first row. Works on symbolic entries.", ref: "https://mathworld.wolfram.com/Determinant.html", examples: ["det([1,2;3,4])", "det([a,b;c,d])"] },
@@ -110,6 +111,7 @@ function cellKind(src: string): string | null {
     case "det": return "determinant";
     case "transpose": return "transpose";
     case "expand": return "expand";
+    case "factor": return "factor";
     case "simplify": return "simplify";
     case "subst": return "substitute";
     case "N": return "numeric";
@@ -3183,7 +3185,7 @@ const USER_NAMES = new Set<string>();
 /** Commands whose argument at `arg` is a variable bound over the call: `diff(f, x)`, `plot(f, x, …)`. */
 const BINDERS: Record<string, number> = { diff: 1, integrate: 1, plot: 1, epicycles: 1, sum: 1, subst: 1 };
 const BUILTIN_FN = new Set(["sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs", "conj", "re", "im", "sign", "det", "rref", "transpose", "dot", "norm", "solve"]);
-const COMMANDS = new Set(["diff", "integrate", "plot", "epicycles", "dft", "import", "samplePoints", "sum", "exptotrig", "expand", "simplify", "N", "subst", "poset", "map", "monotone", "lfp", "gfp", "fixpoints", "hasse", "join", "meet", "sup", "inf", "upper", "lower", "top", "bottom", "maximal", "minimal", "lattice", "le", "divisors", "subsets", "chain"]);
+const COMMANDS = new Set(["diff", "integrate", "plot", "epicycles", "dft", "import", "samplePoints", "sum", "exptotrig", "expand", "factor", "simplify", "N", "subst", "poset", "map", "monotone", "lfp", "gfp", "fixpoints", "hasse", "join", "meet", "sup", "inf", "upper", "lower", "top", "bottom", "maximal", "minimal", "lattice", "le", "divisors", "subsets", "chain"]);
 const CONSTANTS = new Set(["pi", "π", "e", "ℯ", "i", "phi", "φ"]);
 
 type Tok = { kind: "id" | "num" | "op" | "ws" | "kw" | "asset" | "str"; text: string; start: number };

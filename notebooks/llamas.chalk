@@ -416,6 +416,17 @@
       "label": null
     },
     {
+      "src": "The engine's normal form and the hand derivation's last line are the same number written differently. `factor` is the step by hand: expand and collect, put the sum over a common denominator, and pull the numerator's common factor out — the $i$ and the $2k\\pi$ of equation (26):",
+      "type": "markdown",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "factor(c(k))",
+      "showWork": true,
+      "label": null
+    },
+    {
       "src": "We have a major problem with this formula, however. We need a value for $k=0$. This formula, with $k=0$, would result in a divide by $0$, which we cannot do. As a result, we need to define $c_k$ for when $k=0$ and for when $k\\not = 0$. With $k = 0$ the exponentials are $1$:\n\n$$\nc_0 = \\frac{1}{2\\pi}\\left( \\int_0^\\pi{1\\,dt} - \\int_{-\\pi}^0{1\\,dt} \\right) = \\frac{1}{2\\pi}(\\pi - \\pi) = 0\n$$\n\nHanded $k = 0$, the engine substitutes before it integrates, so the exponentials are already $1$ and there is no division by zero:",
       "type": "markdown",
       "showWork": false,

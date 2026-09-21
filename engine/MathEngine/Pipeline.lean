@@ -7,6 +7,7 @@ import MathEngine.Fourier
 import MathEngine.Antiderivative
 import MathEngine.RadicalRules
 import MathEngine.ComplexRules
+import MathEngine.Factor
 import MathEngine.Terminate
 /-!
 # The notebook pipeline: commands as rules, and the combined rule set
@@ -184,7 +185,19 @@ def cmdIntegrate (norm : Norm) : PlainRule :=
       | .fn "integrate" _ => some (refuse "integrate takes an integrand and a variable, optionally with the bounds: integrate(f, x, a, b)")
       | _ => none }
 
-def commandRulesWith (norm : Norm) : List PlainRule := [cmdSimplify, cmdExpand, cmdRref, cmdN, cmdSubst, cmdIntegrate norm, cmdSum, cmdExpToTrig]
+/-- `factor(e)`: expand and collect, put the sum over a common denominator, pull the numerator's common
+factor out — the shape a hand derivation ends in. One presentation of the normal form; unverified. -/
+def cmdFactor (norm : Norm) : PlainRule :=
+  { name := "cmd.factor", apply := fun e => Option.map checked <|
+      match e with
+      | .fn "factor" [a] =>
+        match Factor.run (fun e => (norm e).map (·.1)) a with
+        | .ok out => some ⟨out, "Expand and collect, put the sum over a common denominator (Mathematica's Together), and pull the numerator's common factor out.", none, none⟩
+        | .error msg => some (refuse s!"factor: {msg}")
+      | .fn "factor" _ => some (refuse "factor takes one argument")
+      | _ => none }
+
+def commandRulesWith (norm : Norm) : List PlainRule := [cmdSimplify, cmdExpand, cmdRref, cmdN, cmdSubst, cmdIntegrate norm, cmdSum, cmdExpToTrig, cmdFactor norm]
 
 /-- The matrix rules precede `simp` as in the reference (so `A·A` is a product, not `A^2`); the
 catch-all `la.context` must come after every rule that handles a literal, so it is last. -/

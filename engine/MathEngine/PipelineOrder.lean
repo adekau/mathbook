@@ -26,7 +26,7 @@ variable {norm : Norm}
 -- ---------------------------------------------------------------------------
 
 theorem mem_pipeline_iff (r : PlainRule) : r ∈ (pipelineRulesWith norm) ↔
-    r = cmdSimplify ∨ r = cmdExpand ∨ r = cmdRref ∨ r = cmdN ∨ r = cmdSubst ∨ r = cmdIntegrate norm ∨ r = cmdSum ∨ r = cmdExpToTrig ∨
+    r = cmdSimplify ∨ r = cmdExpand ∨ r = cmdRref ∨ r = cmdN ∨ r = cmdSubst ∨ r = cmdIntegrate norm ∨ r = cmdSum ∨ r = cmdExpToTrig ∨ r = cmdFactor norm ∨
     r = diffHigherOrder ∨ r = diffConstant ∨ r = diffVariable ∨ r = diffSum ∨ r = diffConstMul ∨
     r = diffProduct ∨ r = diffPower ∨ r = diffChain ∨ r = diffMatrix ∨
     r = laAdd ∨ r = laScalarMul ∨ r = laMul ∨ r = laTranspose ∨ r = laDet ∨ r = laPow ∨ r = laDot ∨ r = laNorm ∨ r = laConj ∨
@@ -199,7 +199,7 @@ theorem not_noFire_of_cmd {f : String} {es : List Expr} (h : cmdNames.contains f
     ¬ NoFire (pipelineRulesWith norm) (.fn f es) := by
   intro hnf
   simp [cmdNames] at h
-  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · have := hnf cmdSimplify ((mem_pipeline_iff _).2 (by simp))
     match es, this with
     | [_], h => simp [cmdSimplify] at h
@@ -235,6 +235,9 @@ theorem not_noFire_of_cmd {f : String} {es : List Expr} (h : cmdNames.contains f
     (repeat' split at this) <;> simp_all
   · have := hnf cmdExpToTrig ((mem_pipeline_iff _).2 (by simp))
     simp only [cmdExpToTrig, Option.map_eq_none_iff] at this
+    (repeat' split at this) <;> simp_all
+  · have := hnf (cmdFactor norm) ((mem_pipeline_iff _).2 (by simp))
+    simp only [cmdFactor, Option.map_eq_none_iff] at this
     (repeat' split at this) <;> simp_all
 
 /-- A `diff` of the wrong arity is never normal. -/
@@ -401,6 +404,13 @@ theorem dec_cmdExpToTrig : Dec norm cmdExpToTrig := dec_cmd
     (repeat' split at h) <;> first | exact ⟨_, _, rfl, by decide⟩ | simp at h)
   (fun e res h => by
     unfold cmdExpToTrig at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
+
+theorem dec_cmdFactor : Dec norm (cmdFactor norm) := dec_cmd
+  (fun e res h => by
+    unfold cmdFactor at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨_, h, _⟩ := h
+    (repeat' split at h) <;> first | exact ⟨_, _, rfl, by decide⟩ | simp at h)
+  (fun e res h => by
+    unfold cmdFactor at h; simp only [Option.map_eq_some_iff] at h; obtain ⟨r₀, _, rfl⟩ := h; exact ⟨r₀, rfl⟩)
 
 -- ---------------------------------------------------------------------------
 -- Tier 2: diff.higher-order
@@ -2754,7 +2764,7 @@ theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := 
   rw [mem_pipeline_iff] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
     rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact dec_cmdSimplify
   · exact dec_cmdExpand
   · exact dec_cmdRref
@@ -2763,6 +2773,7 @@ theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := 
   · exact dec_cmdIntegrate
   · exact dec_cmdSum
   · exact dec_cmdExpToTrig
+  · exact dec_cmdFactor
   · exact dec_diffHigherOrder
   · exact dec_diffConstant
   · exact dec_diffVariable

@@ -54,6 +54,7 @@ def ruleStatus : Json :=
     entry "la.row-add.symbolic" "unverified" "Symbolic entries: the arithmetic is the simplifier's, outside the ℚ theorem.",
     entry "simp.radical" "verified" "A perfect-power base is reduced (8^(1/2) = 2^(3/2)) and same-index radicals multiply under one root; unconditional, the bases are positive integers (radicalBase_soundR, mulRadicals_soundR).",
     entry "simp.collect-radicals" "verified" "Radicals with the same square-free part collect, √50 − √18 = 2√2; unconditional (collectRadicals_soundR).",
+    entry "cmd.factor" "unverified" "Expand and collect (the pipeline's proved steps), then a/b + c/d = (ad + cb)/(bd) — which needs nonzero denominators — and distributivity for the common factor; the combination has no theorem yet.",
     entry "cmd.expand" "verified" "Distribution is a total function proved sound over ℝ (dist_sound, proofs/Proofs/Expand.lean); the collection afterwards is the pipeline's own steps with their statuses.",
     entry "expand.distribute" "verified" "Multiplying out a product of sums and collecting like monomials: dist_sound.",
     entry "expand.power" "verified" "A power of a sum is the sum multiplied by itself: dist_sound.",
@@ -105,7 +106,7 @@ def ruleStatus : Json :=
 
 def capabilities : Json :=
   .obj #[("engine", .str "engine-lean"), ("version", .str "0.1.0-m8"), ("verified", .bool true),
-         ("features", .arr #[.str "simplify", .str "expand", .str "diff", .str "linalg", .str "numeric", .str "integrate", .str "plot", .str "lambda", .str "order", .str "sum", .str "exptotrig"]),
+         ("features", .arr #[.str "simplify", .str "expand", .str "factor", .str "diff", .str "linalg", .str "numeric", .str "integrate", .str "plot", .str "lambda", .str "order", .str "sum", .str "exptotrig"]),
          ("ruleStatus", ruleStatus),
          ("termination", .obj #[("status", .str "proven"), ("theorem", .str "MathEngine.pipelineOrdered"),
            ("summary", .str "Cell evaluation has no step budget: every pipeline rule decreases a five-tier ordering (commands, higher-order diff, matrix literals, the weight M, size) on nodes whose children are normal.")])]

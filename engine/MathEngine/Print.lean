@@ -221,7 +221,10 @@ mutual
                   match restOff with
                   | some off => print r (p ++ [off]) T P_MUL
                   | none => print r p T P_MUL
-                else T.wrap p (T.num absC ++ T.times ++ print r (p ++ [restOff.getD 0]) T P_MUL)
+                else
+                  -- the product printer, on the term with its sign dropped, so `− x²/4` and `x²/4` agree
+                  -- (and the factors keep their true paths: the numeral is child 0, the rest follow)
+                  print (.mul (.num absC :: (match r with | .mul rs => rs | r => [r]))) p T P_MUL
             else child a i P_MUL
           acc ++ (if i == 0 then sign.trimAscii.copy else sign) ++ termStr
       (s, P_ADD)
@@ -234,8 +237,17 @@ mutual
           fun ((sign, numer, denom) : String × List String × List String) ((i, a) : Nat × Expr) =>
         let p := path ++ [i]
         match i, a with
-        | 0, .num q => if q.isNeg then (("-" : String), if q.neg.isOne then numer else numer ++ [T.wrap p (T.num q.neg)], denom)
-                       else (sign, numer ++ [print a p T (P_MUL + (if i > 0 then 1 else 0))], denom)
+        | 0, .num q =>
+          -- a rational coefficient p/d puts p in the numerator and d in the denominator — `x/(2π)`,
+          -- as a hand derivation writes it, not `½·x/π`
+          let sign := if q.isNeg then ("-" : String) else sign
+          let a := q.abs
+          -- an integer (a `1` stays visible: the identity step removes it) or an approximate decimal prints as is
+          if a.isInt || q.approx then (sign, if q.isNeg && a.isOne then numer else numer ++ [T.wrap p (T.num a)], denom)
+          else
+            let pn := Q.ofInt a.val.num
+            let dn := Q.ofInt (Int.ofNat a.val.den)
+            (sign, if pn.isOne then numer else numer ++ [T.wrap p (T.num pn)], denom ++ [if pn.isOne then T.wrap p (T.num dn) else T.num dn])
         | _, .pow b (.num q) =>
           if q.isNeg then
             let n := q.neg

@@ -503,3 +503,11 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    194 KB now: a negative literal is one numeral; `-2^2` is still −4); and the square cell's coefficients — a
    square traced at constant speed has c_k at k = 1, −3, 5, −7, all the same sign, falling as 1/k² (I had a sign
    wrong). The fish is now the fish curve x = cos t − sin²t/√2, y = cos t sin t: four circles and a constant.
+- engine: `factor` — DONE 2026-09-21. The normal form of a definite integral in a symbolic parameter reads
+   `½·(−(i/k − i e^{ikπ}/k) − i/k + i e^{−ikπ}/k)/π`; by hand one ends at `i(e^{−ikπ} + e^{ikπ} − 2)/(2kπ)`. `factor(e)`
+   is that step: expand and collect (the pipeline's own proved steps), put the sum over a common denominator
+   (Mathematica's Together: coefficients' lcm, each base at its largest exponent), and pull the numerator's common
+   factor out (the coefficients' gcd, each base at its least exponent). A command (one presentation of the
+   normal form), unverified in the ledger: a/b + c/d = (ad + cb)/(bd) needs nonzero denominators. Not a
+   factorization into irreducibles: x² − 1 stays. Printer: a rational coefficient's denominator now goes into
+   the fraction's denominator (`x/(2π)`, not `½·x/π`), which also puts factor's result in the hand form.
