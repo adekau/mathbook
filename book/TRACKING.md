@@ -439,3 +439,10 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    first step); a rewrite at the root tints nothing, the whole line changed. Hovering a subterm now lights only
    the innermost one (`:hover:not(:has([data-path]:hover))`) — before, every ancestor lit with it, so a hovered
    `2` in `2·d` was indistinguishable from the product.
+- notebook: the step diff, second pass — DONE 2026-09-20. Red-then-green misled: an identity step's old and
+   new print the same, so the term seemed to wander. Now one tint on the step's own row, on what changed, and
+   hovering it shows `old → new` typeset. What changed is a structural diff of the step's `before` and `after`
+   (the smallest differing subterms, matrix entries at `row·width + column`), not the recorded path — so rref's
+   row operations and nested derivations mark too; the integration finder's guesses each start from the integral
+   again (no chain), so they get no "old". Nested derivations now carry `inputRendered` (Wire.lean) so a
+   sub-derivation's first step has its "old".

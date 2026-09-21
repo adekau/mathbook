@@ -53,6 +53,8 @@ export interface Derivation {
   input: WireExpr;
   steps: Step[];
   output: WireExpr;
+  /** `input`, rendered (with path annotations when requested): what the first step rewrote. */
+  inputRendered?: Rendered;
 }
 
 // ---------------------------------------------------------------------------

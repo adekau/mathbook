@@ -25,7 +25,9 @@ mutual
                   ("afterRendered", .obj #[("text", .str s.after.toText), ("latex", .str (s.after.toLatex paths))])]
     .obj (match s.sub with | some d => base.push ("sub", d.toJson paths) | none => base)
   partial def Derivation.toJson (d : Derivation) (paths : Bool := false) : Json :=
-    .obj #[("input", d.input.toJson), ("steps", .arr (d.steps.map fun s => Step.toJson s paths)), ("output", d.output.toJson)]
+    .obj #[("input", d.input.toJson), ("steps", .arr (d.steps.map fun s => Step.toJson s paths)), ("output", d.output.toJson),
+           -- the input rendered too, so a nested derivation's first step has a "before" to show
+           ("inputRendered", .obj #[("text", .str d.input.toText), ("latex", .str (d.input.toLatex paths))])]
 end
 
 end MathEngine

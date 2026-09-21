@@ -1,4 +1,4 @@
-import { createClient, type EngineClient, type Step, type Path, type RuleStatus } from "@mathbook/protocol";
+import { createClient, type EngineClient, type Step, type Path, type RuleStatus, type Derivation, type WireExpr } from "@mathbook/protocol";
 declare const __BUILD_ID__: string;
 import { workerTransport, httpTransport } from "@mathbook/engine-host";
 
@@ -1478,23 +1478,68 @@ const RULE_NAMES: Record<string, string> = {
   "cmd.rref": "Row reduce", "cmd.integrate": "Integrate", "cmd.expand": "Expand", "cmd.subst": "Substitute", "cmd.simplify": "Simplify", "cmd.sum": "Sum", "cmd.exptotrig": "Euler's formula",
 };
 
-/** A diff between consecutive steps, in place: the subterm a step rewrote is tinted in its own row
- *  (new) and in the row before it — or the input's rendering for the first step — (old). A rewrite
- *  at the root changes the whole line, which needs no tint. */
-function markChanges(rows: HTMLElement[], steps: Step[], before?: HTMLElement) {
-  steps.forEach((st, n) => {
-    if (!st.path.length) return;
-    const key = st.path.join(".");
-    const now = rows[n]?.querySelector<HTMLElement>(`.el [data-path="${key}"]`);
-    const was = (n === 0 ? before : rows[n - 1]?.querySelector<HTMLElement>(".el"))?.querySelector<HTMLElement>(`[data-path="${key}"]`);
-    if (now) { now.classList.add("chg-new"); now.title = "what this step produced"; }
-    if (was) { was.classList.add("chg-old"); was.title = `what step ${n + 1} rewrites`; }
+/** The paths at which two terms differ: the smallest subterms that changed. Children are compared
+ *  one to one where the node kind and arity agree; otherwise the node itself is the change. The
+ *  indices follow the renderer's paths (a matrix entry is `row·width + column`). */
+function changedPaths(a: WireExpr, b: WireExpr, path: Path = [], out: Path[] = []): Path[] {
+  if (JSON.stringify(a) === JSON.stringify(b)) return out;
+  if (a.k === b.k) {
+    if ((a.k === "add" || a.k === "mul" || a.k === "fn") && (b.k === "add" || b.k === "mul" || b.k === "fn")
+        && (a.k !== "fn" || b.k !== "fn" || a.name === b.name) && a.args.length === b.args.length) {
+      a.args.forEach((x, i) => changedPaths(x, b.args[i]!, [...path, i], out));
+      return out;
+    }
+    if (a.k === "pow" && b.k === "pow") { changedPaths(a.base, b.base, [...path, 0], out); changedPaths(a.exp, b.exp, [...path, 1], out); return out; }
+    if (a.k === "matrix" && b.k === "matrix" && a.rows.length === b.rows.length && a.rows.every((r, i) => r.length === b.rows[i]!.length)) {
+      const w = a.rows[0]?.length ?? 0;
+      a.rows.forEach((r, i) => r.forEach((x, j) => changedPaths(x, b.rows[i]![j]!, [...path, i * w + j], out)));
+      return out;
+    }
+  }
+  out.push(path);
+  return out;
+}
+
+/** What each step changed, in place: the subterms a step rewrote (`before` against `after`) are
+ *  tinted in its row, and hovering one shows `old → new`. The old is cut from the row before —
+ *  the derivation's input for the first step — when that is what the step started from (the
+ *  integration finder's guesses each start from the integral again, so there it is not shown). A
+ *  change at the root is the whole line: no tint. */
+function markChanges(rows: HTMLElement[], d: Derivation) {
+  d.steps.forEach((st, n) => {
+    const el = rows[n]?.querySelector<HTMLElement>(".el"); if (!el) return;
+    const prev = n === 0 ? { term: d.input, latex: d.inputRendered?.latex } : { term: d.steps[n - 1]!.after, latex: d.steps[n - 1]!.afterRendered?.latex };
+    const chained = JSON.stringify(prev.term) === JSON.stringify(st.before);
+    for (const p of changedPaths(st.before, st.after)) {
+      if (!p.length) continue;
+      const now = el.querySelector<HTMLElement>(`[data-path="${p.join(".")}"]`); if (!now) continue;
+      now.classList.add("chg");
+      const old = chained && prev.latex ? pathLatex(prev.latex, p) : null;
+      const neu = st.afterRendered ? pathLatex(st.afterRendered.latex, p) : null;
+      if (old === null || neu === null) continue;
+      now.addEventListener("mouseenter", () => showDiffTip(now, stripPaths(old), stripPaths(neu)));
+      now.addEventListener("mouseleave", hideDiffTip);
+    }
   });
 }
+/** The `old → new` of a changed subterm, typeset, floating above it. */
+function showDiffTip(anchor: HTMLElement, oldTex: string, newTex: string) {
+  hideDiffTip();
+  const tip = h("div", "difftip");
+  const a = h("span", "was"); a.innerHTML = tex(oldTex);
+  const b = h("span", "now"); b.innerHTML = tex(newTex);
+  tip.append(a, h("span", "arrow", "→"), b);
+  document.body.append(tip);
+  const r = anchor.getBoundingClientRect();
+  tip.style.left = `${Math.max(8, Math.min(r.left + r.width / 2 - tip.offsetWidth / 2, window.innerWidth - tip.offsetWidth - 8))}px`;
+  tip.style.top = `${r.top - tip.offsetHeight - 8 < 8 ? r.bottom + 8 : r.top - tip.offsetHeight - 8}px`;
+}
+function hideDiffTip() { document.querySelector(".difftip")?.remove(); }
 
 /** Re-render everything below a cell's input, leaving the input element untouched. */
 function renderCellBody(cell: Cell) {
   const el = cell.el; if (!el) return;
+  hideDiffTip();
   if (cell.type === "markdown") return renderMdCell(cell);
   if (cell.type === "section") return appendMore(cell, el.querySelector(".cellacts")!);
   el.classList.toggle("done", !!cell.label);
@@ -1503,13 +1548,11 @@ function renderCellBody(cell: Cell) {
   const body = mid.querySelector(".cellbody") as HTMLElement;
   body.innerHTML = "";
 
-  let echoEl: HTMLElement | undefined;
   if (cell.echoLatex && S.showEcho) {
     const echo = h("div", "echo");
     echo.innerHTML = tex(cell.echoLatex, true);
     wireTerm(echo, cell, { kind: "input" });
     body.append(echo);
-    echoEl = echo;
   }
 
 
@@ -1575,7 +1618,7 @@ function renderCellBody(cell: Cell) {
         rows.push(srow);
         renderSub(sub, l, top, depth + 1);
       });
-      if (st.sub) markChanges(rows, st.sub.steps);
+      if (st.sub) markChanges(rows, st.sub);
     };
     const rows: HTMLElement[] = [];
     cell.steps.forEach((st, n) => {
@@ -1585,7 +1628,9 @@ function renderCellBody(cell: Cell) {
       rows.push(row);
       renderSub(st, String(n + 1), n, 1);
     });
-    markChanges(rows, cell.steps, echoEl);
+    // the cell keeps the steps, not the derivation: its input is the first step's before, rendered as the echo
+    const first = cell.steps[0]!;
+    markChanges(rows, { input: first.before, steps: cell.steps, output: cell.steps[cell.steps.length - 1]!.after, ...(cell.echoLatex ? { inputRendered: { text: "", latex: cell.echoLatex } } : {}) });
     body.append(work);
   }
 
