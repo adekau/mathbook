@@ -2089,7 +2089,31 @@ theorem dec_powerRules : Dec norm (scalarOnly powerRules.toPlain) := dec_scalar 
                     have hb'1 := M.pos b'
                     have : (M b' + 1) * M (.num (m * n)) ≤ (M b' + 1) * 2 := Nat.mul_le_mul_left _ hmn2
                     omega
-                  · simp at happ
+                  · -- (p^m)^n → p^(mn) for a positive numeral p: the outer power's two nodes go, and
+                    -- the merged exponent's M is at most 4 against the inner exponent's at least 2
+                    split at happ
+                    · rename_i hnot hnp
+                      simp only [Bool.and_eq_true] at hnp
+                      simp only [Option.some.injEq] at happ; subst happ; (try dsimp only)
+                      have hb' : Clean b' := hb.child (by simp [children])
+                      apply muLt_of_clean (Clean.pow hb' (Clean.num _)) he
+                      left
+                      have hnb' := normal_pow_facts hnb
+                      have hn1 : n.isOne = false := hx1'
+                      have hn2 : M (.num n) = 2 := by rw [M.num, hn1, hnp.1]; rfl
+                      -- the integer case was tried first, so here m is not an integer: M (num m) = 4
+                      have hmi : m.isInt = false := by
+                        cases hmi : m.isInt with
+                        | false => rfl
+                        | true => exact absurd (by simp [hnp.1, hmi] : (n.isInt && m.isInt) = true) hnot
+                      have hm4 : M (.num m) = 4 := M_num_of_not_isInt hmi
+                      have hmn4 := M_num_le_four (m * n)
+                      have h1 : (M b' + 1) * M (.num (m * n)) ≤ (M b' + 1) * 4 := Nat.mul_le_mul_left _ hmn4
+                      have hb'1 := M.pos b'
+                      rw [M.pow, M.pow, M.pow, hn2, hm4]
+                      generalize (M b' + 1) * M (.num (m * n)) = P at h1 ⊢
+                      omega
+                    · simp at happ
                 | _ => simp [powerNum] at happ
               | _ => simp [powerNum] at happ
             | _ => simp [powerNum] at happ

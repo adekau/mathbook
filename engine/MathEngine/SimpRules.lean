@@ -482,14 +482,19 @@ def powNumeric (p q : Q) : Option RuleResult :=
     | none => none
   else none
 
-/-- The structural power rules: numeric evaluation and `(b^m)^n = b^(mn)` for numeric `m`, `n`. -/
+def isPosNum : Expr → Bool | .num q => !q.isNeg && !q.isZero | _ => false
+
+/-- The structural power rules: numeric evaluation and `(b^m)^n = b^(mn)` — for integer `m` and `n`
+(any base), or for an integer `n` and a positive numeral base (so `sqrt(2)^2 = 2`; a symbolic base
+would need `b ≥ 0`, which `sqrt(x)^2` cannot promise over ℝ). -/
 def powerNum : Expr → Expr → Option RuleResult
   | .num p, .num q => powNumeric p q
   | .pow b' (.num m), .num n =>
-    if n.isInt && m.isInt then some ⟨.pow b' (.num (m * n)), "$(b^m)^n = b^{mn}$ for integer $n$.", none, none⟩ else none
+    if n.isInt && m.isInt then some ⟨.pow b' (.num (m * n)), "$(b^m)^n = b^{mn}$ for integer $n$.", none, none⟩
+    else if n.isInt && isPosNum b' then
+      some ⟨.pow b' (.num (m * n)), "$(b^m)^n = b^{mn}$ for an integer $n$ and a positive base $b$ (so $\\sqrt{b}^2 = b$).", none, none⟩
+    else none
   | _, _ => none
-
-def isPosNum : Expr → Bool | .num q => !q.isNeg && !q.isZero | _ => false
 
 def powerAt (b x : Expr) : Option RuleResult :=
   if isZero x then some ⟨Expr.one, "$b^0 = 1$ (for the domain we work in, $b \\neq 0$).", none, none⟩

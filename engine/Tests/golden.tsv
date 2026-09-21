@@ -156,4 +156,4 @@ integrate(x*y, x)	1/2*y*x^2
 integrate(x^(-2), x)	-1/x
 sqrt(72)	sqrt(72)
 2*sqrt(8)+3*sqrt(2)	7*sqrt(2)
-8^(-1/2)	1/2^3/2
+8^(-1/2)	1/2^(3/2)

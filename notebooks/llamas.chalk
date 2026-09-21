@@ -206,6 +206,11 @@
       "label": null
     },
     {
+      "src": "norm(u)",
+      "showWork": true,
+      "label": null
+    },
+    {
       "src": "Secondly, the dot product of vectors that are perpendicular (form a right angle where they intersect) to each other is $0$. This is because $\\cos(\\frac{\\pi}{2}) = 0$. Therefore, with $\\vec{v_1}, \\vec{v_2}$ perpendicular, you end up with\n\n$$\n\\langle\\vec{v_1},\\vec{v_2}\\rangle = \\|\\vec{v_1}\\|\\times \\|\\vec{v_2}\\|\\times 0 = 0\n$$\n\nWith our previous intuition of \"how much $\\vec{v_1}$ is in $\\vec{v_2}$\", it makes sense for it to be $0$ since these two vectors are orthogonal.",
       "type": "markdown",
       "showWork": false,

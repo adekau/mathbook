@@ -33,7 +33,7 @@ def ruleStatus : Json :=
     entryC "simp.identity" "verified" "The additive and multiplicative identities and the annihilator." "verified" "The identities and the annihilator, in any field (identity_soundC).",
     entryC "simp.fold-constants" "verified" "Exact rational arithmetic; ℚ embeds in ℝ." "verified" "ℚ embeds in ℂ (foldConstants_soundC).",
     entryC "simp.collect-like-terms" "verified" "Distributivity: a·t + b·t = (a+b)·t." "verified" "Distributivity (collectTerms_soundC).",
-    entryC "simp.power" "verified" "Includes exact roots; the root search returns only checked roots." "verified" "The principal branch agrees with the real power on the positive rational bases the exact roots use (powerRules_soundC).",
+    entryC "simp.power" "verified" "Includes exact roots (the root search returns only checked roots) and (b^m)^n = b^(mn) for integer exponents, or for an integer n over a positive numeral base — so sqrt(2)^2 = 2 (Real.rpow_mul needs 0 ≤ b, which sqrt(x)^2 cannot promise)." "verified" "The principal branch agrees with the real power on the positive rational bases the exact roots and the radical powers use (powerRules_soundC).",
     entry "simp.collect-powers" "conditional" "b^m·b^n = b^(m+n) needs a positive base: at b = 0 it turns 0 into 1.",
     entryC "simp.function" "conditional" "exp(ln x) = x needs 0 < x: at x = -1 it turns -1 into 1. The other cases, sin/cos = tan among them, are unconditional." "unverified" "ln(exp x) = x is false on the principal branch: at x = 2πi it turns 2πi into 0 (not_functionRules_soundC).",
     entry "diff.constant" "verified" "A term the variable does not occur in has derivative 0.",

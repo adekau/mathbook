@@ -381,6 +381,13 @@ theorem isPosNum_ne_zero {x : Expr} (h : isPosNum x = true) (ρ : EnvR) : evalR 
     intro hz; rw [show q.isZero = true by simp [Q.isZero, hz]] at h; simp at h
   simpa using this
 
+/-- A positive numeral is non-negative (its `isNeg` flag reads `num < 0`). -/
+theorem Q_nonneg_of_isPosNum {p : Q} (h : isPosNum (.num p) = true) : 0 ≤ p.val := by
+  simp only [isPosNum, Bool.and_eq_true, Bool.not_eq_true'] at h
+  have := h.1
+  simp only [Q.isNeg, decide_eq_false_iff_not, not_lt] at this
+  exact Rat.num_nonneg.mp this
+
 theorem powerRules_soundR : RuleSoundR powerRules := by
   intro e r h ρ
   cases e <;> simp only [powerRules, powerApply, reduceCtorEq] at h
@@ -439,16 +446,32 @@ theorem powerRules_soundR : RuleSoundR powerRules := by
         cases m with
         | num mq =>
           simp only [powerNum] at h
-          split at h <;> simp only [Option.some.injEq, reduceCtorEq] at h
-          subst h; rename_i hint
-          simp only [Bool.and_eq_true] at hint
-          obtain ⟨hn', hm⟩ := hint
-          have hmn : ((mq * n' : Q).val : ℝ) = ((mq.val.num * n'.val.num : ℤ) : ℝ) := by
-            rw [Q_val_mul, Rat.cast_mul, Q_cast_isInt hm, Q_cast_isInt hn']; push_cast; ring
-          show ((evalR ρ b') ^ (evalR ρ (Expr.num mq))) ^ (evalR ρ (Expr.num n'))
-            = (evalR ρ b') ^ (evalR ρ (Expr.num (mq * n')))
-          rw [evalR_num, evalR_num, evalR_num, hmn, Q_cast_isInt hm, Q_cast_isInt hn',
-            Real.rpow_intCast, Real.rpow_intCast, Real.rpow_intCast, zpow_mul]
+          split at h
+          · simp only [Option.some.injEq] at h
+            subst h; rename_i hint
+            simp only [Bool.and_eq_true] at hint
+            obtain ⟨hn', hm⟩ := hint
+            have hmn : ((mq * n' : Q).val : ℝ) = ((mq.val.num * n'.val.num : ℤ) : ℝ) := by
+              rw [Q_val_mul, Rat.cast_mul, Q_cast_isInt hm, Q_cast_isInt hn']; push_cast; ring
+            show ((evalR ρ b') ^ (evalR ρ (Expr.num mq))) ^ (evalR ρ (Expr.num n'))
+              = (evalR ρ b') ^ (evalR ρ (Expr.num (mq * n')))
+            rw [evalR_num, evalR_num, evalR_num, hmn, Q_cast_isInt hm, Q_cast_isInt hn',
+              Real.rpow_intCast, Real.rpow_intCast, Real.rpow_intCast, zpow_mul]
+          · -- a positive numeral base: (p^m)^n = p^(mn) is `Real.rpow_mul`, which needs 0 ≤ p
+            split at h
+            · rename_i hnp
+              simp only [Bool.and_eq_true] at hnp
+              simp only [Option.some.injEq] at h; subst h
+              cases b' with
+              | num p =>
+                have hp : (0 : ℝ) ≤ ((p.val : ℚ) : ℝ) := by exact_mod_cast Q_nonneg_of_isPosNum hnp.2
+                have hmn : ((mq * n' : Q).val : ℝ) = ((mq.val : ℚ) : ℝ) * ((n'.val : ℚ) : ℝ) := by
+                  rw [Q_val_mul, Rat.cast_mul]
+                show ((evalR ρ (Expr.num p)) ^ (evalR ρ (Expr.num mq))) ^ (evalR ρ (Expr.num n'))
+                  = (evalR ρ (Expr.num p)) ^ (evalR ρ (Expr.num (mq * n')))
+                rw [evalR_num, evalR_num, evalR_num, evalR_num, hmn, Real.rpow_mul hp]
+              | _ => simp [isPosNum] at hnp
+            · simp at h
         | _ => simp [powerNum] at h
       | _ => simp [powerNum] at h
     | _ => cases x <;> simp [powerNum] at h

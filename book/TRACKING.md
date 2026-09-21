@@ -466,3 +466,18 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    60-circle llama fills its box; `dft(name, …)` echoes as itself; near-zero ticks print 0. Engine gaps the
    article exposed: `sqrt(2)^2`, `sqrt(74)^2` and `sqrt(x)^2` do not simplify (products `sqrt(2)*sqrt(2)` do), so
    `u` is written with `sqrt(2)/2` and the norm is shown as `dot(u, u)`; `p(j)` in a `sum` reads as `p·j`.
+- engine: powers of radicals — DONE 2026-09-20. `simp.power`'s `(b^m)^n = b^(mn)` was integer-only, so `sqrt(2)^2`,
+   `sqrt(74)^2` and `1/sqrt(2)^2` sat there (the notebook's `norm(u)` came out as `sqrt(1/2·sqrt(2)^2)`). New branch:
+   integer `n` over a positive numeral base, any rational `m`. Proofs: ℝ by `Real.rpow_mul` (needs `0 ≤ b` — which is
+   why a symbolic `sqrt(x)^2` is left alone: `Real.rpow` reads `x^(1/2)` as 0 for negative x, so `sqrt(x)^2 = x` is
+   false there); ℂ by routing every power through `Complex.ofReal_cpow` (the principal branch agrees with the real
+   power on a non-negative real base) and the same `Real.rpow_mul`; ℤ semantics vacuous (a non-integer exponent has
+   no integer value). Termination: the measure has `M (pow b x) = (M b + 1)·M x − 1` and a non-integer numeral has
+   `M = 4`, which the branch needs (with only `2 ≤ M` the bound is tight, not strict). Tests: `sqrt(2)^2 = 2`,
+   `sqrt(74)^2 = 74`, `1/sqrt(2)^2 = 1/2`, `(2^(3/2))^2 = 8`, `sqrt(x)^2` stays, `norm([√2/2, √2/2]) = 1`.
+- notebook: load lag — DONE 2026-09-20. Two causes. Each epicycle box rebuilt its whole SVG every animation frame
+   (axes, the trace, and for the full llama 402 circles + 402 arms), five boxes at once; now the SVG is built once
+   and each frame moves the arms and circles in place and re-cuts the trace's `d`, at most 30 fps, paused while
+   the page is hidden, and circles under a pixel are not created (the llama keeps 84 of 402). And the autosave
+   re-serialized every open notebook after each of a hundred cells during hydration; it is now coalesced (700 ms)
+   and flushed on unload.

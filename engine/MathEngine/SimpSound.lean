@@ -377,18 +377,32 @@ theorem powerRules_sound : RuleSound powerRules := by
         cases m with
         | num mq =>
           simp only [powerNum] at h
-          split at h <;> simp only [Option.some.injEq, reduceCtorEq] at h
-          subst h; rename_i hint
-          simp only [Bool.and_eq_true] at hint
-          obtain ⟨vb', mi, hb', hm, hmi, rfl⟩ := eval?_pow_some hb
-          simp only [eval?_num] at hm hx
-          rw [eval?_pow, hb', eval?_num, Q.asInt?_mul hm hx]
-          obtain ⟨a, rfl⟩ := Int.eq_ofNat_of_zero_le hmi
-          obtain ⟨c, rfl⟩ := Int.eq_ofNat_of_zero_le hn
-          simp only [Int.toNat_natCast]
-          simp
-          exact ⟨Int.mul_nonneg (Int.natCast_nonneg a) (Int.natCast_nonneg c),
-            by rw [← Int.natCast_mul, Int.toNat_natCast, Int.pow_mul]⟩
+          split at h
+          · simp only [Option.some.injEq] at h
+            subst h; rename_i hint
+            simp only [Bool.and_eq_true] at hint
+            obtain ⟨vb', mi, hb', hm, hmi, rfl⟩ := eval?_pow_some hb
+            simp only [eval?_num] at hm hx
+            rw [eval?_pow, hb', eval?_num, Q.asInt?_mul hm hx]
+            obtain ⟨a, rfl⟩ := Int.eq_ofNat_of_zero_le hmi
+            obtain ⟨c, rfl⟩ := Int.eq_ofNat_of_zero_le hn
+            simp only [Int.toNat_natCast]
+            simp
+            exact ⟨Int.mul_nonneg (Int.natCast_nonneg a) (Int.natCast_nonneg c),
+              by rw [← Int.natCast_mul, Int.toNat_natCast, Int.pow_mul]⟩
+          · -- the radical-power branch: its inner exponent is not an integer, so the base has no
+            -- integer value and the premise is impossible
+            split at h
+            · exfalso; rename_i hnot hnp
+              simp only [Bool.and_eq_true] at hnp
+              have hmi : mq.isInt = false := by
+                cases hmi : mq.isInt with
+                | false => rfl
+                | true => exact absurd (by simp [hnp.1, hmi] : (n'.isInt && mq.isInt) = true) hnot
+              obtain ⟨vb', mi, hb', hm, hmi', rfl⟩ := eval?_pow_some hb
+              rw [eval?_num, Q.asInt?_none_of_not_isInt (by simpa using hmi)] at hm
+              simp at hm
+            · simp at h
         | _ => simp [powerNum] at h
       | _ => simp [powerNum] at h
     | _ => cases x <;> simp [powerNum] at h

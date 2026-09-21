@@ -33,15 +33,15 @@ Mathematica's \texttt{Dot} is; the Hermitian product is \rn{dot(u, conj(v))}.
 \end{proof}
 
 This is the whole of Fourier analysis in one line: \emph{a coefficient is an inner product}. The
-rest of the chapter chooses the basis. The article's example --- $u = (\tfrac{1}{\sqrt 2},
-\tfrac{1}{\sqrt 2})$, $v = (-\tfrac{1}{\sqrt 2}, \tfrac{1}{\sqrt 2})$, $w = (0.7, 1.2)$ --- is
-worth redoing with an orthonormal pair that stays rational, since the engine's radicals do not
-yet simplify $(\sqrt 2)^{-2}$.
+rest of the chapter chooses the basis. The article's example is $u = (\tfrac{1}{\sqrt 2},
+\tfrac{1}{\sqrt 2})$, $v = (-\tfrac{1}{\sqrt 2}, \tfrac{1}{\sqrt 2})$, $w = (0.7, 1.2)$; the
+engine's radicals carry it exactly (the step $(\sqrt 2)^{2} = 2$ is \lc{simp.power}'s
+$(b^m)^n = b^{mn}$ for a positive numeral base, \lc{Real.rpow_mul}).
 
 \begin{trybox}
 \begin{minted}{text}
-let u = [3/5, 4/5]
-let v = [-4/5, 3/5]
+let u = [1/sqrt(2), 1/sqrt(2)]
+let v = [-1/sqrt(2), 1/sqrt(2)]
 let w = [7/10, 6/5]
 dot(u, v)
 norm(u)
@@ -50,7 +50,8 @@ dot(v, w)
 dot(u, w)*u + dot(v, w)*v
 \end{minted}
   $\langle u, v\rangle = 0$ and $\|u\| = 1$: an orthonormal pair. The two inner products are
-  $\frac{69}{50}$ and $\frac{4}{25}$, and the last line rebuilds $w$ from them, exactly.
+  $\frac{19}{10\sqrt 2}$ and $\frac{1}{2\sqrt 2}$ --- the article's $1.3435$ and $0.353553$ ---
+  and the last line rebuilds $w$ from them, exactly: $[\tfrac{7}{10}, \tfrac{6}{5}]$.
 \end{trybox}
 
 \section{Functions as vectors}

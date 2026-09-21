@@ -873,12 +873,21 @@ function newNotebook() {
  *  each had unsaved changes. */
 interface Autosave { chalkmath: 1; active: number; docs: { file: ChalkFile; dirty: boolean }[] }
 
-/** The notebooks survive a reload: autosaved to the browser after every run or edit. */
+/** The notebooks survive a reload: autosaved to the browser after every run or edit — coalesced,
+ *  since serializing every open notebook after each of a hundred cells is most of what makes a
+ *  big notebook feel slow while it loads. The pending save is flushed before the page unloads. */
+let autosaveTimer = 0;
 function autosave() {
+  clearTimeout(autosaveTimer);
+  autosaveTimer = window.setTimeout(autosaveNow, 700);
+}
+function autosaveNow() {
+  clearTimeout(autosaveTimer); autosaveTimer = 0;
   stashDoc();
   const doc: Autosave = { chalkmath: 1, active: S.doc, docs: S.docs.map((d) => ({ file: JSON.parse(d.text) as ChalkFile, dirty: docDirty(d) })) };
   try { localStorage.setItem("chalkmath.autosave", JSON.stringify(doc)); } catch { /* storage may be unavailable */ }
 }
+window.addEventListener("beforeunload", () => { if (autosaveTimer) autosaveNow(); });
 function restoreAutosave(): string | null {
   try { return localStorage.getItem("chalkmath.autosave") ?? localStorage.getItem("lemma.autosave"); } catch { return null; }
 }
@@ -1181,6 +1190,7 @@ function plotSvg(p: PlotData, w: number, hgt: number, frac = 1, t01?: number): S
   const L = 38, R = 10, T = 10, B = 24;
   const sx = (x: number) => L + ((x - x0) / (x1 - x0 || 1)) * (w - L - R);
   const sy = (y: number) => T + ((y1 - y) / (y1 - y0)) * (hgt - T - B);
+  PLOT_MAP.set(svg, { sx, sy, kx: (w - L - R) / (x1 - x0 || 1), y0, y1 });
   const line = (x1: number, yA: number, x2: number, yB: number, cls: string) => {
     const l = document.createElementNS(NS, "line");
     l.setAttribute("x1", String(x1)); l.setAttribute("y1", String(yA)); l.setAttribute("x2", String(x2)); l.setAttribute("y2", String(yB));
@@ -1270,20 +1280,69 @@ function epiExtent(terms: Epicycle[]): [number, number, number, number] {
   return [x0, x1, y0, y1];
 }
 
-/** The epicycle animation in a cell: redraw at the phase of a 12-second loop while the box is on
- *  screen. Returns the box; the loop stops when the box leaves the document. */
+/** A plot's mapping from data to pixels, kept beside the SVG so an animation can move things in it. */
+const PLOT_MAP = new WeakMap<SVGSVGElement, { sx: (x: number) => number; sy: (y: number) => number; kx: number; y0: number; y1: number }>();
+
+/** The epicycle animation in a cell: a 12-second lap while the box is on screen. The SVG is built
+ *  once — axes, the full trace, one circle and arm per term — and each frame only moves the arms
+ *  and circles and re-cuts the trace's `d` (up to the tip), at most 30 times a second; circles
+ *  smaller than a pixel are not drawn at all (a 400-term llama has hundreds of them). */
 function epicycleBox(p: PlotData, w: number, hgt: number): HTMLElement {
   const box = h("div", "plotbox epibox");
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = plotSvg(p, w, hgt, 1);
+  const map = PLOT_MAP.get(svg)!;
+  const terms = p.terms ?? [];
+  const polar = terms.map((c) => ({ r: Math.hypot(c.re, c.im), ph: Math.atan2(c.im, c.re), k: c.k }));
+  const series = p.series[0];
+  const curve = svg.querySelector<SVGPathElement>("path.curve");
+  // the chain: a circle (when it is big enough to see) and an arm per term, then the tip
+  const g = document.createElementNS(NS, "g"); g.setAttribute("class", "epi");
+  const circles = polar.map((c) => {
+    if (c.k === 0 || c.r * map.kx < 0.75) return null;
+    const el = document.createElementNS(NS, "circle");
+    el.setAttribute("r", String(c.r * map.kx)); el.setAttribute("class", "epicircle"); g.append(el);
+    return el;
+  });
+  const arms = polar.map(() => { const l = document.createElementNS(NS, "line"); l.setAttribute("class", "epiarm"); g.append(l); return l; });
+  const tip = document.createElementNS(NS, "circle");
+  tip.setAttribute("r", "3"); tip.setAttribute("class", "epitip"); g.append(tip);
+  svg.append(g);
+  box.append(svg);
   const period = 12000;
-  let start = performance.now();
-  const draw = () => {
-    const t01 = ((performance.now() - start) % period) / period;
-    const svg = plotSvg(p, w, hgt, 1, t01);
-    box.replaceChildren(svg);
+  let start = performance.now(), lastFrame = 0;
+  const draw = (now: number) => {
+    const t01 = ((now - start) % period) / period, t = t01 * 2 * Math.PI;
+    let x = 0, y = 0;
+    polar.forEach((c, i) => {
+      const nx = x + c.r * Math.cos(c.k * t + c.ph), ny = y + c.r * Math.sin(c.k * t + c.ph);
+      const cx = map.sx(x).toFixed(1), cy = map.sy(y).toFixed(1);
+      const circ = circles[i]; if (circ) { circ.setAttribute("cx", cx); circ.setAttribute("cy", cy); }
+      const l = arms[i]!;
+      l.setAttribute("x1", cx); l.setAttribute("y1", cy); l.setAttribute("x2", map.sx(nx).toFixed(1)); l.setAttribute("y2", map.sy(ny).toFixed(1));
+      x = nx; y = ny;
+    });
+    tip.setAttribute("cx", map.sx(x).toFixed(1)); tip.setAttribute("cy", map.sy(y).toFixed(1));
+    if (curve && series) {
+      // the trace up to the last sample at or before t, then to the tip itself
+      const n = Math.min(series.points.length, Math.floor(t01 * series.points.length) + 1);
+      let d = "", pen = false;
+      for (let i = 0; i < n; i++) {
+        const [px, py] = series.points[i]!;
+        if (py === null) { pen = false; continue; }
+        d += `${pen ? "L" : "M"}${map.sx(px).toFixed(1)} ${map.sy(py).toFixed(1)} `; pen = true;
+      }
+      if (pen) d += `L${map.sx(x).toFixed(1)} ${map.sy(y).toFixed(1)} `;
+      curve.setAttribute("d", d);
+    }
   };
-  draw();
+  draw(start);
   let raf = 0;
-  const loop = () => { if (!box.isConnected) return; draw(); raf = requestAnimationFrame(loop); };
+  const loop = (now: number) => {
+    if (!box.isConnected) return;
+    if (!document.hidden && now - lastFrame >= 33) { lastFrame = now; draw(now); }
+    raf = requestAnimationFrame(loop);
+  };
   const io = new IntersectionObserver((es) => {
     for (const e of es) { if (e.isIntersecting) { if (!raf) { start = performance.now(); raf = requestAnimationFrame(loop); } } else { cancelAnimationFrame(raf); raf = 0; } }
   });

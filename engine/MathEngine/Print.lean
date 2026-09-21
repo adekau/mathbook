@@ -193,7 +193,13 @@ mutual
           let base := child b 0 (if n.isOne then T.denomPrec else P_POW + 1)
           let den := match (if T.times != "*" then radicalLatex b (.num n) else none) with
             | some (r, _) => r
-            | none => if n.isOne then base else T.pow base (T.wrap (path ++ [1]) (T.num n))
+            | none =>
+              if n.isOne then base
+              else if (Expr.num n).isNumEq (Q.ofRat (mkRat 1 2)) then T.sqrt (child b 0 P_ADD)   -- x^(-1/2) → 1/sqrt(x)
+              else
+                -- in text a fractional exponent needs its parentheses: 1/2^(3/2), not 1/2^3/2
+                let e := T.wrap (path ++ [1]) (T.num n)
+                T.pow base (if T.times == "*" && !n.isInt then T.parens e else e)
           (T.frac (T.num Q.one) den, P_MUL)
         else powRaw b x
       | _ => powRaw b x
