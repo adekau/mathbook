@@ -224,6 +224,8 @@ def tests : TestM Unit := do
   check "radical power: symbolic base stays" (simp "sqrt(x)^2") "sqrt(x)^2"
   check "print 2^(-1/2) as 1/sqrt(2)" (simp "1/sqrt(2)") "1/sqrt(2)"
   check "print 2^(-3/2) with parentheses" (simp "2^(-3/2)") "1/2^(3/2)"
+  check "print a product over sqrt(2)" (simp "1/(4*sqrt(2))") "1/(4*sqrt(2))"
+  check "print a product over 2^(3/2)" (simp "3/(2*2^(3/2))") "3/(2*2^(3/2))"
   check "simp ln(exp(x))" (simp "ln(exp(x))") "x"
   check "simp 1/2 + 1/3" (simp "1/2 + 1/3") "5/6"
   check "simp x^2 + 3x + 1 order" (simp "1 + 3x + x^2") "x^2 + 3*x + 1"

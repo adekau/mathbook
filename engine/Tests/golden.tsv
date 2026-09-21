@@ -95,7 +95,7 @@ diff(tan(x), x)	1/cos(x)^2
 diff(exp(2x), x)	2*exp(2*x)
 diff(x^2 + 2x + 1, x)	2*x + 2
 diff(1/(x+1), x)	-1/(x + 1)^2
-diff(sqrt(x), x)	1/2/x^1/2
+diff(sqrt(x), x)	1/2/sqrt(x)
 diff(x*y, x)	y
 diff([x, x^2], x)	[1, 2*x]
 diff(sin(x)*exp(x), x)	cos(x)*exp(x) + exp(x)*sin(x)

@@ -242,7 +242,12 @@ mutual
             let base := print b (p ++ [0]) T (if n.isOne then T.denomPrec else P_POW + 1)
             let den := match (if T.times != "*" then radicalLatex b (.num n) else none) with
               | some (r, _) => r
-              | none => if n.isOne then base else T.pow base (T.wrap (p ++ [1]) (T.num n))
+              | none =>
+                if n.isOne then base
+                else if (Expr.num n).isNumEq (Q.ofRat (mkRat 1 2)) then T.sqrt (print b (p ++ [0]) T P_ADD)   -- ·x^(-1/2) → /sqrt(x)
+                else
+                  let e := T.wrap (p ++ [1]) (T.num n)
+                  T.pow base (if T.times == "*" && !n.isInt then T.parens e else e)
             (sign, numer, denom ++ [T.wrap p den])
           else (sign, numer ++ [print a p T P_MUL], denom)
         | _, _ => (sign, numer ++ [print a p T (P_MUL + (if i > 0 && a.isNum then 1 else 0))], denom)
