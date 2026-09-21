@@ -9,7 +9,7 @@
       "label": null
     },
     {
-      "src": "The Fourier transform is a method of transforming an input signal from the time domain to the frequency domain. It has a *huge* range of applications, for instance audio engineers can pick out individual undesired frequencies in a song with the Fourier transform and then get back the sound without that frequency using the inverse Fourier transform. We can make use of the Fourier transform in digital image processing for filtering images, like gaussian blurs and compressing images using the JPEG format. Lastly, as this article will go into: drawing!\n\nWhat am I talking about by *drawing*? Well, the idea is that we can take a path that represents something such as a fish, the pi symbol, or just about anything else we can draw by putting pencil lead down on a piece of paper and sketching a picture without lifting the pencil until completion. Using this path we can connect a bunch of vectors rotating in circles at different frequencies tip to tail and the last vector's tip will draw out our original sketch, or at least something very closely resembling it.\n\nHere are a few examples of what I am talking about. In this notebook the drawings are live: `epicycles(f, t)` takes a finite sum of terms $c_k e^{ikt}$ and spins one circle per term — radius $|c_k|$, starting angle $\\arg c_k$, $k$ turns per lap.\n\n![Drawing a line with circles](https://adekau.github.io/_static/2020/llamas/line.gif)",
+      "src": "The Fourier transform is a method of transforming an input signal from the time domain to the frequency domain. It has a *huge* range of applications, for instance audio engineers can pick out individual undesired frequencies in a song with the Fourier transform and then get back the sound without that frequency using the inverse Fourier transform. We can make use of the Fourier transform in digital image processing for filtering images, like gaussian blurs and compressing images using the JPEG format. Lastly, as this article will go into: drawing!\n\nWhat am I talking about by *drawing*? Well, the idea is that we can take a path that represents something such as a fish, the pi symbol, or just about anything else we can draw by putting pencil lead down on a piece of paper and sketching a picture without lifting the pencil until completion. Using this path we can connect a bunch of vectors rotating in circles at different frequencies tip to tail and the last vector's tip will draw out our original sketch, or at least something very closely resembling it.\n\nHere are a few examples of what I am talking about. In this notebook the drawings are live: `epicycles(f, t)` takes a finite sum of terms $c_k e^{ikt}$ and spins one circle per term — radius $|c_k|$, starting angle $\\arg c_k$, $k$ turns per lap. First, drawing a line with circles:",
       "type": "markdown",
       "showWork": false,
       "label": null
@@ -20,7 +20,7 @@
       "label": null
     },
     {
-      "src": "So you can draw a straight line using a shape that is about as far opposite from a straight line as possible: two circles of equal radius spinning opposite ways, $e^{it} + e^{-it} = 2\\cos t$, a segment on the real axis. By modifying the circles you can change the shape that is drawn. For example, by decreasing the radius of the outer circle and increasing the speed it spins at, we can draw a square (below, the first three terms of a square's Fourier series).\n\n![A square](https://adekau.github.io/_static/2020/llamas/square.gif)",
+      "src": "So you can draw a straight line using a shape that is about as far opposite from a straight line as possible: two circles of equal radius spinning opposite ways, $e^{it} + e^{-it} = 2\\cos t$, a segment on the real axis. By modifying the circles you can change the shape that is drawn. For example, by decreasing the radius of the outer circle and increasing the speed it spins at, we can draw a square (the first three terms of a square's Fourier series):",
       "type": "markdown",
       "showWork": false,
       "label": null
@@ -31,7 +31,7 @@
       "label": null
     },
     {
-      "src": "So what happens, then, if we add a third circle? It will allow our curves to get more sophisticated.\n\n![A fish.](https://adekau.github.io/_static/2020/llamas/fish.gif)",
+      "src": "So what happens, then, if we add a third circle? It will allow our curves to get more sophisticated.",
       "type": "markdown",
       "showWork": false,
       "label": null
@@ -42,7 +42,18 @@
       "label": null
     },
     {
-      "src": "For a more extreme example of what is possible using only circles connected to other circles, here's a llama being drawn using $1024$ circles each with different frequencies, radii, and start angles. In general (most) every closed curve can be drawn using circles, called epicycles.\n\n![A llama?!](https://adekau.github.io/_static/2020/llamas/llama.gif)\n\nIn general, the more circles that we add, the more complicated the drawings we can produce. Also, the more circles we add for the same drawing, the better it will resemble the original \"input\" drawing. In order to understand what creates that animation, we will need to go into some of the underlying math and intuition behind the Fourier transform (and series). As mentioned previously, there are three conditions we can modify on a circle to draw different curves. They are: the rate at which it rotates (frequency), how big the circle is (radius), and the angle it starts at (phase). All three of these conditions can be represented using a single complex number.\n\nThe original article's interactive demo is at [adekau.github.io/fourier](https://adekau.github.io/fourier/fourier).",
+      "src": "For a more extreme example of what is possible using only circles connected to other circles, here's a llama being drawn using $100$ circles each with different frequencies, radii, and start angles (the article used $1024$; all $400$ this drawing can carry come at the end). The drawing is the article's own `llama.svg`, imported straight from its repository: `import(\"url\")` fetches an SVG and hands the engine the points sampled along its paths. In general (most) every closed curve can be drawn using circles, called epicycles.",
+      "type": "markdown",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "epicycles(import(\"https://raw.githubusercontent.com/adekau/fourier/master/src/assets/llama.svg\"), 100)",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "In general, the more circles that we add, the more complicated the drawings we can produce. Also, the more circles we add for the same drawing, the better it will resemble the original \"input\" drawing. In order to understand what creates that animation, we will need to go into some of the underlying math and intuition behind the Fourier transform (and series). As mentioned previously, there are three conditions we can modify on a circle to draw different curves. They are: the rate at which it rotates (frequency), how big the circle is (radius), and the angle it starts at (phase). All three of these conditions can be represented using a single complex number.\n\nThe original article's interactive demo is at [adekau.github.io/fourier](https://adekau.github.io/fourier/fourier).",
       "type": "markdown",
       "showWork": false,
       "label": null
@@ -289,7 +300,18 @@
       "label": null
     },
     {
-      "src": "![How e^(ix) correlates to Trigonometry](https://adekau.github.io/_static/2020/llamas/e-ix-1.gif)\n\nWhy is this the case? How does raising $e$ to an imaginary number cause rotation about a unit circle? The answer lies in physics. If the position $p$ at time $t$ is $p(t)=e^{it}$, then the velocity of that point is the first derivative of $p(t)$:\n\n$$\nv(t)=\\frac{dp}{dt}=i\\times e^{it}\n$$",
+      "src": "One circle, radius $1$, one turn per lap — $e^{it}$ itself as an epicycle:",
+      "type": "markdown",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "epicycles(exp(i*t), t)",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "Why is this the case? How does raising $e$ to an imaginary number cause rotation about a unit circle? The answer lies in physics. If the position $p$ at time $t$ is $p(t)=e^{it}$, then the velocity of that point is the first derivative of $p(t)$:\n\n$$\nv(t)=\\frac{dp}{dt}=i\\times e^{it}\n$$",
       "type": "markdown",
       "showWork": false,
       "label": null
@@ -322,7 +344,18 @@
       "label": null
     },
     {
-      "src": "![Demonstrating cos and sin being orthogonal functions.](https://adekau.github.io/_static/2020/llamas/cos-sin-orthogonal.png)\n\nSo essentially what we are doing is a change of basis from the two dimension complex number space $(1,0), (0, 1)i$ to an infinite dimension space with basis *functions* $(\\ldots,e^{-2it}, e^{-it}, 1, e^{it}, e^{2it},\\ldots)$ (for period $T = 2\\pi$), which means that we are going from a function producing complex numbers and mapping to a new function producing an infinite dimension complex vector. Since this is a linear operation and it's mapping from one function space to another, it's what we call a **linear operator**. The basis functions are orthogonal, the way $\\vec{u}$ and $\\vec{v}$ were: for $k \\ne m$,",
+      "src": "Their product is as much above the axis as below it over a period — the picture behind the zero:",
+      "type": "markdown",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "plot([cos(t), sin(t), cos(t)*sin(t)], t, 0, 2pi)",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "So essentially what we are doing is a change of basis from the two dimension complex number space $(1,0), (0, 1)i$ to an infinite dimension space with basis *functions* $(\\ldots,e^{-2it}, e^{-it}, 1, e^{it}, e^{2it},\\ldots)$ (for period $T = 2\\pi$), which means that we are going from a function producing complex numbers and mapping to a new function producing an infinite dimension complex vector. Since this is a linear operation and it's mapping from one function space to another, it's what we call a **linear operator**. The basis functions are orthogonal, the way $\\vec{u}$ and $\\vec{v}$ were: for $k \\ne m$,",
       "type": "markdown",
       "showWork": false,
       "label": null
@@ -339,7 +372,7 @@
       "label": null
     },
     {
-      "src": "![The square wave.](https://adekau.github.io/_static/2020/llamas/square_wave.svg)\n\nThe square wave is sort of like the \"hello world\" of the signal processing world. A square wave is defined as a $[-\\pi, \\pi]$ periodic wave where half the period is \"on\", or $1$, and half the period is \"off\", or $0$.\n\n$$\n\\text{square}(t)= \\text{sgn}(\\sin{(t)})\n$$\n\nWhere **sgn** is the sign function, defined as so\n\n$$\n\\text{sgn}(x)=\\begin{cases}1 &\\text{if}\\; x>0 \\\\ 0 &\\text{if}\\; x=0 \\\\ -1 &\\text{if}\\; x<0 \\end{cases}\n$$",
+      "src": "The square wave is sort of like the \"hello world\" of the signal processing world. A square wave is defined as a $[-\\pi, \\pi]$ periodic wave where half the period is \"on\", or $1$, and half the period is \"off\", or $0$.\n\n$$\n\\text{square}(t)= \\text{sgn}(\\sin{(t)})\n$$\n\nWhere **sgn** is the sign function, defined as so\n\n$$\n\\text{sgn}(x)=\\begin{cases}1 &\\text{if}\\; x>0 \\\\ 0 &\\text{if}\\; x=0 \\\\ -1 &\\text{if}\\; x<0 \\end{cases}\n$$",
       "type": "markdown",
       "showWork": false,
       "label": null
@@ -350,7 +383,18 @@
       "label": null
     },
     {
-      "src": "So we can integrate (inner product of the square wave function and the $k$th basis term, same as a change of basis for 2D vectors as described in the *Linear Algebra* section above) to find the $k$th Fourier coefficient of the square wave.\n\n$$\nc_k=\\frac{1}{2\\pi}\\int_{-\\pi}^{\\pi}{\\text{sgn}(\\sin (t))e^{-i k t}dt}\n$$\n\n> The $\\frac{2\\pi}{T}$ term for $e^{-i \\frac{2\\pi}{T} k t}$ disappears since $T=2\\pi$.\n\nSince the sign function is discontinuous, we need to separate the integral into a new integral for each case of the sign function. Between $[-\\pi, 0]$, the sign of $\\sin(t)$ is negative. At $0$, it's $0$, and between $[0, \\pi]$ it's positive. Therefore the separated integral looks like\n\n$$\nc_k=\\frac{1}{2\\pi}\\int_{-\\pi}^{0}{-1\\times e^{-i k t}dt}+\\frac{1}{2\\pi}\\int_0^0{0\\times e^{-i k t}dt}+\\frac{1}{2\\pi}\\int_0^{\\pi}{1\\times e^{-i k t}dt}\n$$\n\nThe middle term will disappear since the interval is $[0, 0]$ and the integrand is $0$; since the $-1$ can be pulled out of the first integrand, this simplifies to\n\n$$\nc_k=\\frac{1}{2\\pi}\\left(\\int_0^{\\pi}{e^{-i k t}dt}-\\int_{-\\pi}^{0}{e^{-i k t}dt}\\right)\n$$\n\nSo we can calculate this integral pretty easily. Recall that\n\n$$\n\\int{e^{i x}dx}=-i e^{i x} + C\n$$",
+      "src": "So we can integrate (inner product of the square wave function and the $k$th basis term, same as a change of basis for 2D vectors as described in the *Linear Algebra* section above) to find the $k$th Fourier coefficient of the square wave.\n\n$$\nc_k=\\frac{1}{2\\pi}\\int_{-\\pi}^{\\pi}{\\text{sgn}(\\sin (t))e^{-i k t}dt}\n$$\n\n> The $\\frac{2\\pi}{T}$ term for $e^{-i \\frac{2\\pi}{T} k t}$ disappears since $T=2\\pi$.\n\nSince the sign function is discontinuous, we need to separate the integral into a new integral for each case of the sign function.",
+      "type": "markdown",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "plot(sin(t), t, -pi, pi)",
+      "showWork": false,
+      "label": null
+    },
+    {
+      "src": "Between $[-\\pi, 0]$, the sign of $\\sin(t)$ is negative. At $0$, it's $0$, and between $[0, \\pi]$ it's positive. Therefore the separated integral looks like\n\n$$\nc_k=\\frac{1}{2\\pi}\\int_{-\\pi}^{0}{-1\\times e^{-i k t}dt}+\\frac{1}{2\\pi}\\int_0^0{0\\times e^{-i k t}dt}+\\frac{1}{2\\pi}\\int_0^{\\pi}{1\\times e^{-i k t}dt}\n$$\n\nThe middle term will disappear since the interval is $[0, 0]$ and the integrand is $0$; since the $-1$ can be pulled out of the first integrand, this simplifies to\n\n$$\nc_k=\\frac{1}{2\\pi}\\left(\\int_0^{\\pi}{e^{-i k t}dt}-\\int_{-\\pi}^{0}{e^{-i k t}dt}\\right)\n$$\n\nSo we can calculate this integral pretty easily. Recall that\n\n$$\n\\int{e^{i x}dx}=-i e^{i x} + C\n$$",
       "type": "markdown",
       "showWork": false,
       "label": null
@@ -486,7 +530,7 @@
       "label": null
     },
     {
-      "src": "We can use the same principles demonstrated in the section above to draw pretty much anything we want to as long as we can represent it as a closed curve that is fairly smooth. As far as how to go about acquiring a function that represents a llama, there's two things we can do. We can draw a llama in a vector graphics program and export it as an SVG and then use the SVG since SVGs are just mathematically defined curves (lines, bezier curves, etc). Or, we could take that SVG and sample it at evenly spaced intervals and get a list of sample points and execute a discrete Fourier transformation (DFT) on those sample points to get the Fourier coefficients. For this article, we are going to go with the second option as it's more straightforward.\n\n```ts\nconst numSamples = 400;\nlet pts = [];\n\nasync function entry() {\n    const svgUrl = './images/llama.svg';\n    const response = await fetch(svgUrl);\n    const text = await response.text();\n    pts = await sampleSvgPoints(text, numSamples);\n}\n\n// Might not sample exactly numPts number of sample points, but it will be\n// close. Not a concern using the O(N^2) DFT.\nasync function sampleSvgPoints(xml: string, numPts: number): Promise<[number, number][]> {\n    const doc = new DOMParser().parseFromString(xml, 'application/xml');\n    let samplePts = [];\n    const paths = Array.from(doc.querySelectorAll('path'));\n    const totalLength = paths.reduce((acc, v) => acc + v.getTotalLength(), 0);\n    const step = totalLength / numPts;\n    paths.forEach(path => {\n        const n = Math.floor(path.getTotalLength());\n        for (let i = 0; i < n; i += step)\n            samplePts.push(toPt(path.getPointAtLength(i)));\n    });\n    return samplePts.slice(0, numPts);\n}\n```\n\n(In ChalkMath, File → Import SVG as epicycles does exactly this sampling and writes the `dft` cell for you.) So then we run the Discrete Fourier Transform (DFT) on those sampled points to find the Fourier coefficients that we want just like for the square wave above. The Discrete Fourier transform equation is the following\n\n$$\nc_k=\\frac{1}{N}\\sum_{j=0}^{N-1}{p_j\\,e^{-i\\frac{2\\pi}{N}kj}}\n$$\n\nWhere $N$ is the total number of sample points. The DFT is really the same thing as the Fourier series except we are summing evenly spaced definite samples rather than having a limit as the change between steps reaches $0$. It converts $N$ evenly spaced sample complex points in the time domain into their representation in the frequency domain — the strengths of each whole-number frequency — the direct application of the change of basis to the $N$-dimensional basis $(\\ldots, e^{-2it}, e^{-it}, 1, e^{it}, e^{2it}, \\ldots)$.\n\n```ts\nexport function dft(cps: Complex[]): DFTData[] {\n    const X = [];\n    const N = cps.length;\n    for (let k = 0; k < N; k++) {\n        let sum = complex(0, 0);\n        for (let n = 0; n < N; n++) {\n            const theta = -(2 * Math.PI * k * n) / N;\n            sum = add(sum, multiply(cps[n], complex(Math.cos(theta), Math.sin(theta))));\n        }\n        const { re, im } = multiply(1 / N, sum);\n        X.push({ re, im, freq: k, radius: Math.hypot(re, im), phase: Math.atan2(im, re) });\n    }\n    return X;\n}\n```\n\nThe smallest example: four points around the unit circle, $1, i, -1, -i$, are one turn of $e^{it}$ — the transform finds the single circle ($c_1 = 1$, everything else $0$):",
+      "src": "We can use the same principles demonstrated in the section above to draw pretty much anything we want to as long as we can represent it as a closed curve that is fairly smooth. As far as how to go about acquiring a function that represents a llama, there's two things we can do. We can draw a llama in a vector graphics program and export it as an SVG and then use the SVG since SVGs are just mathematically defined curves (lines, bezier curves, etc). Or, we could take that SVG and sample it at evenly spaced intervals and get a list of sample points and execute a discrete Fourier transformation (DFT) on those sample points to get the Fourier coefficients. For this article, we are going to go with the second option as it's more straightforward.\n\n```ts\nconst numSamples = 400;\nlet pts = [];\n\nasync function entry() {\n    const svgUrl = './images/llama.svg';\n    const response = await fetch(svgUrl);\n    const text = await response.text();\n    pts = await sampleSvgPoints(text, numSamples);\n}\n\n// Might not sample exactly numPts number of sample points, but it will be\n// close. Not a concern using the O(N^2) DFT.\nasync function sampleSvgPoints(xml: string, numPts: number): Promise<[number, number][]> {\n    const doc = new DOMParser().parseFromString(xml, 'application/xml');\n    let samplePts = [];\n    const paths = Array.from(doc.querySelectorAll('path'));\n    const totalLength = paths.reduce((acc, v) => acc + v.getTotalLength(), 0);\n    const step = totalLength / numPts;\n    paths.forEach(path => {\n        const n = Math.floor(path.getTotalLength());\n        for (let i = 0; i < n; i += step)\n            samplePts.push(toPt(path.getPointAtLength(i)));\n    });\n    return samplePts.slice(0, numPts);\n}\n```\n\n(In ChalkMath this sampling is what `import(\"url\")` and an attached `⟦file.svg⟧` do.) So then we run the Discrete Fourier Transform (DFT) on those sampled points to find the Fourier coefficients that we want just like for the square wave above. The Discrete Fourier transform equation is the following\n\n$$\nc_k=\\frac{1}{N}\\sum_{j=0}^{N-1}{p_j\\,e^{-i\\frac{2\\pi}{N}kj}}\n$$\n\nWhere $N$ is the total number of sample points. The DFT is really the same thing as the Fourier series except we are summing evenly spaced definite samples rather than having a limit as the change between steps reaches $0$. It converts $N$ evenly spaced sample complex points in the time domain into their representation in the frequency domain — the strengths of each whole-number frequency — the direct application of the change of basis to the $N$-dimensional basis $(\\ldots, e^{-2it}, e^{-it}, 1, e^{it}, e^{2it}, \\ldots)$.\n\n```ts\nexport function dft(cps: Complex[]): DFTData[] {\n    const X = [];\n    const N = cps.length;\n    for (let k = 0; k < N; k++) {\n        let sum = complex(0, 0);\n        for (let n = 0; n < N; n++) {\n            const theta = -(2 * Math.PI * k * n) / N;\n            sum = add(sum, multiply(cps[n], complex(Math.cos(theta), Math.sin(theta))));\n        }\n        const { re, im } = multiply(1 / N, sum);\n        X.push({ re, im, freq: k, radius: Math.hypot(re, im), phase: Math.atan2(im, re) });\n    }\n    return X;\n}\n```\n\nThe smallest example: four points around the unit circle, $1, i, -1, -i$, are one turn of $e^{it}$ — the transform finds the single circle ($c_1 = 1$, everything else $0$):",
       "type": "markdown",
       "showWork": false,
       "label": null
@@ -497,13 +541,13 @@
       "label": null
     },
     {
-      "src": "Now the llama. These are $400$ points sampled along the paths of the article's `llama.svg` (centred and scaled so the larger extent is $[-1, 1]$), bound to a name so the transforms below can share them:",
+      "src": "Now the llama. `import` samples $400$ points along the paths of the article's `llama.svg` (centred and scaled so the larger extent is $[-1, 1]$) — a $400 \\times 2$ matrix, bound to a name so the transforms below can share it. (An SVG can also be attached or pasted into a cell, where it appears as `⟦llama.svg⟧`.)",
       "type": "markdown",
       "showWork": false,
       "label": null
     },
     {
-      "src": "let llama = [0.387, 0.251; 0.395, 0.207; 0.411, 0.165; 0.440, 0.131; 0.462, 0.092; 0.460, 0.060; 0.432, 0.094; 0.426, 0.054; 0.423, 0.009; 0.419, -0.036; 0.406, -0.079; 0.392, -0.122; 0.379, -0.165; 0.366, -0.208; 0.353, -0.251; 0.339, -0.293; 0.323, -0.335; 0.307, -0.377; 0.290, -0.419; 0.274, -0.461; 0.258, -0.503; 0.246, -0.546; 0.235, -0.590; 0.224, -0.633; 0.214, -0.677; 0.203, -0.721; 0.192, -0.764; 0.205, -0.807; 0.241, -0.827; 0.279, -0.850; 0.268, -0.883; 0.225, -0.870; 0.255, -0.897; 0.223, -0.908; 0.179, -0.898; 0.136, -0.886; 0.107, -0.857; 0.098, -0.813; 0.068, -0.823; 0.071, -0.789; 0.069, -0.766; 0.055, -0.754; 0.090, -0.727; 0.104, -0.685; 0.139, -0.657; 0.153, -0.614; 0.164, -0.571; 0.173, -0.527; 0.189, -0.485; 0.205, -0.443; 0.221, -0.401; 0.237, -0.359; 0.254, -0.317; 0.270, -0.275; 0.282, -0.232; 0.292, -0.188; 0.301, -0.144; 0.311, -0.100; 0.320, -0.056; 0.330, -0.012; 0.339, 0.031; 0.349, 0.075; 0.358, 0.119; 0.368, 0.163; 0.377, 0.207; -0.169, -0.115; -0.176, -0.159; -0.184, -0.203; -0.192, -0.247; -0.219, -0.282; -0.246, -0.318; -0.277, -0.349; -0.280, -0.393; -0.267, -0.434; -0.239, -0.469; -0.222, -0.510; -0.207, -0.552; -0.196, -0.595; -0.188, -0.639; -0.173, -0.681; -0.149, -0.713; -0.138, -0.754; -0.108, -0.786; -0.066, -0.801; -0.053, -0.781; -0.063, -0.754; -0.029, -0.784; 0.000, -0.770; -0.019, -0.730; -0.045, -0.694; -0.055, -0.654; -0.084, -0.620; -0.105, -0.581; -0.118, -0.538; -0.132, -0.496; -0.147, -0.454; -0.158, -0.411; -0.156, -0.367; -0.124, -0.338; -0.084, -0.321; -0.046, -0.297; -0.013, -0.267; 0.005, -0.227; 0.007, -0.182; 0.008, -0.139; -0.036, -0.133; -0.081, -0.127; -0.125, -0.121; 0.026, 0.292; -0.019, 0.289; -0.060, 0.303; -0.098, 0.329; -0.141, 0.342; -0.185, 0.346; -0.230, 0.337; -0.271, 0.321; -0.312, 0.302; -0.353, 0.283; -0.394, 0.264; -0.435, 0.246; -0.475, 0.226; -0.497, 0.187; -0.511, 0.144; -0.514, 0.099; -0.501, 0.067; -0.480, 0.074; -0.491, 0.030; -0.510, -0.011; -0.532, -0.050; -0.558, -0.087; -0.533, -0.088; -0.544, -0.115; -0.536, -0.128; -0.537, -0.159; -0.504, -0.155; -0.520, -0.194; -0.523, -0.239; -0.514, -0.283; -0.503, -0.326; -0.502, -0.370; -0.512, -0.414; -0.508, -0.455; -0.483, -0.492; -0.464, -0.533; -0.456, -0.577; -0.448, -0.622; -0.447, -0.667; -0.458, -0.710; -0.475, -0.752; -0.481, -0.797; -0.465, -0.838; -0.433, -0.863; -0.413, -0.903; -0.376, -0.927; -0.362, -0.903; -0.332, -0.912; -0.288, -0.918; -0.288, -0.880; -0.304, -0.838; -0.330, -0.801; -0.354, -0.763; -0.367, -0.720; -0.376, -0.676; -0.384, -0.632; -0.386, -0.587; -0.386, -0.542; -0.384, -0.497; -0.384, -0.452; -0.383, -0.408; -0.368, -0.365; -0.348, -0.325; -0.325, -0.286; -0.301, -0.248; -0.276, -0.211; -0.236, -0.215; -0.196, -0.197; -0.195, -0.208; -0.167, -0.221; -0.139, -0.222; -0.140, -0.247; -0.098, -0.231; -0.082, -0.229; -0.074, -0.245; -0.030, -0.239; 0.012, -0.223; 0.039, -0.256; 0.067, -0.290; 0.095, -0.326; 0.120, -0.363; 0.141, -0.403; 0.155, -0.446; 0.148, -0.489; 0.162, -0.531; 0.183, -0.570; 0.200, -0.612; 0.218, -0.653; 0.234, -0.695; 0.244, -0.739; 0.244, -0.784; 0.229, -0.826; 0.224, -0.871; 0.222, -0.916; 0.256, -0.937; 0.286, -0.970; 0.326, -0.990; 0.369, -1.000; 0.357, -0.959; 0.337, -0.928; 0.368, -0.961; 0.403, -0.987; 0.412, -0.948; 0.396, -0.906; 0.376, -0.865; 0.350, -0.828; 0.318, -0.797; 0.311, -0.752; 0.306, -0.708; 0.300, -0.663; 0.293, -0.618; 0.283, -0.575; 0.279, -0.532; 0.280, -0.488; 0.255, -0.452; 0.260, -0.407; 0.279, -0.366; 0.289, -0.324; 0.287, -0.279; 0.282, -0.234; 0.275, -0.190; 0.295, -0.214; 0.321, -0.220; 0.338, -0.187; 0.363, -0.223; 0.382, -0.213; 0.370, -0.170; 0.377, -0.136; 0.412, -0.164; 0.405, -0.146; 0.382, -0.107; 0.369, -0.064; 0.375, -0.050; 0.399, -0.088; 0.432, -0.118; 0.438, -0.113; 0.413, -0.076; 0.400, -0.033; 0.423, -0.042; 0.427, -0.011; 0.418, 0.034; 0.406, 0.077; 0.391, 0.120; 0.379, 0.163; 0.376, 0.208; 0.382, 0.253; 0.403, 0.261; 0.406, 0.278; 0.391, 0.321; 0.412, 0.324; 0.419, 0.339; 0.400, 0.380; 0.425, 0.381; 0.404, 0.421; 0.389, 0.464; 0.385, 0.509; 0.388, 0.553; 0.410, 0.592; 0.451, 0.577; 0.495, 0.569; 0.535, 0.588; 0.555, 0.610; 0.558, 0.653; 0.540, 0.691; 0.531, 0.730; 0.496, 0.758; 0.460, 0.785; 0.443, 0.816; 0.408, 0.844; 0.380, 0.879; 0.406, 0.850; 0.449, 0.853; 0.473, 0.886; 0.477, 0.930; 0.493, 0.971; 0.468, 1.000; 0.431, 0.975; 0.390, 0.958; 0.351, 0.939; 0.346, 0.895; 0.312, 0.912; 0.330, 0.880; 0.289, 0.899; 0.275, 0.882; 0.235, 0.902; 0.206, 0.937; 0.170, 0.963; 0.129, 0.976; 0.089, 0.982; 0.072, 0.960; 0.083, 0.917; 0.101, 0.875; 0.119, 0.834; 0.161, 0.828; 0.170, 0.819; 0.142, 0.783; 0.136, 0.741; 0.139, 0.696; 0.142, 0.651; 0.141, 0.607; 0.126, 0.564; 0.111, 0.522; 0.096, 0.479; 0.091, 0.441; 0.087, 0.409; 0.094, 0.384; 0.106, 0.367; 0.068, 0.343; 0.089, 0.329; 0.065, 0.291; 0.041, 0.253; 0.035, -0.244; 0.015, -0.206; 0.013, -0.162; -0.008, -0.177; -0.022, -0.148; -0.017, -0.104; -0.283, 0.045; -0.263, 0.004; -0.252, -0.039; -0.242, -0.083; -0.269, -0.047; -0.263, -0.068; -0.255, -0.112; -0.252, -0.149; -0.272, -0.124; -0.282, -0.168; 0.072, 0.270; 0.048, 0.233; 0.014, 0.205; 0.017, 0.198; 0.057, 0.206; 0.019, 0.184; -0.012, 0.153; -0.036, 0.117; 0.002, 0.140; 0.020, 0.141; -0.011, 0.109; -0.035, 0.072; -0.034, 0.061; -0.003, 0.093; 0.015, 0.091; -0.011, 0.056; -0.035, 0.018; -0.043, -0.011; -0.010, 0.018; 0.016, 0.037; -0.011, 0.002; -0.031, -0.038; -0.033, -0.082; 0.265, -0.159; 0.291, -0.193; 0.309, -0.177; 0.313, -0.135; 0.316, -0.119; 0.338, -0.156; 0.338, -0.136; 0.335, -0.094; 0.335, -0.051; 0.368, 0.032; 0.369, 0.074; 0.363, 0.116; 0.363, 0.129; 0.381, 0.090; 0.393, 0.049; 0.155, 0.897; 0.174, 0.864; 0.200, 0.885; 0.180, 0.923; 0.233, 0.819; 0.276, 0.801; 0.307, 0.766; 0.295, 0.761; 0.251, 0.755; 0.237, 0.793; 0.460, 0.703; 0.464, 0.679; 0.503, 0.673; 0.534, 0.684; 0.498, 0.687; 0.504, 0.636; 0.464, 0.624; 0.462, 0.606; 0.503, 0.613; 0.535, 0.618; 0.235, 0.590; 0.254, 0.572; 0.296, 0.557; 0.335, 0.557; 0.379, 0.556; 0.401, 0.597; 0.357, 0.586; 0.317, 0.585; 0.281, 0.588]",
+      "src": "let llama = import(\"https://raw.githubusercontent.com/adekau/fourier/master/src/assets/llama.svg\")",
       "showWork": false,
       "label": null
     },
@@ -514,7 +558,7 @@
       "label": null
     },
     {
-      "src": "dft(llama, 10)",
+      "src": "epicycles(llama, 10)",
       "showWork": false,
       "label": null
     },
@@ -525,17 +569,17 @@
       "label": null
     },
     {
-      "src": "dft(llama, 60)",
+      "src": "epicycles(llama, 60)",
       "showWork": false,
       "label": null
     },
     {
-      "src": "dft(llama)",
+      "src": "epicycles(llama)",
       "showWork": false,
       "label": null
     },
     {
-      "src": "![1 → 500 modes of a llama approximation, from the article.](https://adekau.github.io/_static/2020/llamas/modes.gif)\n\nFrom this we can see that most of the work is done in the lower frequencies since it very quickly becomes llama-like. As we add more and more of the higher frequencies, the smaller details of the llama start filling in and the approximation becomes slowly more crisp.\n\nIn order to recreate the image at the beginning of the article, with the circles moving around in organized chaos drawing the outline of the llama, we need some code to go through and draw each frequency's circle — the radius and phase of each coefficient. The animation in the cells above is the same loop; the article's used [p5.js](https://p5js.org/):\n\n```ts\nfunction draw() {\n    for (let i = 0; i < complex.length; i++) {\n        const { freq, radius, phase } = complex[i];\n        const prevx = x, prevy = y;\n        x += radius * Math.cos(freq * time + phase);\n        y += radius * Math.sin(freq * time + phase);\n        noFill(); stroke(230, 85); ellipse(prevx, prevy, radius * 2);\n        stroke(230, 142); line(prevx, prevy, x, y);\n    }\n    points.push(createVector(x, y));\n    beginShape(); for (const p of points) vertex(p.x, p.y); endShape();\n    if (time > Math.PI * 2) points.pop();\n    time += (2 * Math.PI) / pts.length;\n}\n```\n\nThe complete source for the original Fourier animations is at [github.com/adekau/fourier](https://github.com/adekau/fourier). What this notebook adds is the split the engine insists on: the sums, integrals and Euler's formula above are exact and carry their rules' proofs; the drawings — `plot`, `epicycles`, `dft` — are numeric presentation, and say so.",
+      "src": "From this we can see that most of the work is done in the lower frequencies since it very quickly becomes llama-like. As we add more and more of the higher frequencies, the smaller details of the llama start filling in and the approximation becomes slowly more crisp.\n\nIn order to recreate the image at the beginning of the article, with the circles moving around in organized chaos drawing the outline of the llama, we need some code to go through and draw each frequency's circle — the radius and phase of each coefficient. The animation in the cells above is the same loop; the article's used [p5.js](https://p5js.org/):\n\n```ts\nfunction draw() {\n    for (let i = 0; i < complex.length; i++) {\n        const { freq, radius, phase } = complex[i];\n        const prevx = x, prevy = y;\n        x += radius * Math.cos(freq * time + phase);\n        y += radius * Math.sin(freq * time + phase);\n        noFill(); stroke(230, 85); ellipse(prevx, prevy, radius * 2);\n        stroke(230, 142); line(prevx, prevy, x, y);\n    }\n    points.push(createVector(x, y));\n    beginShape(); for (const p of points) vertex(p.x, p.y); endShape();\n    if (time > Math.PI * 2) points.pop();\n    time += (2 * Math.PI) / pts.length;\n}\n```\n\nThe complete source for the original Fourier animations is at [github.com/adekau/fourier](https://github.com/adekau/fourier). What this notebook adds is the split the engine insists on: the sums, integrals and Euler's formula above are exact and carry their rules' proofs; the drawings — `plot`, `epicycles`, `dft` — are numeric presentation, and say so.",
       "type": "markdown",
       "showWork": false,
       "label": null

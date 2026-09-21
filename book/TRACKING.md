@@ -481,3 +481,16 @@ Goal: re-derive the article (inner products → orthogonality → the square wav
    the page is hidden, and circles under a pixel are not created (the llama keeps 84 of 402). And the autosave
    re-serialized every open notebook after each of a hundred cells during hydration; it is now coalesced (700 ms)
    and flushed on unload.
+- notebook: files as values — DONE 2026-09-21. A notebook has attachments (File → Attach file…, or paste a file or
+   SVG text into any cell): any type, held as text or base64, persisted in the .chalk and in the link. `⟦name⟧`
+   refers to one; what it means depends on where it stands — in a Markdown cell an image shows; in a math cell an
+   SVG becomes, before the engine sees the cell, the 400 points sampled along its paths (equal arc lengths,
+   centred, scaled to [-1, 1]), so `let x = ⟦llama.svg⟧` binds a 400×2 matrix; a non-SVG says "only an SVG can be
+   traced into points (yet)". `import("url")` fetches one from the web the same way. The engine only ever sees
+   numbers; `epicycles(points[, modes])` is now `dft` under the natural name. The input interpretation names the
+   image and its point count instead of typesetting 400 rows, and a matrix output of more than 24 rows is abridged
+   (three rows, dots, the last, and its size). The highlighter draws `⟦name⟧` as a chip (red when nothing of that
+   name is attached). llamas.chalk now imports the article's llama.svg from its repository and draws it in the
+   introduction with 100 circles; the static figures with a live counterpart (the line, square and fish, e^{it},
+   the square wave, sin t, cos·sin, the modes animation) are cells now. Left as images: the frequency-domain
+   magnitude plot and the vector diagrams, which have no function yet.

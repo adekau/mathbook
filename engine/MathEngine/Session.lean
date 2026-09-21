@@ -445,7 +445,8 @@ def plotCell (s : Session) (cellId source : String) :
             let n := samples rest 400
             let trace := (epicycleTrace (terms.map fun (k, c, _) => (k, c)) n).map fun (x, y) => (x, some y)
             (s, .ok (f, output, d, ⟨t, 0, 2 * 3.141592653589793, #[⟨output, trace, true⟩], terms⟩))
-    | .fn "dft" (p :: rest) =>
+    -- `epicycles(points[, modes])` — a list of points instead of a Fourier sum — is `dft`
+    | .fn "dft" (p :: rest) | .fn "epicycles" (p :: rest) =>
       match samplePoints (substitute s.env (substituteFns s.fns p)) with
       | .error msg => (s, .error ("eval", msg, none))
       | .ok pts =>

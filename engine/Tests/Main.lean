@@ -421,6 +421,7 @@ def tests : TestM Unit := do
   checkTrue "rpc inputRendered" (contains (rpc "engine.evaluate" "{\"source\":\"x + 0\",\"showWork\":true}") "\"inputRendered\":{\"text\":\"x + 0\"")
   checkTrue "rpc ruleStatus" (contains (rpc "engine.capabilities" "{}") "\"rule\":\"simp.collect-powers\",\"status\":\"conditional\"")
   checkTrue "rpc error span" (contains (rpc "engine.evaluate" "{\"source\":\"3 4\"}") "\"span\":{\"start\":2,\"end\":3}},\"label\":")
+  checkTrue "rpc epicycles of points is dft" (contains (rpc "engine.plot" "{\"source\":\"epicycles([1, i, -1, -i])\"}") "\"terms\":[") 
   checkTrue "rpc plot list, first series" (contains (rpc "engine.plot" "{\"source\":\"plot([sin(x), x^2], x, -1, 1, 3)\"}") "\"series\":[{\"rendered\":{\"text\":\"sin(x)\"")
   checkTrue "rpc plot list, second series" (contains (rpc "engine.plot" "{\"source\":\"plot([sin(x), x^2], x, -1, 1, 3)\"}") "{\"rendered\":{\"text\":\"x^2\"")
   checkTrue "rpc plot list normalizes entries" (contains (rpc "engine.plot" "{\"source\":\"plot([diff(x^2, x), x + 0], x, -1, 1, 3)\"}") "\"series\":[{\"rendered\":{\"text\":\"2*x\"")

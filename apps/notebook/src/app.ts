@@ -31,7 +31,8 @@ const DOCS: Doc[] = [
   { name: "sum", sig: "sum(f, k, a, b)", blurb: "The finite sum f[k := a] + … + f[k := b] for integer bounds, expanded and collected. A definition, read over ℝ by sum_soundR.", examples: ["sum(k^2, k, 1, 10)", "sum(c*exp(i*k*t), k, -3, 3)"] },
   { name: "exptotrig", sig: "exptotrig(e)", blurb: "Euler's formula exp(iθ) = cos θ + i sin θ applied to every exponential with a pure-imaginary argument, at once (Mathematica's ExpToTrig). It is a command rather than a simplification rule because the general formula makes the term bigger; wrap it in expand to distribute and collect. Proved sound over ℂ.", examples: ["exptotrig(exp(i*t))", "expand(exptotrig(exp(-i*t) - exp(i*t)))"] },
   { name: "dot", sig: "dot(u, v) · norm(v)", blurb: "The dot product Σ uᵢvᵢ of two vectors (one-row or one-column matrices), bilinear like Mathematica's Dot — the Hermitian inner product of complex vectors is dot(u, conj(v)). norm(v) is the Euclidean length √(Σ vᵢ²).", examples: ["dot([1,2,3],[4,5,6])", "dot([i,1], conj([i,1]))", "norm([3,4])"] },
-  { name: "epicycles", sig: "epicycles(f, t[, n]) · dft(points[, modes])", blurb: "Draw a finite Fourier sum Σ c_k·exp(i k t) with circles: one per term, radius |c_k| and phase arg c_k, spinning at k turns per period, tip to tail; the tip traces the curve. dft(points) computes the coefficients of sample points numerically (the discrete Fourier transform, keeping the modes largest) and draws the same way — File → Import SVG samples a drawing for it. The drawing is numeric presentation; the sum's algebra is the engine's.", examples: ["epicycles(exp(i*t) + 1/2*exp(-3i*t), t)", "epicycles(sum(2i/(k*pi)*(exp(-i*k*t) - exp(i*k*t)), k, 1, 3), t)", "dft([1, i, -1, -i])"] },
+  { name: "epicycles", sig: "epicycles(f, t[, n]) · epicycles(points[, modes]) · dft(points[, modes])", blurb: "Draw a finite Fourier sum Σ c_k·exp(i k t) with circles: one per term, radius |c_k| and phase arg c_k, spinning at k turns per period, tip to tail; the tip traces the curve. Given a list of points instead — [x, y; …] or complex numbers — it computes their coefficients numerically (the discrete Fourier transform, dft, keeping the modes largest) and draws the same way. The drawing is numeric presentation; the sum's algebra is the engine's.", examples: ["epicycles(exp(i*t) + 1/2*exp(-3i*t), t)", "epicycles(sum(2i/(k*pi)*(exp(-i*k*t) - exp(i*k*t)), k, 1, 3), t)", "dft([1, i, -1, -i])"] },
+  { name: "import", sig: "import(\"url\") · ⟦file.svg⟧", blurb: "A file as a value. ⟦name⟧ refers to a file attached to the notebook (File → Attach file…, or paste an image into a cell); import(\"url\") fetches one from the web. In a Markdown cell an image shows; in a math cell an SVG becomes the 400 points sampled along its paths at equal arc lengths, centred and scaled to [-1, 1] — a 400×2 matrix, so let x = ⟦llama.svg⟧ binds it and epicycles(x, 60) draws it with 60 circles. Other file types have no conversion to a value yet.", examples: ["let llama = import(\"https://raw.githubusercontent.com/adekau/fourier/master/src/assets/llama.svg\")", "epicycles(llama, 60)"] },
   { name: "sign", sig: "sign(x)", blurb: "The sign function: −1, 0 or 1. Folds on numerals and stays symbolic otherwise, so sign(sin(t)) is the square wave.", examples: ["sign(-3)", "plot(sign(sin(t)), t, -pi, pi)"] },
   { name: "poset", sig: "poset({a,b,c}; a<b, a<c) · divisors(n) · subsets({…}) · chain(n)", blurb: "A finite partial order: the reflexive-transitive closure of the relation given, checked for antisymmetry. Bind it with let and ask about it: hasse, join, meet, sup, inf, upper, lower, top, bottom, maximal, minimal, lattice, le.", examples: ["let D = divisors(12)", "join(D, 4, 6)", "lattice(D)", "le(D, 2, 12)", "let P = poset({a,b,c,d}; a<b, a<c, b<d, c<d)"] },
   { name: "map", sig: "map(P; a->b, c->d, …) · monotone(P, f) · lfp(P, f) · gfp(P, f) · fixpoints(P, f)", blurb: "A map on a poset given as a table (other elements are fixed). monotone checks every pair; lfp and gfp iterate from ⊥ and ⊤ and show the Kleene chain, which is proved to end at the least (greatest) fixed point.", examples: ["let f = map(D; 1->2, 3->6)", "monotone(D, f)", "lfp(D, f)"] },
@@ -91,6 +92,7 @@ function cellKind(src: string): string | null {
   const s = src.trim();
   if (!s) return null;
   if (/^let\s/.test(s)) return "definition";
+  if (/⟦|\bimport\(/.test(s) && !/^(epicycles|dft|plot)\s*\(/.test(s)) return "image";
   const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(s);
   const head = m?.[1];
   switch (head) {
@@ -221,9 +223,16 @@ type Tab = "notebook" | "studio" | "reference";
 /** One open notebook: its cells, its studio scenes and its own engine session. The globals below
  *  (`S.cells`, `S.docName`, `ST.scenes`, `sessionId`) are views of the current one; `stashDoc` and
  *  `loadDoc` swap them. */
+/** A file attached to a notebook (attached or pasted): any type, held as text or as base64. A cell
+ *  refers to it as `⟦name⟧`. What a reference means depends on where it stands: in a Markdown cell an
+ *  image shows; in a math cell an SVG becomes the sample points along its paths before the engine
+ *  sees the cell — the engine only ever deals in numbers, and other types have no conversion yet. */
+interface Asset { name: string; mime: string; data: string; binary?: boolean }
+
 interface Nb {
   id: string; name: string; sessionId: string;
   cells: Cell[]; scenes: Scene[]; studioActive: number; active: number; nextLabel: number;
+  assets: Record<string, Asset>;
   /** The serialized notebook at the last save or open; the tab shows `*` while the live state differs. */
   savedText: string;
   /** The serialized notebook at the last stash, for the dirty mark of a document that is not current. */
@@ -236,6 +245,7 @@ const S = {
   docs: [] as Nb[],
   doc: 0,
   cells: [] as Cell[],
+  assets: {} as Record<string, Asset>,
   active: 0,
   rail: "outline" as "outline" | "palette",
   tab: "notebook" as Tab,
@@ -339,9 +349,11 @@ async function runCell(cell: Cell) {
   const isPlot = /^\s*(plot|epicycles|dft)\s*\(/.test(src);
   log("rpc", `${isPlot ? "engine.plot" : "engine.evaluate"} ${JSON.stringify(src)}`);
   try {
+    // images in the cell become their sample points; the engine only sees numbers
+    const { src: sent, notes } = await resolveImages(src);
     const r = isPlot
-      ? await client.call("engine.plot", { sessionId, cellId: cell.id, source: src, showWork: true, paths: true })
-      : await client.call("engine.evaluate", { sessionId, cellId: cell.id, source: src, showWork: true, paths: true });
+      ? await client.call("engine.plot", { sessionId, cellId: cell.id, source: sent, showWork: true, paths: true })
+      : await client.call("engine.evaluate", { sessionId, cellId: cell.id, source: sent, showWork: true, paths: true });
     cell.ms = performance.now() - t0;
     queueMicrotask(autosave);
     if (r.ok) {
@@ -350,6 +362,8 @@ async function runCell(cell: Cell) {
       cell.outText = r.rendered.text;
       cell.semantics = "semantics" in r && r.semantics === "complex" ? "complex" : "real";
       cell.echoLatex = r.inputRendered?.latex;
+      // an image's points are hundreds of rows: the interpretation names the image instead
+      if (notes.length) cell.echoLatex = `\\text{${notes.map((n) => n.replace(/[\\{}]/g, "")).join("; ")}}`;
       // a dft cell's input is a long list of sample points: say how many rather than typeset them
       if (/^\s*dft\s*\(\s*\[/.test(src)) {
         // a literal list is long: say how many points rather than typeset them. Rows `[x, y; …]` are
@@ -456,6 +470,19 @@ function formLatex(latex: string, form: string | undefined): string {
   });
 }
 
+/** A matrix of more than 24 rows shows its first three, a row of dots with the count, and its last:
+ *  a 400-point image is a value to bind and draw, not to read. (Rows are split at the top level
+ *  only, so a nested matrix is left alone.) */
+function abridgeMatrix(latex: string): string {
+  return latex.replace(/\\begin\{bmatrix\}([\s\S]*?)\\end\{bmatrix\}/g, (whole, body: string) => {
+    const rows = body.split(" \\\\ ");
+    if (rows.length <= 24 || body.includes("\\begin{")) return whole;
+    const cols = (rows[0]?.match(/&/g)?.length ?? 0) + 1;
+    const dots = Array.from({ length: cols }, () => "\\vdots").join(" & ");
+    return `\\begin{bmatrix}${rows.slice(0, 3).join(" \\\\ ")} \\\\ ${dots} \\\\ ${rows[rows.length - 1]}\\end{bmatrix}\\;{\\scriptstyle (${rows.length}\\times${cols})}`;
+  });
+}
+
 /** Make every path-annotated subterm of a rendered term clickable. */
 function wireTerm(host: HTMLElement, cell: Cell, term: TermRef) {
   host.dataset["term"] = termKey(term);
@@ -477,7 +504,7 @@ const currentDoc = () => S.docs[S.doc];
 /** Copy the live globals back into the current document. */
 function stashDoc() {
   const d = currentDoc(); if (!d) return;
-  d.name = S.docName; d.cells = S.cells; d.scenes = ST.scenes; d.studioActive = ST.active; d.active = S.active;
+  d.name = S.docName; d.cells = S.cells; d.scenes = ST.scenes; d.studioActive = ST.active; d.active = S.active; d.assets = S.assets;
   d.nextLabel = nextLabel; d.sessionId = sessionId; d.text = serializeNotebook();
 }
 
@@ -487,7 +514,7 @@ function loadDoc(i: number) {
   stashDoc();
   const d = S.docs[i]; if (!d) return;
   S.doc = i;
-  S.docName = d.name; S.cells = d.cells; ST.scenes = d.scenes; ST.active = d.studioActive; ST.t = 0; stopPlayback();
+  S.docName = d.name; S.cells = d.cells; S.assets = d.assets; ST.scenes = d.scenes; ST.active = d.studioActive; ST.t = 0; stopPlayback();
   S.active = Math.min(d.active, Math.max(0, d.cells.length - 1)); nextLabel = d.nextLabel; sessionId = d.sessionId;
   S.sel = null; hideCompletions(); hideSigHelp(); hideHover();
   renderChrome(); renderCells(); renderSidebar(); renderPanelHead(); renderPanel();
@@ -503,9 +530,9 @@ function hydrate(d: Nb) {
   void runAll().then(() => { if (wasClean && d === currentDoc()) { d.savedText = serializeNotebook(); renderTabs(); autosave(); } });
 }
 
-function makeDoc(name: string, cells: Cell[] = [], scenes: Scene[] = []): Nb {
+function makeDoc(name: string, cells: Cell[] = [], scenes: Scene[] = [], assets: Record<string, Asset> = {}): Nb {
   return { id: `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name, sessionId: crypto.randomUUID(),
-    cells, scenes, studioActive: 0, active: 0, nextLabel: Math.max(0, ...cells.map((c) => c.label ?? 0)) + 1,
+    cells, scenes, assets, studioActive: 0, active: 0, nextLabel: Math.max(0, ...cells.map((c) => c.label ?? 0)) + 1,
     savedText: "", text: "", hydrated: true };
 }
 
@@ -528,7 +555,7 @@ function docDirty(d: Nb): boolean {
 
 /** A new notebook nobody has typed in: the natural place to open a file into. */
 function docPristine(d: Nb): boolean {
-  return d.name === "untitled.chalk" && d.scenes.length === 0 && d.cells.every((c) => !cellSrc(c).trim() && !c.outLatex);
+  return d.name === "untitled.chalk" && d.scenes.length === 0 && !Object.keys(d.assets).length && d.cells.every((c) => !cellSrc(c).trim() && !c.outLatex);
 }
 
 /** Close a tab; an unsaved notebook asks first. The last tab closing leaves a fresh one. */
@@ -581,6 +608,8 @@ interface ChalkFile {
   chalk?: 1; lemma?: 1; name: string;
   cells: { src: string; type?: Cell["type"] | undefined; collapsed?: boolean | undefined; showWork: boolean; label: number | null; outLatex?: string | undefined; outText?: string | undefined; form?: string | undefined; semantics?: "real" | "complex" | undefined; echoLatex?: string | undefined; steps?: Step[] | undefined; error?: Cell["error"] | undefined; plot?: PlotData | undefined }[];
   scenes: Scene[];
+  /** Images attached to the notebook, by name. */
+  assets?: Record<string, Asset>;
 }
 
 /** A cell's source as the user has it now: the live editor's text when there is one. */
@@ -600,6 +629,7 @@ function serializeNotebook(): string {
     chalk: 1, name: S.docName,
     cells: S.cells.map((c) => ({ src: cellSrc(c), type: c.type, collapsed: c.collapsed || undefined, showWork: c.showWork, label: c.label, outLatex: c.outLatex, outText: c.outText, form: c.form, semantics: c.semantics, echoLatex: c.echoLatex, steps: stepsToSave(c), error: c.error, plot: c.plot })),
     scenes: ST.scenes,
+    ...(Object.keys(S.assets).length ? { assets: S.assets } : {}),
   };
   return JSON.stringify(doc, null, 2);
 }
@@ -610,7 +640,7 @@ async function loadNotebook(text: string, name?: string) {
   let doc: ChalkFile;
   try { doc = JSON.parse(text) as ChalkFile; } catch { log("err", "not a .chalk file: invalid JSON"); return; }
   if ((doc.chalk !== 1 && doc.lemma !== 1) || !Array.isArray(doc.cells)) { log("err", "not a .chalk file"); return; }
-  const d = makeDoc(name ?? doc.name ?? "untitled.chalk", cellsFromFile(doc), Array.isArray(doc.scenes) ? doc.scenes : []);
+  const d = makeDoc(name ?? doc.name ?? "untitled.chalk", cellsFromFile(doc), Array.isArray(doc.scenes) ? doc.scenes : [], assetsFromFile(doc));
   if (!d.cells.length) d.cells.push(freshCell());
   // an untouched new notebook is replaced; otherwise the file gets its own tab
   const cur = currentDoc();
@@ -622,6 +652,16 @@ async function loadNotebook(text: string, name?: string) {
   d.savedText = serializeNotebook();
   renderTabs();
   autosave();
+}
+
+/** A file's attachments: only well-formed records are kept. */
+function assetsFromFile(doc: ChalkFile): Record<string, Asset> {
+  const out: Record<string, Asset> = {};
+  for (const [name, a] of Object.entries(doc.assets ?? {})) {
+    if (!a || typeof a.data !== "string" || typeof a.mime !== "string") continue;
+    out[name] = { name, mime: a.mime, data: a.data, ...(a.binary ? { binary: true } : {}) };
+  }
+  return out;
 }
 
 /** Cells from a file's records (no DOM yet). */
@@ -767,7 +807,7 @@ function importNotebook() {
 
 /** What a link carries: the name and every cell's text and kind. Outputs are not included: the
  *  engine recomputes them when the link opens, which is the point of a verified notebook. */
-interface LinkDoc { v: 1; n: string; c: { s: string; t?: "markdown" | "section"; w?: 1; f?: 1 }[] }
+interface LinkDoc { v: 1; n: string; c: { s: string; t?: "markdown" | "section"; w?: 1; f?: 1 }[]; a?: Record<string, { m: string; d: string; b?: 1 }> }
 
 async function deflate(text: string): Promise<Uint8Array> {
   const cs = new CompressionStream("deflate-raw");
@@ -794,6 +834,7 @@ async function notebookLink(): Promise<string> {
   const doc: LinkDoc = {
     v: 1, n: S.docName,
     c: S.cells.filter((c) => cellSrc(c).trim()).map((c) => ({ s: cellSrc(c), ...(c.type ? { t: c.type } : {}), ...(c.showWork ? { w: 1 as const } : {}), ...(c.collapsed ? { f: 1 as const } : {}) })),
+    ...(Object.keys(S.assets).length ? { a: Object.fromEntries(Object.values(S.assets).map((a) => [a.name, { m: a.mime, d: a.data, ...(a.binary ? { b: 1 as const } : {}) }])) } : {}),
   };
   const json = JSON.stringify(doc);
   const payload = typeof CompressionStream === "function" ? `nb=${b64url(await deflate(json))}` : `nbj=${b64url(new TextEncoder().encode(json))}`;
@@ -818,6 +859,7 @@ async function openNotebookLink(hash: string): Promise<boolean> {
       chalk: 1, name: doc.n || "shared.chalk",
       cells: doc.c.map((c) => ({ src: String(c.s ?? ""), type: c.t === "markdown" || c.t === "section" ? c.t : undefined, collapsed: c.f ? true : undefined, showWork: !!c.w, label: null })),
       scenes: [],
+      ...(doc.a ? { assets: Object.fromEntries(Object.entries(doc.a).map(([name, a]) => [name, { name, mime: String(a.m), data: String(a.d), ...(a.b ? { binary: true } : {}) }])) } : {}),
     };
     history.replaceState(null, "", location.pathname + location.search);
     await loadNotebook(JSON.stringify(file), file.name);
@@ -825,43 +867,169 @@ async function openNotebookLink(hash: string): Promise<boolean> {
   } catch (e) { log("err", `the link did not open: ${e instanceof Error ? e.message : String(e)}`); return false; }
 }
 
-/** Import SVG…: sample the file's paths at evenly spaced arc lengths (the article's
- *  `getPointAtLength` loop), centre and scale them, and add a `dft([...])` cell — the discrete Fourier
- *  transform of the samples drives an epicycle drawing of the picture. Presentation, not exact. */
-function importSvg() {
+// --- Attachments: `⟦name⟧` for a file attached to the notebook, `import("url")` for one on the web --
+// The store is generic (any file, by name); what a reference means is decided where it stands. In a
+// math cell an SVG becomes, before the engine sees the cell, the list of points sampled along its
+// paths at equal arc lengths (the article's `getPointAtLength` loop), centred and scaled so the
+// larger extent is [-1, 1]: `let x = ⟦llama.svg⟧` binds a 400×2 matrix and `epicycles(x, 60)` draws
+// it. Other types have no conversion to a value yet and say so. In a Markdown cell any image shows.
+
+const ASSET_RE = /⟦([^⟧]+)⟧/g;
+const IMPORT_RE = /\bimport\(\s*(["'])([^"']*)\1\s*\)/g;
+/** Points sampled from an SVG, by its text (an attached image) or its URL (an import), so a re-run
+ *  neither re-samples nor re-fetches. */
+const SAMPLE_CACHE = new Map<string, string>();
+
+/** The sample points along an SVG's paths as a matrix literal `[x, y; …]`, or an explanation of why not. */
+function svgPoints(xml: string, N = 400): { rows: string; n: number; paths: number } {
+  const doc = new DOMParser().parseFromString(xml, "image/svg+xml");
+  const paths = Array.from(doc.querySelectorAll("path"));
+  if (!paths.length) throw new Error("the SVG has no <path> elements (shapes, text and images are not traced)");
+  // measure in a hidden host SVG so getTotalLength works
+  const NS = "http://www.w3.org/2000/svg";
+  const host = document.createElementNS(NS, "svg"); host.setAttribute("width", "0"); host.setAttribute("height", "0"); host.style.position = "absolute";
+  document.body.append(host);
+  const copies = paths.map((p) => { const c = document.createElementNS(NS, "path"); c.setAttribute("d", p.getAttribute("d") ?? ""); host.append(c); return c; });
+  const total = copies.reduce((a, c) => a + c.getTotalLength(), 0);
+  const pts: [number, number][] = [];
+  for (const c of copies) {
+    const len = c.getTotalLength(), n = Math.max(1, Math.round((N * len) / (total || 1)));
+    for (let i = 0; i < n; i++) { const q = c.getPointAtLength((len * i) / n); pts.push([q.x, q.y]); }
+  }
+  host.remove();
+  // centre, flip y (SVG's y grows downward), scale the larger extent to [-1, 1]
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const ext = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 2 || 1;
+  const rows = pts.map(([x, y]) => `${((x - cx) / ext).toFixed(3)}, ${(-(y - cy) / ext).toFixed(3)}`).join("; ");
+  return { rows: `[${rows}]`, n: pts.length, paths: paths.length };
+}
+
+/** Attach a file to the notebook under a name (made unique if another file has it) and return the name. */
+function attachAsset(name: string, mime: string, data: string, binary = false): string {
+  let n = name.replace(/[⟦⟧]/g, "") || "file";
+  if (S.assets[n] && S.assets[n]!.data !== data) {
+    const m = /^(.*?)(\.[^.]*)?$/.exec(n)!; const base = m[1] ?? n, ext = m[2] ?? "";
+    let k = 2; while (S.assets[`${base}-${k}${ext}`]) k++; n = `${base}-${k}${ext}`;
+  }
+  S.assets[n] = { name: n, mime, data, ...(binary ? { binary: true } : {}) };
+  return n;
+}
+/** An attachment as a URL an <img> can show. */
+function assetUrl(name: string): string | undefined {
+  const a = S.assets[name]; if (!a) return undefined;
+  return a.binary ? `data:${a.mime};base64,${a.data}` : `data:${a.mime};charset=utf-8,${encodeURIComponent(a.data)}`;
+}
+/** The sample points an attachment stands for in a math cell: an SVG's paths; nothing else, yet. */
+function assetPoints(a: Asset): { rows: string; n: number; paths: number } {
+  if (a.mime !== "image/svg+xml") throw new Error(`⟦${a.name}⟧ is ${a.mime}: only an SVG can be traced into points (yet)`);
+  return svgPoints(a.data);
+}
+/** Read a file for attaching: text for SVG and text types, base64 otherwise. */
+async function readAttachment(f: File): Promise<{ mime: string; data: string; binary: boolean }> {
+  const mime = f.type || (/\.svg$/i.test(f.name) ? "image/svg+xml" : "application/octet-stream");
+  if (mime === "image/svg+xml" || mime.startsWith("text/")) return { mime, data: await f.text(), binary: false };
+  const buf = new Uint8Array(await f.arrayBuffer());
+  let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return { mime, data: btoa(bin), binary: true };
+}
+
+/** Put text at the caret of a cell's input (replacing the selection), as if typed. */
+function insertAtCaret(cell: Cell, text: string) {
+  const input = cell.input; if (!input) return;
+  input.setRangeText(text, input.selectionStart ?? input.value.length, input.selectionEnd ?? input.value.length, "end");
+  cell.src = input.value; syncHighlight(cell); renderSidebar(); renderTabs();
+}
+
+/** The cell's source with every image reference replaced by its sample points, and a note per
+ *  image for the input interpretation. Imports are fetched (and cached); an unknown name, a failed
+ *  fetch or an SVG without paths throws with the reason. */
+async function resolveImages(src: string): Promise<{ src: string; notes: string[] }> {
+  const notes: string[] = [];
+  const sample = (key: string, xml: string, label: string) => {
+    let rows = SAMPLE_CACHE.get(key);
+    if (!rows) {
+      const s = svgPoints(xml);
+      rows = s.rows; SAMPLE_CACHE.set(key, rows);
+      notes.push(`${label}: ${s.n} points along ${s.paths} path${s.paths === 1 ? "" : "s"}`);
+    } else notes.push(`${label}: ${rows.split(";").length} points`);
+    return rows;
+  };
+  let out = src.replace(ASSET_RE, (_m, name: string) => {
+    const a = S.assets[name];
+    if (!a) throw new Error(`nothing named ⟦${name}⟧ is attached to this notebook (File → Attach file…, or paste an image)`);
+    let rows = SAMPLE_CACHE.get(`asset:${a.mime}:${a.data}`);
+    if (!rows) { const s = assetPoints(a); rows = s.rows; SAMPLE_CACHE.set(`asset:${a.mime}:${a.data}`, rows); notes.push(`${name}: ${s.n} points along ${s.paths} path${s.paths === 1 ? "" : "s"}`); }
+    else notes.push(`${name}: ${rows.split(";").length} points`);
+    return rows;
+  });
+  const imports = [...out.matchAll(IMPORT_RE)];
+  for (const m of imports) {
+    const url = m[2]!;
+    if (!SAMPLE_CACHE.has(`url:${url}`)) {
+      let xml: string;
+      try {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+        xml = await r.text();
+      } catch (e) { throw new Error(`import("${url}") failed: ${e instanceof Error ? e.message : String(e)} — the server must allow cross-origin reads; attach the file instead`); }
+      if (!/<svg[\s>]/i.test(xml)) throw new Error(`import("${url}"): not an SVG (only SVG images can be traced)`);
+      SAMPLE_CACHE.set(`url:${url}`, sample(`svgtext:${xml}`, xml, url.split("/").pop() || url));
+    } else notes.push(`${url.split("/").pop() || url}: ${SAMPLE_CACHE.get(`url:${url}`)!.split(";").length} points`);
+  }
+  out = out.replace(IMPORT_RE, (_m, _q, url: string) => SAMPLE_CACHE.get(`url:${url}`)!);
+  return { src: out, notes };
+}
+
+/** File → Attach file…: the file joins the notebook and `⟦name⟧` lands at the caret of the active
+ *  cell — a math cell's input, or a Markdown cell's editor (where an image shows); with neither, a
+ *  fresh cell `epicycles(⟦name⟧)` for an SVG. */
+function attachFile() {
   const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".svg,image/svg+xml";
+  inp.type = "file";
   inp.addEventListener("change", () => {
     const f = inp.files?.[0]; if (!f) return;
-    void f.text().then((xml) => {
-      const doc = new DOMParser().parseFromString(xml, "image/svg+xml");
-      const paths = Array.from(doc.querySelectorAll("path"));
-      if (!paths.length) { log("err", "Import SVG: no <path> elements in the file"); return; }
-      // measure in a hidden host SVG so getTotalLength works
-      const NS = "http://www.w3.org/2000/svg";
-      const host = document.createElementNS(NS, "svg"); host.setAttribute("width", "0"); host.setAttribute("height", "0"); host.style.position = "absolute";
-      document.body.append(host);
-      const N = 400;
-      const copies = paths.map((p) => { const c = document.createElementNS(NS, "path"); c.setAttribute("d", p.getAttribute("d") ?? ""); host.append(c); return c; });
-      const total = copies.reduce((a, c) => a + c.getTotalLength(), 0);
-      const pts: [number, number][] = [];
-      for (const c of copies) {
-        const len = c.getTotalLength(), n = Math.max(1, Math.round((N * len) / (total || 1)));
-        for (let i = 0; i < n; i++) { const q = c.getPointAtLength((len * i) / n); pts.push([q.x, q.y]); }
-      }
-      host.remove();
-      // centre, flip y (SVG's y grows downward), scale the larger extent to [-1, 1]
-      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-      const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-      const ext = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 2 || 1;
-      const rows = pts.map(([x, y]) => `${((x - cx) / ext).toFixed(3)}, ${(-(y - cy) / ext).toFixed(3)}`).join("; ");
-      const cell = addCell(`dft([${rows}])`);
-      renderSidebar(); focusCell(S.cells.length - 1);
-      log("ok", `imported ${f.name}: ${pts.length} sample points along ${paths.length} path${paths.length === 1 ? "" : "s"}`);
-      void runCell(cell);
+    void readAttachment(f).then(({ mime, data, binary }) => {
+      const name = attachAsset(f.name, mime, data, binary);
+      const c = S.cells[S.active];
+      if (c?.input && !c.type) { insertAtCaret(c, `⟦${name}⟧`); c.input.focus(); }
+      else if (c?.ta) { c.ta.setRangeText(`⟦${name}⟧`, c.ta.selectionStart, c.ta.selectionEnd, "end"); c.src = c.ta.value; c.ta.focus(); }
+      else if (mime === "image/svg+xml") { const cell = addCell(`epicycles(⟦${name}⟧)`); renderSidebar(); focusCell(S.cells.indexOf(cell)); }
+      else { const cell = addCell(`⟦${name}⟧`, "markdown"); renderSidebar(); focusCell(S.cells.indexOf(cell)); }
+      log("ok", `attached ${name} (${mime}, ${Math.round(data.length / 1024)} KB): ⟦${name}⟧ refers to it`);
+      renderHighlights(); autosave();
     });
   });
   inp.click();
+}
+
+/** A paste into a cell: a file (an image, say) or SVG text becomes an attachment and its `⟦name⟧`
+ *  goes in at the caret; anything else pastes as text. Works in math cells and Markdown editors. */
+function onPaste(ev: ClipboardEvent, cell: Cell) {
+  const dt = ev.clipboardData; if (!dt) return;
+  const put = (name: string) => {
+    if (cell.input) insertAtCaret(cell, `⟦${name}⟧`);
+    else if (cell.ta) { cell.ta.setRangeText(`⟦${name}⟧`, cell.ta.selectionStart, cell.ta.selectionEnd, "end"); cell.src = cell.ta.value; cell.ta.dispatchEvent(new Event("input")); }
+    renderHighlights(); autosave();
+  };
+  const file = Array.from(dt.files)[0];
+  if (file) {
+    ev.preventDefault();
+    void readAttachment(file).then(({ mime, data, binary }) => {
+      let k = 1; const ext = file.name ? "" : `.${(mime.split("/")[1] ?? "bin").replace("svg+xml", "svg")}`;
+      while (!file.name && S.assets[`pasted-${k}${ext}`]) k++;
+      const name = attachAsset(file.name || `pasted-${k}${ext}`, mime, data, binary);
+      put(name); log("ok", `pasted ${name} (${mime}): ⟦${name}⟧ refers to it`);
+    });
+    return;
+  }
+  const text = dt.getData("text/plain");
+  if (/^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE[^>]*>\s*)?<svg[\s>]/i.test(text)) {
+    ev.preventDefault();
+    let k = 1; while (S.assets[`pasted-${k}.svg`]) k++;
+    const name = attachAsset(`pasted-${k}.svg`, "image/svg+xml", text);
+    put(name); log("ok", `pasted SVG as ${name}: ⟦${name}⟧ refers to it`);
+  }
 }
 function newNotebook() {
   newDoc(); switchTab("notebook");
@@ -1003,7 +1171,7 @@ function renderChrome() {
   brand.append(mark, h("span", "name", "ChalkMath"));
   const menus = h("div", "menus");
   const MENUS: Record<string, [string, () => void][]> = {
-    File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs], ["Export to file…", exportNotebook], ["Import from file…", importNotebook], ["Import SVG as epicycles…", importSvg], ["Copy link to notebook", () => void copyNotebookLink()]],
+    File: [["New notebook", newNotebook], ["Open…", openNotebook], ["Save", () => saveNotebook()], ["Save as…", saveNotebookAs], ["Export to file…", exportNotebook], ["Import from file…", importNotebook], ["Attach file…", attachFile], ["Copy link to notebook", () => void copyNotebookLink()]],
     Edit: [["Add math cell", () => { addCell(); focusCell(S.cells.length - 1); }], ["Add Markdown cell", () => { addCell("", "markdown"); focusCell(S.cells.length - 1); }], ["Add section", () => { addCell("", "section"); focusCell(S.cells.length - 1); }],
       ...(S.cells[S.active] ? CELL_TYPES.filter(([t]) => t !== (S.cells[S.active]!.type ?? "math")).map(([t, label]): [string, () => void] => [`Change to ${label.toLowerCase()}`, () => convertCell(S.cells[S.active]!, t)]) : []),
       ["Clear outputs", clearOutputs]],
@@ -1464,6 +1632,7 @@ function renderCells() {
     input.addEventListener("scroll", () => syncHighlight(cell));
     input.addEventListener("blur", () => { hideCompletions(); hideSigHelp(); });
     input.addEventListener("keydown", (ev) => onKey(ev, cell, i));
+    input.addEventListener("paste", (ev) => onPaste(ev, cell));
     // the highlight overlay sits under the transparent text of the input; the input keeps caret and selection
     const hl = h("div", "hl"); hl.setAttribute("aria-hidden", "true");
     cell.hl = hl;
@@ -1772,7 +1941,7 @@ function renderCellBody(cell: Cell) {
     } else if (cell.form === "input") {
       val.append(h("code", "outtext", cell.outText ?? ""));
     } else {
-      val.innerHTML = tex(formLatex(cell.outLatex, cell.form), true);
+      val.innerHTML = tex(abridgeMatrix(formLatex(cell.outLatex, cell.form)), true);
       wireTerm(val, cell, { kind: "output" });
     }
     // the output form: a per-cell choice of typesetting, like Mathematica's //MatrixForm
@@ -1828,6 +1997,7 @@ function renderMdCell(cell: Cell) {
     cell.ta = ta;
     const grow = () => { ta.style.height = "auto"; ta.style.height = `${ta.scrollHeight + 2}px`; };
     ta.addEventListener("focus", onFocus);
+    ta.addEventListener("paste", (ev) => onPaste(ev, cell));
     ta.addEventListener("input", () => { cell.src = ta.value; grow(); renderSidebar(); renderTabs(); });
     ta.addEventListener("keydown", (ev) => {
       if ((ev.key === "Enter" && (ev.shiftKey || ev.metaKey || ev.ctrlKey)) || ev.key === "Escape") { ev.preventDefault(); void runCell(cell); return; }
@@ -1874,6 +2044,8 @@ function mdMath(src: string, display: boolean): HTMLElement {
 }
 /** Links keep http(s), mailto and relative targets; anything else (javascript:) is dropped. */
 function mdUrl(u: string): string {
+  const att = /^⟦([^⟧]+)⟧$/.exec(u.trim());
+  if (att) return assetUrl(att[1]!) ?? "#";
   return /^\s*(javascript|data|vbscript):/i.test(u) && !/^\s*data:image\//i.test(u) ? "#" : u;
 }
 const MD_LINK = /^!?\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/;
@@ -1896,6 +2068,16 @@ function mdInline(host: HTMLElement, text: string) {
       } else if (next !== undefined && !/\s/.test(next)) {
         const j = text.indexOf("$", i + 1);
         if (j > i + 1 && !/\s/.test(text[j - 1]!)) { flush(); host.append(mdMath(text.slice(i + 1, j), false)); i = j + 1; continue; }
+      }
+    }
+    if (c === "⟦") {
+      const m = /^⟦([^⟧]+)⟧/.exec(text.slice(i));
+      const a = m && S.assets[m[1]!];
+      if (m && a) {
+        flush(); i += m[0].length;
+        if (a.mime.startsWith("image/")) { const img = document.createElement("img"); img.src = assetUrl(a.name)!; img.alt = a.name; img.className = "mdimg"; host.append(img); }
+        else { const e = h("code", "mdcode", `⟦${a.name}⟧`); e.title = `${a.mime}, ${Math.round(a.data.length / 1024)} KB`; host.append(e); }
+        continue;
       }
     }
     if (c === "!" && next === "[") {
@@ -2963,18 +3145,20 @@ const USER_NAMES = new Set<string>();
 /** Commands whose argument at `arg` is a variable bound over the call: `diff(f, x)`, `plot(f, x, …)`. */
 const BINDERS: Record<string, number> = { diff: 1, integrate: 1, plot: 1, epicycles: 1, sum: 1, subst: 1 };
 const BUILTIN_FN = new Set(["sin", "cos", "tan", "exp", "ln", "log", "sqrt", "abs", "conj", "re", "im", "sign", "det", "rref", "transpose", "dot", "norm", "solve"]);
-const COMMANDS = new Set(["diff", "integrate", "plot", "epicycles", "dft", "sum", "exptotrig", "expand", "simplify", "N", "subst", "poset", "map", "monotone", "lfp", "gfp", "fixpoints", "hasse", "join", "meet", "sup", "inf", "upper", "lower", "top", "bottom", "maximal", "minimal", "lattice", "le", "divisors", "subsets", "chain"]);
+const COMMANDS = new Set(["diff", "integrate", "plot", "epicycles", "dft", "import", "sum", "exptotrig", "expand", "simplify", "N", "subst", "poset", "map", "monotone", "lfp", "gfp", "fixpoints", "hasse", "join", "meet", "sup", "inf", "upper", "lower", "top", "bottom", "maximal", "minimal", "lattice", "le", "divisors", "subsets", "chain"]);
 const CONSTANTS = new Set(["pi", "π", "e", "ℯ", "i", "phi", "φ"]);
 
-type Tok = { kind: "id" | "num" | "op" | "ws" | "kw"; text: string; start: number };
+type Tok = { kind: "id" | "num" | "op" | "ws" | "kw" | "asset" | "str"; text: string; start: number };
 function tokenize(src: string): Tok[] {
   const out: Tok[] = [];
-  const re = /(\s+)|(\d+(?:\.\d+)?)|([A-Za-z_\u0370-\u03FFℯ][A-Za-z0-9_\u0370-\u03FFℯ']*)|(:=|->|[^\sA-Za-z0-9_])/gu;
+  const re = /(\s+)|(\d+(?:\.\d+)?)|([A-Za-z_\u0370-\u03FFℯ][A-Za-z0-9_\u0370-\u03FFℯ']*)|(⟦[^⟧]*⟧?)|("[^"]*"?|'[^']*'?)|(:=|->|[^\sA-Za-z0-9_])/gu;
   let m: RegExpExecArray | null;
   while ((m = re.exec(src))) {
     if (m[1] !== undefined) out.push({ kind: "ws", text: m[0], start: m.index });
     else if (m[2] !== undefined) out.push({ kind: "num", text: m[0], start: m.index });
     else if (m[3] !== undefined) out.push({ kind: m[0] === "let" ? "kw" : "id", text: m[0], start: m.index });
+    else if (m[4] !== undefined) out.push({ kind: "asset", text: m[0], start: m.index });
+    else if (m[5] !== undefined) out.push({ kind: "str", text: m[0], start: m.index });
     else out.push({ kind: "op", text: m[0], start: m.index });
   }
   return out;
@@ -3034,6 +3218,8 @@ function highlightHtml(src: string): string {
     let cls = "";
     if (t.kind === "num") cls = "hnum";
     else if (t.kind === "kw") cls = "hkw";
+    else if (t.kind === "asset") cls = S.assets[t.text.slice(1, -1)] ? "hasset" : "hasset missing";
+    else if (t.kind === "str") cls = "hstr";
     else if (t.kind === "op") cls = /^[()\[\]{};,]$/.test(t.text) ? "hpun" : "hop";
     else if (bound.has(k)) cls = "hbound";
     else if (USER_NAMES.has(`${sessionId}:${t.text}`)) cls = "hdef";
