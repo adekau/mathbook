@@ -7,7 +7,8 @@ import Mathlib.MeasureTheory.Integral.IntervalIntegral.FundThmCalculus
 Four small readings the notebook's new commands need.
 
 * `substVar` — the structural substitution `e[x := v]` — evaluates as an environment update, over
-  ℝ and over ℂ. There are no binders in the scalar language, so this is plain induction.
+  ℝ and over ℂ. There are no binders in the scalar language, so this is plain induction. The `subst`
+  command is exactly that substitution (`cmdSubst_soundR`).
 * `sum(f, k, a, b)` is a definition (`cmdSum_spec`); `sum_soundR` reads it as the finite sum over
   ℝ, `∑ j < n, f[k := a + j]`.
 * `exptotrig` applies Euler's formula everywhere at once (`expToTrig`); over ℂ it never changes a
@@ -56,6 +57,12 @@ mutual
     | [] => rfl
     | e :: es => by simp only [substVarList, prodR_cons, substVar_soundR ρ x v e, substVarList_soundR' ρ x v es]
 end
+
+/-- **`cmd.subst`**: `subst(body, x, v)` evaluates as `body` with `x` rebound to the value of `v`. -/
+theorem cmdSubst_soundR (ρ : EnvR) {body v : Expr} {x : String} {res : RuleResult}
+    (h : cmdSubst.apply (.fn "subst" [body, .var x, v]) = some res) (hok : res.error = none) :
+    evalR ρ res.result = evalR (upd ρ x (evalR ρ v)) body := by
+  rw [cmdSubst_spec h hok, substVar_soundR]
 
 def updC (ρ : EnvC) (x : String) (t : ℂ) : EnvC := fun y => if y = x then t else ρ y
 

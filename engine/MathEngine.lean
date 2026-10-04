@@ -18,6 +18,8 @@ import MathEngine.RewritingProofs
 import MathEngine.PosetProofs
 import MathEngine.LogicProofs
 import MathEngine.RelationProofs
+import MathEngine.SystemsProofs
+import MathEngine.CtlProofs
 import MathEngine.AlgebraProofs
 import MathEngine.StlcProofs
 import MathEngine.StlcPrincipal

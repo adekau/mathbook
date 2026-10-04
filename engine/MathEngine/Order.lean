@@ -601,8 +601,8 @@ theorem μ_canon (e : Expr) : μ (canon e) = μ e := by
     count_canon_lit, count_canon _ numOwn_head, M.canon_eq, size_canon]
 
 /-- For rules that consume a matrix literal (`la.*`, `diff.matrix`): the output is checked to contain
-no command or malformed `diff` and strictly fewer nodes on paths to literals — tier 3 of `μ`. The
-matrix arithmetic itself is unverified (M7), so its outputs are checked rather than proved. -/
+no command or malformed `diff` and strictly fewer nodes on paths to literals — tier 3 of `μ`. This is
+the termination check only: what the matrix arithmetic computes is proved in `proofs/Proofs/Matrix.lean`. -/
 def checkedLit (e : Expr) (r : RuleResult) : RuleResult :=
   if r.error.isSome then r
   else if count cmdOwn r.result = 0 ∧ count d3Own r.result = 0 ∧ count litOwn r.result < count litOwn e then r

@@ -34,7 +34,7 @@ namespace Sys
 inductive Val where
   | int (n : Int)
   | sym (s : String)
-  deriving BEq, Hashable, Inhabited, Repr
+  deriving DecidableEq, Hashable, Inhabited, Repr
 
 def Val.toString : Val → String
   | .int n => s!"{n}"
@@ -297,34 +297,60 @@ structure Graph where
   parent : Array (Option (Nat × String))
   inits : List Nat
 
+/-- A breadth-first search in progress, over states of any type: the states found so far, each at the
+index `index` gives it, each one's parent, and the edges found. -/
+structure Search (α : Type) [BEq α] [Hashable α] where
+  states : Array α
+  index : Std.HashMap α Nat
+  parent : Array (Option (Nat × String))
+  edges : Array (Nat × String × Nat)
+
+namespace Search
+variable {α : Type} [BEq α] [Hashable α]
+
+def empty : Search α := ⟨#[], {}, #[], #[]⟩
+
+/-- A new state, at the next index. -/
+def add (sr : Search α) (s : α) (p : Option (Nat × String)) : Search α :=
+  { sr with index := sr.index.insert s sr.states.size, states := sr.states.push s, parent := sr.parent.push p }
+
+/-- An initial state, unless it is already there. -/
+def addInit (sr : Search α) (s : α) : Search α :=
+  if sr.index.contains s then sr else sr.add s none
+
+/-- The successor `t` of state `i` by action `a`: an edge, and a new state when `t` is new. -/
+def visit (limit i : Nat) (sr : Search α) (at_ : String × α) : Except String (Search α) :=
+  match sr.index[at_.2]? with
+  | some j => .ok { sr with edges := sr.edges.push (i, at_.1, j) }
+  | none =>
+    if sr.states.size ≥ limit then .error s!"more than {limit} reachable states"
+    else .ok { sr.add at_.2 (some (i, at_.1)) with edges := sr.edges.push (i, at_.1, sr.states.size) }
+
+/-- Expand the states from index `i` on, each once, in the order they were found; `fuel` bounds the
+rounds, and a search that runs out of it before every state is expanded is refused, never returned. -/
+def run (succ : α → Except String (List (String × α))) (limit : Nat) : Nat → Nat → Search α → Except String (Search α)
+  | 0, i, sr => if i < sr.states.size then .error s!"more than {limit} reachable states" else .ok sr
+  | fuel + 1, i, sr =>
+    if h : i < sr.states.size then do
+      let out ← succ sr.states[i]
+      let sr ← out.foldlM (visit limit i) sr
+      run succ limit fuel (i + 1) sr
+    else .ok sr
+
+end Search
+
+/-- Breadth-first search from `inits` along `succ`, refused past `limit` states. `SystemsProofs.lean`
+proves it finds exactly the states reachable from `inits` (`explore_complete`, `explore_sound`), each
+once, and every transition between them (`explore_edges_complete`, `explore_edges_sound`). -/
+def exploreWith {α : Type} [BEq α] [Hashable α] (succ : α → Except String (List (String × α))) (inits : List α)
+    (limit : Nat) : Except String (Search α) :=
+  Search.run succ limit (limit + 1) 0 (inits.foldl Search.addInit Search.empty)
+
 def System.explore (S : System) (limit : Nat := 5000) : Except String Graph := do
   let inits ← S.initStates
   if inits.isEmpty then throw "no initial state satisfies init"
-  let mut states : Array State := #[]
-  let mut index : Std.HashMap State Nat := {}
-  let mut parent : Array (Option (Nat × String)) := #[]
-  for s in inits do
-    if !index.contains s then
-      index := index.insert s states.size
-      states := states.push s
-      parent := parent.push none
-  let mut edges : Array (Nat × String × Nat) := #[]
-  let mut i := 0
-  -- states grow as the search goes; each is expanded once
-  for _ in [0:limit + 1] do
-    if i ≥ states.size then break
-    let s := states[i]!
-    for (a, t) in ← S.successors s do
-      match index.get? t with
-      | some j => edges := edges.push (i, a, j)
-      | none =>
-        if states.size ≥ limit then throw s!"more than {limit} reachable states"
-        index := index.insert t states.size
-        edges := edges.push (i, a, states.size)
-        states := states.push t
-        parent := parent.push (some (i, a))
-    i := i + 1
-  return ⟨states, edges.toList, parent, (inits.filterMap index.get?)⟩
+  let sr ← exploreWith S.successors inits limit
+  return ⟨sr.states, sr.edges.toList, sr.parent, inits.filterMap (sr.index[·]?)⟩
 
 /-- The path from an initial state to state `j`, as `(action, state)` steps after the first state. -/
 def Graph.pathTo (G : Graph) (j : Nat) : Nat × List (String × Nat) := Id.run do
@@ -397,6 +423,72 @@ def iterateSets (n : Nat) (f : List Nat → List Nat) (start : List Nat) : List 
     chain := chain ++ [nxt]
     cur := nxt
   return chain
+
+/-! ## Certificates for CTL
+
+Each CTL answer is a set `Z` of state indices, the last of a chain of Kleene rounds. A state's round
+is its rank: the round that first holds it (`rankIn`, for a least fixed point) or first drops it
+(`rankOut`, for a greatest). The checks below read the certificate off `Z` and the ranks, and
+`CtlProofs.lean` proves that where a check passes, `Z` is exactly the set of states where the formula
+holds by the meaning of its paths: `EF` some path reaches φ, `EG` an infinite path stays in φ, `AG`
+every reachable state is in φ, `AF` every maximal path (infinite, or stopping where no action is
+enabled) reaches φ. -/
+namespace Ctl
+
+def rankIn (chain : List (List Nat)) (s : Nat) : Nat := chain.findIdx (·.contains s)
+def rankOut (chain : List (List Nat)) (s : Nat) : Nat := chain.findIdx fun z => !z.contains s
+
+/-- Every edge joins states below `n`. -/
+def inRange (n : Nat) (es : List (Nat × Nat)) : Bool := es.all fun e => decide (e.1 < n) && decide (e.2 < n)
+
+/-- `Z` is `EF φ`: a member is in φ or steps to a member of lower rank; a non-member is not in φ and
+steps to no member. -/
+def checkEF (n : Nat) (es : List (Nat × Nat)) (sat Z : List Nat) (r : Nat → Nat) : Bool :=
+  inRange n es && (List.range n).all fun s =>
+    if Z.contains s then sat.contains s || es.any (fun e => e.1 == s && Z.contains e.2 && decide (r e.2 < r s))
+    else !sat.contains s && es.all (fun e => e.1 != s || !Z.contains e.2)
+
+/-- `Z` is `EG φ`: a member is in φ and steps to a member; a non-member is not in φ, or steps only to
+non-members of lower rank. -/
+def checkEG (n : Nat) (es : List (Nat × Nat)) (sat Z : List Nat) (r : Nat → Nat) : Bool :=
+  inRange n es && (List.range n).all fun s =>
+    if Z.contains s then sat.contains s && es.any (fun e => e.1 == s && Z.contains e.2)
+    else !sat.contains s || es.all (fun e => e.1 != s || (!Z.contains e.2 && decide (r e.2 < r s)))
+
+/-- `Z` is `AG φ`: a member is in φ and steps only to members; a non-member is not in φ, or steps to a
+non-member of lower rank. -/
+def checkAG (n : Nat) (es : List (Nat × Nat)) (sat Z : List Nat) (r : Nat → Nat) : Bool :=
+  inRange n es && (List.range n).all fun s =>
+    if Z.contains s then sat.contains s && es.all (fun e => e.1 != s || Z.contains e.2)
+    else !sat.contains s || es.any (fun e => e.1 == s && !Z.contains e.2 && decide (r e.2 < r s))
+
+/-- `Z` is `AF φ`: a member is in φ, or has a step and steps only to members of lower rank; a
+non-member is not in φ, and has no step or steps to a non-member. -/
+def checkAF (n : Nat) (es : List (Nat × Nat)) (sat Z : List Nat) (r : Nat → Nat) : Bool :=
+  inRange n es && (List.range n).all fun s =>
+    if Z.contains s then
+      sat.contains s || (es.any (fun e => e.1 == s) && es.all (fun e => e.1 != s || (Z.contains e.2 && decide (r e.2 < r s))))
+    else !sat.contains s && (!es.any (fun e => e.1 == s) || es.any (fun e => e.1 == s && !Z.contains e.2))
+
+/-- `Z` is `EX φ`: the states with a step into φ. -/
+def checkEX (n : Nat) (es : List (Nat × Nat)) (sat Z : List Nat) : Bool :=
+  (List.range n).all fun s => Z.contains s == es.any (fun e => e.1 == s && sat.contains e.2)
+
+/-- `Z` is `AX φ`: the states that have a step, and step only into φ. -/
+def checkAX (n : Nat) (es : List (Nat × Nat)) (sat Z : List Nat) : Bool :=
+  (List.range n).all fun s => Z.contains s == (es.any (fun e => e.1 == s) && es.all (fun e => e.1 != s || sat.contains e.2))
+
+/-- The check for an operator, with the chain it was computed from. -/
+def check (op : String) (n : Nat) (es : List (Nat × Nat)) (sat : List Nat) (chain : List (List Nat)) (Z : List Nat) : Bool :=
+  match op with
+  | "EF" => checkEF n es sat Z (rankIn chain)
+  | "AF" => checkAF n es sat Z (rankIn chain)
+  | "EG" => checkEG n es sat Z (rankOut chain)
+  | "AG" => checkAG n es sat Z (rankOut chain)
+  | "EX" => checkEX n es sat Z
+  | _ => checkAX n es sat Z
+
+end Ctl
 
 end Sys
 end MathEngine

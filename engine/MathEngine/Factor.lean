@@ -7,7 +7,8 @@ import MathEngine.ExpandRules
 common denominator (Mathematica's `Together`) and pulls the numerator's common factor out — the
 shape a hand derivation ends in: `i(e^{-ikπ} + e^{ikπ} - 2)/(2kπ)` rather than the normal form's
 `½·(−(i/k − i e^{ikπ}/k) − i/k + i e^{−ikπ}/k)/π`. It is a command, not a rule: the normal form is
-what the rules produce, and this is one presentation of it. Unverified (see the ledger).
+what the rules produce, and this is one presentation of it, checked: expanded and normalized again,
+it must give back the normal form it came from (`run`).
 
 The bookkeeping is on *factors*: every term is a rational coefficient times bases with rational
 exponents, positive ones in the numerator and negative ones (negated) in the denominator.
@@ -60,10 +61,10 @@ def ofParts (c : Rat) (num den : Factors) : Expr :=
   | fs => mulN fs
 
 /-- The terms of a sum over a common denominator, with the numerator's common factor pulled out:
-`g · Π common · (Σ rest) / D`. -/
-def combine (terms : List Term) : Expr :=
+`g · Π common · (Σ rest) / D`; with it, the numerator `g · Π common · (Σ rest)` and the denominator `D`. -/
+def combineParts (terms : List Term) : Expr × Expr × Expr :=
   match terms with
-  | [] => Expr.zero
+  | [] => (Expr.zero, Expr.zero, Expr.one)
   | _ =>
     -- the common denominator: the coefficients' denominators' lcm, and each base at its largest exponent
     let dnum : Nat := terms.foldl (fun acc t => Nat.lcm acc t.coeff.den) 1
@@ -85,12 +86,24 @@ def combine (terms : List Term) : Expr :=
       ofParts (if g == 0 then c else c / g)
         (fs.filterMap fun (b, q) => let e := q - exponentOf gbases b; if ratLt 0 e then some (b, e) else none) [])
     let outer := ofParts (g / Rat.ofInt (Int.ofNat dnum)) gbases dbases
-    if outer == Expr.one then inner else mulN (unMul outer ++ [inner])
+    let numer := let o := ofParts g gbases []; if o == Expr.one then inner else mulN (unMul o ++ [inner])
+    (if outer == Expr.one then inner else mulN (unMul outer ++ [inner]), numer, ofParts (Rat.ofInt (Int.ofNat dnum)) dbases [])
 
-/-- Expand and collect with the pipeline's normalizer, then combine. -/
-def run (norm : Expr → Except String Expr) (a : Expr) : Except String Expr := do
+def combine (terms : List Term) : Expr := (combineParts terms).1
+
+/-- Expand and collect with the pipeline's normalizer, then combine. The combined form `N/D` is kept
+only if it checks (`true`): the input times `D`, expanded and normalized, is the numerator `N`
+expanded and normalized, so the two agree wherever `D` is not zero (the cancellations `x·x⁻¹ = 1`
+in that check are `simp.collect-powers.assuming` steps, which say so). Otherwise the normal form itself
+is the answer (`false`). The check is what the answer rests on, as `int.check` is for an
+antiderivative: the combination is a guess, the pipeline's steps confirm it. -/
+def run (norm : Expr → Except String Expr) (a : Expr) : Except String (Expr × Bool) := do
   let e ← norm (Expand.dist a)
-  pure (combine ((unAdd e).map termOf))
+  let (out, numer, den) := combineParts ((unAdd e).map termOf)
+  -- each term times `D`, normalized first so that a denominator's factor cancels before it can be distributed
+  let lhs ← norm (Expand.dist (← norm (addN ((unAdd e).map fun t => mulN (unMul t ++ unMul den)))))
+  let rhs ← norm (Expand.dist numer)
+  pure (if Expr.equal lhs rhs then (out, true) else (e, false))
 
 end Factor
 end MathEngine

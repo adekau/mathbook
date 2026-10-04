@@ -35,7 +35,8 @@ theorem mem_pipeline_iff (r : PlainRule) : r ∈ (pipelineRulesWith norm) ↔
     r = scalarOnly iPower ∨ r = scalarOnly cxArith ∨ r = scalarOnly cxPow ∨ r = scalarOnly cxConj ∨ r = scalarOnly cxReIm ∨
     r = scalarOnly cxAbs ∨ r = scalarOnly exactTrig ∨ r = scalarOnly euler ∨ r = scalarOnly eulerPower ∨ r = scalarOnly expProduct ∨
     r = scalarOnly sqrtPower ∨ r = scalarOnly sqrtRadical ∨ r = scalarOnly flatten.toPlain ∨ r = scalarOnly identity.toPlain ∨ r = scalarOnly foldConstants.toPlain ∨
-    r = scalarOnly functionRules.toPlain ∨ r = scalarOnly powerRules.toPlain ∨ r = scalarOnly collectPowers.toPlain ∨
+    r = scalarOnly functionRules.toPlain ∨ r = scalarOnly functionAssuming.toPlain ∨ r = scalarOnly powerRules.toPlain ∨
+    r = scalarOnly collectPowers.toPlain ∨ r = scalarOnly collectPowersAssuming.toPlain ∨
     r = scalarOnly collectTerms.toPlain ∨ r = scalarOnly parityPowMul ∨ r = scalarOnly parityPowPow ∨
     r = scalarOnly radicalBase ∨ r = scalarOnly collectRadicals ∨ r = scalarOnly mulRadicals ∨ r = laContext := by
   simp [pipelineRulesWith, commandRulesWith, diffRules, matrixRules, simpPlain, simpRules, parityPlain, parityRules,
@@ -1920,8 +1921,9 @@ theorem Q_half_isInt : (Q.ofRat (mkRat 1 2)).isInt = false := by decide
 
 theorem M_minusOne : M Expr.minusOne = 2 := by simp only [Expr.minusOne]; rw [M.num]; decide
 
-theorem dec_functionRules : Dec norm (scalarOnly functionRules.toPlain) := dec_scalar fun e res hcn hm happ herr => by
-  simp only [Rule.toPlain, functionRules, functionApply] at happ
+theorem dec_functionApply : ∀ e res, ChildrenNormal (pipelineRulesWith norm) e → (children e).any isMatrix = false →
+    functionApply e = some res → res.error = none → MuLt (μ res.result) (μ e) := fun e res hcn hm happ herr => by
+  simp only [functionApply] at happ
   split at happ
   -- sin u / cos u = tan u
   · rename_i es
@@ -2261,8 +2263,9 @@ theorem mergePowers_spec : ∀ (es l : List Expr) (t : Expr), mergePowers es = s
         · exact hcs c List.mem_cons_self
         · exact ih.2 (fun d hd => hcs d (List.mem_cons_of_mem _ hd)) c hc
 
-theorem dec_collectPowers : Dec norm (scalarOnly collectPowers.toPlain) := dec_scalar fun e res hcn hm happ herr => by
-  simp only [Rule.toPlain, collectPowers, collectPowersApply] at happ
+theorem dec_collectPowersApply : ∀ e res, ChildrenNormal (pipelineRulesWith norm) e → (children e).any isMatrix = false →
+    collectPowersApply e = some res → res.error = none → MuLt (μ res.result) (μ e) := fun e res hcn hm happ herr => by
+  simp only [collectPowersApply] at happ
   split at happ
   · rename_i es
     split at happ
@@ -2275,6 +2278,23 @@ theorem dec_collectPowers : Dec norm (scalarOnly collectPowers.toPlain) := dec_s
       left; rw [M.mul, M.mul]; omega
     · simp at happ
   · simp at happ
+
+-- the rules split at their assumptions rewrite as the whole did
+
+theorem dec_functionRules : Dec norm (scalarOnly functionRules.toPlain) := dec_scalar fun e res hcn hm happ herr =>
+  dec_functionApply e res hcn hm (gate_some happ) herr
+
+theorem dec_functionAssuming : Dec norm (scalarOnly functionAssuming.toPlain) := dec_scalar fun e res hcn hm happ herr => by
+  obtain ⟨_, r₀, _, h₀, hres, herr'⟩ := functionAssumingApply_some happ
+  rw [hres]; exact dec_functionApply e r₀ hcn hm h₀ (herr' ▸ herr)
+
+theorem dec_collectPowers : Dec norm (scalarOnly collectPowers.toPlain) := dec_scalar fun e res hcn hm happ herr =>
+  dec_collectPowersApply e res hcn hm (gate_some happ) herr
+
+theorem dec_collectPowersAssuming : Dec norm (scalarOnly collectPowersAssuming.toPlain) :=
+  dec_scalar fun e res hcn hm happ herr => by
+    obtain ⟨_, _, r₀, _, h₀, hres, herr'⟩ := collectAssumingApply_some happ
+    rw [hres]; exact dec_collectPowersApply e r₀ hcn hm h₀ (herr' ▸ herr)
 
 -- simp.collect-like-terms ---------------------------------------------------------
 
@@ -2837,12 +2857,12 @@ theorem dec_eulerPower : Dec norm (scalarOnly eulerPower) := dec_scalar fun e re
 With `normalizeT`'s innermost strategy this is exactly what makes cell evaluation terminate. -/
 theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := ⟨fun r hr => by
   rw [mem_pipeline_iff] at hr
-  -- 29 commands, diff and la rules; la.part; the statistics; 25 scalar rules and la.context
+  -- 29 commands, diff and la rules; la.part; the statistics; 27 scalar rules and la.context
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
     rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
     rfl | ⟨st, hst, rfl⟩ |
     rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact dec_cmdSimplify
   · exact dec_cmdExpand
   · exact dec_cmdRref
@@ -2890,8 +2910,10 @@ theorem pipelineOrderedWith (norm : Norm) : Ordered (pipelineRulesWith norm) := 
   · exact dec_identity
   · exact dec_foldConstants
   · exact dec_functionRules
+  · exact dec_functionAssuming
   · exact dec_powerRules
   · exact dec_collectPowers
+  · exact dec_collectPowersAssuming
   · exact dec_collectTerms
   · exact dec_parityPowMul
   · exact dec_parityPowPow

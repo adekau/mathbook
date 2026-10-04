@@ -4,18 +4,21 @@ import Proofs.Semantics
 
 M1 proved every rule sound on the integer fragment. That fragment cannot see `1/2`, `sin`, or
 `x^(1/2)`, so it also could not see where a rule is *wrong*. Over ℝ each rule gets its real
-soundness theorem, and two of them turn out to need side conditions:
+soundness theorem, and two laws turn out to need side conditions:
 
 | rule | over ℝ |
 |---|---|
 | `simp.flatten`, `simp.identity`, `simp.fold-constants`, `simp.collect-like-terms`, `simp.power`, canonical order | unconditionally sound |
-| `simp.collect-powers` | needs a nonzero base — `x·x⁻¹ ⟶ x⁰` is `0 ≠ 1` at `x = 0` |
-| `simp.function` | needs a positive argument for `exp(ln x) ⟶ x` — it is `1 ≠ -1` at `x = -1` |
+| `simp.collect-powers` | unconditionally sound: integer exponents of one sign, or a positive numeral base (`collectPowers_soundR`) |
+| `simp.collect-powers.assuming` | needs `b ≠ 0` (integer exponents) or `0 < b` (others) — `x·x⁻¹ ⟶ x⁰` is `0 ≠ 1` at `x = 0` |
+| `simp.function` | unconditionally sound (`functionRules_soundR`, `SimpAll.lean`) |
+| `simp.function.assuming` | needs `0 < x` for `exp(ln x) ⟶ x` (`1 ≠ -1` at `x = -1`) and `0 < b` for `ln(b^p) ⟶ p ln b` |
 
-The two gaps are not proof failures: `not_collectPowers_soundR` and `not_functionRules_soundR`
-*prove* that no unconditional theorem exists. Both are the standard computer-algebra convention
-(Mathematica simplifies `x/x` to `1` too), so the engine keeps them; what changes is that the
-assumption is now written down instead of implied.
+The two laws were one rule each until they were split at their assumptions: the engine still
+rewrites `x/x` to `1` and `exp(ln x)` to `x`, as every computer-algebra system does, but those steps
+are now rules of their own whose explanation states the assumption, proved under it
+(`collectPowersAssuming_soundR_on`, `functionAssuming_soundR_on`). `not_collectPowersAssuming_soundR`
+and `not_functionAssuming_soundR` *prove* that no unconditional theorem exists for them.
 -/
 noncomputable section
 namespace MathProofs
@@ -521,12 +524,13 @@ theorem mergePowers_soundR_on (ρ : EnvR) : ∀ (es l : List Expr) (t : Expr),
       obtain ⟨rfl, rfl⟩ := hl
       rw [prodR_cons, prodR_cons, mergePowers_soundR_on ρ rest l' t' hm ht]
 
-/-- **`simp.collect-powers` is sound wherever the base it merged is positive.** -/
-theorem collectPowers_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
-    (h : collectPowers.apply e = some res)
+/-- **The merge is sound wherever the base it merged is positive** (the rule as it was before it was
+split at its assumption). -/
+theorem collectPowersApply_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
+    (h : collectPowersApply e = some res)
     (ht : ∀ es l t, e = .mul es → mergePowers es = some (l, t) → 0 < evalR ρ t) :
     evalR ρ e = evalR ρ res.result := by
-  cases e <;> simp only [collectPowers, collectPowersApply, reduceCtorEq] at h
+  cases e <;> simp only [collectPowersApply, reduceCtorEq] at h
   rename_i es
   split at h
   · rename_i l t hm
@@ -535,10 +539,162 @@ theorem collectPowers_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
     exact (mergePowers_soundR_on ρ es l t hm (ht es l t rfl hm)).symm
   · simp at h
 
-/-- **…and it is not sound without that hypothesis.** At `x = 0` the rule turns `x·x⁻¹` into `x⁰`,
-that is `0` into `1`. This is the usual computer-algebra convention (`x/x` simplifies to `1`), so
-the engine keeps the rule; the point is that the assumption is now explicit. -/
-theorem not_collectPowers_soundR : ¬ RuleSoundR collectPowers := by
+/-- The merge is sound wherever the pair it merges obeys `b^x · b^y = b^(x+y)`. -/
+theorem mergePowers_soundR_with (ρ : EnvR) : ∀ (es l : List Expr) (t : Expr),
+    mergePowers es = some (l, t) →
+    (∀ b x y, mergedExps es = some (b, x, y) →
+      (evalR ρ b) ^ (evalR ρ x) * (evalR ρ b) ^ (evalR ρ y) = (evalR ρ b) ^ (evalR ρ x + evalR ρ y)) →
+    prodR ρ l = prodR ρ es
+  | [], _, _, h, _ => by simp [mergePowers] at h
+  | e :: rest, l, t, h, H => by
+    simp only [mergePowers] at h
+    obtain ⟨b, x, hbx⟩ : ∃ b x, baseExp e = (b, x) := ⟨_, _, rfl⟩
+    rw [hbx] at h
+    simp only at h
+    have hme : mergedExps (e :: rest) = if bigBase b then
+        (match rest.find? (fun f => Expr.equal (baseExp f).1 b) with
+          | some f => some (b, x, (baseExp f).2)
+          | none => mergedExps rest) else mergedExps rest := by
+      rw [mergedExps, hbx]; rfl
+    split at h
+    · rename_i hbig
+      rw [ite_eq_left hbig] at hme
+      split at h
+      · rename_i f hf
+        rw [hf] at hme
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        have hp : Expr.equal (baseExp f).1 b = true := by simpa using List.find?_some hf
+        have hfb : baseExp f = (b, (baseExp f).2) := by rw [← Expr.equal_eq hp]
+        have h1 : prodR ρ rest
+            = evalR ρ f * prodR ρ (removeFirst (fun y => (baseExp y).1.equal b) rest) := by
+          rw [prodR_perm ρ (perm_find?_removeFirst _ rest f hf), prodR_cons]
+        rw [prodR_cons, prodR_cons, h1, evalR_baseExp hbx, evalR_baseExp hfb, evalR_pow,
+          evalR_addExp, ← H b x (baseExp f).2 hme]
+        ring
+      · rename_i hf
+        rw [hf] at hme
+        simp only [Option.map_eq_some_iff] at h
+        obtain ⟨⟨l', t'⟩, hm, hl⟩ := h
+        simp only [Prod.mk.injEq] at hl
+        obtain ⟨rfl, rfl⟩ := hl
+        rw [prodR_cons, prodR_cons, mergePowers_soundR_with ρ rest l' t' hm (fun b x y h => H b x y (hme ▸ h))]
+    · rename_i hbig
+      rw [ite_eq_right hbig] at hme
+      simp only [Option.map_eq_some_iff] at h
+      obtain ⟨⟨l', t'⟩, hm, hl⟩ := h
+      simp only [Prod.mk.injEq] at hl
+      obtain ⟨rfl, rfl⟩ := hl
+      rw [prodR_cons, prodR_cons, mergePowers_soundR_with ρ rest l' t' hm (fun b x y h => H b x y (hme ▸ h))]
+
+theorem evalR_of_intExp {x : Expr} {m : ℤ} (h : intExp x = some m) (ρ : EnvR) : evalR ρ x = (m : ℝ) := by
+  cases x <;> simp only [intExp, reduceCtorEq] at h
+  rename_i q
+  split at h
+  · rename_i hq
+    simp only [Option.some.injEq] at h; subst h
+    rw [evalR_num]; exact Q_cast_isInt hq
+  · cases h
+
+/-- Integer powers of one sign add their exponents at every real base, `0` included. -/
+theorem rpow_int_add_of_sameSign (b : ℝ) {m n : ℤ} (h : (0 ≤ m ∧ 0 ≤ n) ∨ (m ≤ 0 ∧ n ≤ 0)) :
+    b ^ (m : ℝ) * b ^ (n : ℝ) = b ^ ((m : ℝ) + n) := by
+  have key : b ≠ 0 ∨ m + n ≠ 0 ∨ m = 0 ∧ n = 0 := by
+    by_cases hmn : m + n = 0
+    · right; right; omega
+    · right; left; exact hmn
+  rw [Real.rpow_intCast, Real.rpow_intCast, ← Int.cast_add, Real.rpow_intCast, zpow_add' key]
+
+/-- Integer powers of a nonzero base add their exponents. -/
+theorem rpow_int_add_of_ne (b : ℝ) (hb : b ≠ 0) (m n : ℤ) :
+    b ^ (m : ℝ) * b ^ (n : ℝ) = b ^ ((m : ℝ) + n) := by
+  rw [Real.rpow_intCast, Real.rpow_intCast, ← Int.cast_add, Real.rpow_intCast, zpow_add₀ hb]
+
+theorem isPosNum_pos {x : Expr} (h : isPosNum x = true) (ρ : EnvR) : 0 < evalR ρ x := by
+  cases x with
+  | num q =>
+    exact lt_of_le_of_ne (by rw [evalR_num]; exact_mod_cast Q_nonneg_of_isPosNum h)
+      (Ne.symm (isPosNum_ne_zero h ρ))
+  | _ => simp [isPosNum] at h
+
+/-- **`powSafe` decides an identity**: where it holds, `b^x · b^y = b^(x+y)` at every point. -/
+theorem powSafe_value {b x y : Expr} (h : powSafe b x y = true) (ρ : EnvR) :
+    (evalR ρ b) ^ (evalR ρ x) * (evalR ρ b) ^ (evalR ρ y) = (evalR ρ b) ^ (evalR ρ x + evalR ρ y) := by
+  unfold powSafe at h
+  simp only [Bool.or_eq_true] at h
+  rcases h with hp | hi
+  · exact (Real.rpow_add (isPosNum_pos hp ρ) _ _).symm
+  · split at hi
+    · rename_i m n hm hn
+      rw [evalR_of_intExp hm, evalR_of_intExp hn]
+      apply rpow_int_add_of_sameSign
+      simpa using hi
+    · cases hi
+
+/-- **`simp.collect-powers` is sound over ℝ, unconditionally**: it merges only a pair of factors
+whose exponents are integers of one sign, or whose base is a positive numeral. -/
+theorem collectPowers_soundR : RuleSoundR collectPowers := by
+  intro e res h ρ
+  have hs := gate_some h
+  have hna : (collectAssumed e).isNone = true := by
+    cases hca : (collectAssumed e).isNone with
+    | true => rfl
+    | false => simp only [collectPowers, Option.isNone_iff_eq_none] at h hca
+               simp_all
+  cases e <;> simp only [collectPowersApply, reduceCtorEq] at hs
+  rename_i es
+  split at hs
+  · rename_i l t hm
+    simp only [Option.some.injEq] at hs; subst hs
+    rw [evalR_mul, evalR_mul]
+    refine (mergePowers_soundR_with ρ es l t hm fun b x y hb => ?_).symm
+    simp only [collectAssumed, hb] at hna
+    split at hna
+    · rename_i hsafe; exact powSafe_value hsafe ρ
+    · simp at hna
+  · simp at hs
+
+/-- **`simp.collect-powers.assuming` is sound under the assumption its step states**: `b ≠ 0` when the
+exponents are integers, `0 < b` otherwise. -/
+theorem collectPowersAssuming_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
+    (h : collectPowersAssuming.apply e = some res)
+    (hb : ∀ b nz, collectAssumed e = some (b, nz) → if nz then evalR ρ b ≠ 0 else 0 < evalR ρ b) :
+    evalR ρ e = evalR ρ res.result := by
+  obtain ⟨b, nz, r₀, hca, h₀, hres, _⟩ := collectAssumingApply_some h
+  rw [hres]
+  have hcond := hb b nz hca
+  cases e <;> simp only [collectPowersApply, reduceCtorEq] at h₀
+  rename_i es
+  split at h₀
+  · rename_i l t hm
+    simp only [Option.some.injEq] at h₀; subst h₀
+    rw [evalR_mul, evalR_mul]
+    refine (mergePowers_soundR_with ρ es l t hm fun b' x y hb' => ?_).symm
+    simp only [collectAssumed, hb'] at hca
+    split at hca
+    · cases hca
+    · simp only [Option.some.injEq, Prod.mk.injEq] at hca
+      obtain ⟨rfl, rfl⟩ := hca
+      cases hx : intExp x with
+      | none =>
+        simp only [hx, Option.isSome_none, Bool.false_and, Bool.false_eq_true, ite_false] at hcond
+        exact (Real.rpow_add hcond _ _).symm
+      | some m =>
+        cases hy : intExp y with
+        | none =>
+          simp only [hx, hy, Option.isSome_none, Option.isSome_some, Bool.and_false, Bool.false_eq_true,
+            ite_false] at hcond
+          exact (Real.rpow_add hcond _ _).symm
+        | some n =>
+          simp only [hx, hy, Option.isSome_some, Bool.and_self, ite_true] at hcond
+          rw [evalR_of_intExp hx, evalR_of_intExp hy]
+          exact rpow_int_add_of_ne _ hcond m n
+  · simp at h₀
+
+/-- **…and not without it.** At `x = 0` the step rewrites `x·x⁻¹` into `x⁰`, that is `0` into `1`. This is
+the usual computer-algebra convention (`x/x` simplifies to `1`), so the engine keeps the step and
+says what it assumes. -/
+theorem not_collectPowersAssuming_soundR : ¬ RuleSoundR collectPowersAssuming := by
   intro hs
   have h := hs (.mul [.var "x", .pow (.var "x") (.num (Q.ofInt (-1)))]) _ rfl (fun _ => 0)
   norm_num [evalR_mul, prodR_cons, prodR_nil, evalR_var, evalR_pow, evalR_num, Q_val_ofInt,
@@ -564,9 +720,35 @@ theorem functionRules_tan_soundR (ρ : EnvR) {es : List Expr} {u : Expr} {others
   push_cast
   rw [Real.rpow_neg_one, applyFn, applyFn, applyFn, Real.tan_eq_sin_div_cos, div_eq_mul_inv, mul_assoc]
 
-/-- **`simp.function` is not unconditionally sound over ℝ**: at `x = -1`, `exp (ln x)` is `1`,
-not `-1`, because `Real.log` is even. Every other case of the rule is unconditional. -/
-theorem not_functionRules_soundR : ¬ RuleSoundR functionRules := by
+/-- **`simp.function.assuming` is sound under the assumption its step states**: `0 < x` for
+`exp(ln x) = x`, `0 < b` for `ln(b^p) = p ln b`. -/
+theorem functionAssuming_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
+    (h : functionAssuming.apply e = some res)
+    (hpos : ∀ a, functionAssumed e = some a → 0 < evalR ρ a) :
+    evalR ρ e = evalR ρ res.result := by
+  obtain ⟨a, r₀, hfa, h₀, hres, _⟩ := functionAssumingApply_some h
+  rw [hres]
+  have ha := hpos a hfa
+  unfold functionAssumed at hfa
+  split at hfa
+  · rename_i x
+    simp only [Option.some.injEq] at hfa; subst hfa
+    simp only [functionApply, isZero, Bool.false_eq_true, ite_false, Option.some.injEq] at h₀
+    subst h₀
+    simp only [evalR_fn₁, applyFn_exp, applyFn_ln]
+    exact Real.exp_log ha
+  · rename_i b p
+    split at hfa
+    · cases hfa
+    · simp only [Option.some.injEq] at hfa; subst hfa
+      simp only [functionApply, isOne, Bool.false_eq_true, ite_false, Option.some.injEq] at h₀
+      subst h₀
+      simp only [evalR_fn₁, applyFn_ln, evalR_pow, evalR_mul, prodR_cons, prodR_nil, mul_one]
+      exact Real.log_rpow ha _
+  · cases hfa
+
+/-- **…and not without it**: at `x = -1`, `exp(ln x)` is `1`, not `-1`, because `Real.log` is even. -/
+theorem not_functionAssuming_soundR : ¬ RuleSoundR functionAssuming := by
   intro hs
   have h := hs (.fn "exp" [.fn "ln" [.var "x"]]) _ rfl (fun _ => -1)
   simp only [evalR_fn₁, applyFn_exp, applyFn_ln, evalR_var] at h
@@ -577,19 +759,20 @@ theorem not_functionRules_soundR : ¬ RuleSoundR functionRules := by
 -- The fold over the unconditionally sound rules
 -- ---------------------------------------------------------------------------
 
-/-- The subset of `simpRules` that is unconditionally sound over ℝ: everything except
-`simp.collect-powers` and `simp.function`, each of which needs a side condition (above). -/
-def simpRulesR : List (Rule simpW) := [flatten, identity, foldConstants, collectTerms, powerRules]
+/-- Rules of `simpRules` proved unconditionally sound over ℝ in this file (`simp.function` is too, in
+`SimpAll.lean`, which folds every rule but the two that assume). -/
+def simpRulesR : List (Rule simpW) := [flatten, identity, foldConstants, collectTerms, powerRules, collectPowers]
 
 theorem simpRulesR_soundR : ∀ r ∈ simpRulesR, RuleSoundR r := by
   intro r hr
   simp only [simpRulesR, List.mem_cons, List.not_mem_nil, or_false] at hr
-  rcases hr with rfl | rfl | rfl | rfl | rfl
+  rcases hr with rfl | rfl | rfl | rfl | rfl | rfl
   · exact flatten_soundR
   · exact identity_soundR
   · exact foldConstants_soundR
   · exact collectTerms_soundR
   · exact powerRules_soundR
+  · exact collectPowers_soundR
 
 /-- **Normalization with the unconditionally sound rules preserves the real value.** The proof is
 `normalize_sound_for` — the same fold M1 used for the integer fragment, reused at ℝ because

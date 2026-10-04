@@ -9,6 +9,11 @@ import MathEngine.Relation
 - `stable_transitive`: when a round adds nothing, the relation is transitive. The closure stops
   exactly then (`transClosure` reports it), so it is the least transitive relation containing the
   original.
+- `wf_of_measure`: a measure that goes down along every step (`measureFailure` finds none) makes the
+  relation, read as "steps to", well-founded in Lean's sense: no infinite chain of steps.
+- `not_wf_of_closed`: a nonempty set every element of which steps into the set (a cycle) makes it not
+  well-founded. `wellfounded` decides by one or the other, so each answer comes with its proof
+  (`wellfounded_none`, `wellfounded_some`).
 -/
 namespace MathEngine
 namespace Ord
@@ -104,6 +109,95 @@ theorem transClosure_transitive : ∀ (n : Nat) (R : Rel) (acc : List (List (Str
         rw [hemp] at this; simp at this
     · simp only [transClosure.go, hemp] at h ⊢
       exact ih _ _ h
+
+/-! ## Well-founded relations -/
+
+/-- `R` read as "steps to", for `WellFounded`: `y` is below `x` when `x` steps to `y`. -/
+def Below (R : Rel) (y x : String) : Prop := (x, y) ∈ R.pairs
+
+theorem measureFailure_none {R : Rel} {m : String → Option Int} (h : measureFailure R m = none) :
+    ∀ x y, (x, y) ∈ R.pairs → ∃ a b, m x = some a ∧ m y = some b ∧ b < a := by
+  intro x y hxy
+  unfold measureFailure at h
+  have := List.find?_eq_none.mp h (x, y) hxy
+  cases hx : m x <;> cases hy : m y <;> simp_all
+
+theorem natAbs_le_sum {a : Int} : ∀ {l : List Int}, a ∈ l → a.natAbs ≤ (l.map Int.natAbs).sum
+  | [], h => by simp at h
+  | b :: l, h => by
+    simp only [List.mem_cons] at h
+    rcases h with rfl | h
+    · simp
+    · have := natAbs_le_sum h; simp; omega
+
+/-- **A measure that goes down along every step makes the relation well-founded**: the values on the
+finitely many elements the pairs mention are bounded below, so the measure is a natural number in
+disguise. -/
+theorem wf_of_measure (R : Rel) (m : String → Option Int) (h : measureFailure R m = none) :
+    WellFounded (Below R) := by
+  let vals : List Int := (R.pairs.flatMap fun p => [p.1, p.2]).filterMap m
+  let S : Int := ((vals.map Int.natAbs).sum : Nat)
+  have hbound : ∀ z a, (∃ p ∈ R.pairs, z = p.1 ∨ z = p.2) → m z = some a → -S ≤ a := by
+    intro z a ⟨p, hp, hz⟩ hza
+    have hmem : a ∈ vals := by
+      simp only [vals, List.mem_filterMap, List.mem_flatMap]
+      exact ⟨z, ⟨p, hp, by rcases hz with rfl | rfl <;> simp⟩, hza⟩
+    have := natAbs_le_sum hmem
+    simp only [S]; omega
+  let f : String → Nat := fun x => ((m x).getD 0 + S).toNat
+  refine Subrelation.wf (r := InvImage (· < ·) f) ?_ (InvImage.wf f Nat.lt_wfRel.wf)
+  intro y x hyx
+  obtain ⟨a, b, ha, hb, hlt⟩ := measureFailure_none h x y hyx
+  have ha' := hbound x a ⟨(x, y), hyx, Or.inl rfl⟩ ha
+  have hb' := hbound y b ⟨(x, y), hyx, Or.inr rfl⟩ hb
+  show f y < f x
+  simp only [f, ha, hb, Option.getD_some]
+  omega
+
+/-- **A set every element of which steps into it makes the relation not well-founded.** -/
+theorem not_wf_of_closed {R : Rel} {c : List String} (h : stepClosed R c = true) : ¬ WellFounded (Below R) := by
+  intro hwf
+  simp only [stepClosed, Bool.and_eq_true, Bool.not_eq_true', List.isEmpty_eq_false_iff, List.all_eq_true,
+    List.any_eq_true] at h
+  obtain ⟨hne, hall⟩ := h
+  have key : ∀ x, x ∈ c → False := fun x =>
+    hwf.induction (C := fun x => x ∈ c → False) x fun x ih hx => by
+      obtain ⟨y, hy, hxy⟩ := hall x hx
+      exact ih y ((Rel.has_iff R x y).mp hxy) hy
+  obtain ⟨x, hx⟩ := List.exists_mem_of_ne_nil c hne
+  exact key x hx
+
+/-- **`rel.wellfounded`, answering yes**: the relation is well-founded. -/
+theorem wellfounded_none {R : Rel} (h : wellfounded R = .ok none) : WellFounded (Below R) := by
+  unfold wellfounded at h
+  rcases hp : peelRanks R with ⟨ranks, left⟩
+  simp only [hp] at h
+  by_cases hl : left.isEmpty = true
+  · rw [ite_eq_left hl] at h
+    by_cases hm : (measureFailure R fun x => (ranks.lookup x).map Int.ofNat).isNone = true
+    · exact wf_of_measure R _ (Option.isNone_iff_eq_none.mp hm)
+    · rw [ite_eq_right hm] at h; cases h
+  · rw [ite_eq_right hl] at h
+    split at h
+    · split at h <;> cases h
+    · cases h
+
+/-- **`rel.wellfounded`, answering no**: the cycle it shows steps back into itself, so the relation is
+not well-founded. -/
+theorem wellfounded_some {R : Rel} {c : List String} (h : wellfounded R = .ok (some c)) :
+    stepClosed R c = true ∧ ¬ WellFounded (Below R) := by
+  unfold wellfounded at h
+  rcases hp : peelRanks R with ⟨ranks, left⟩
+  simp only [hp] at h
+  by_cases hl : left.isEmpty = true
+  · rw [ite_eq_left hl] at h
+    split at h <;> cases h
+  · rw [ite_eq_right hl] at h
+    split at h
+    · split at h
+      · rename_i hc; cases h; exact ⟨hc, not_wf_of_closed hc⟩
+      · cases h
+    · cases h
 
 end Ord
 end MathEngine

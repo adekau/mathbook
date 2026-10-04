@@ -98,13 +98,13 @@ def functionApply : Expr → Option RuleResult
 
 Two cases are settled by theorems in \file{proofs/}.
 
-\begin{thmbox}[\lcn{not_functionRules_soundR}]
+\begin{thmbox}[\lcn{not_functionAssuming_soundR}]
   The rule is not unconditionally sound: at $x = -1$ it rewrites $\exp(\ln x)$, whose value is
   $\exp(\ln 1) = 1$, to $x$, whose value is $-1$.
 \end{thmbox}
 
 \begin{minted}{lean}
-theorem not_functionRules_soundR : ¬ RuleSoundR functionRules := by
+theorem not_functionAssuming_soundR : ¬ RuleSoundR functionAssuming := by
   intro hs
   have h := hs (.fn "exp" [.fn "ln" [.var "x"]]) _ rfl (fun _ => -1)
   simp only [evalR_fn₁, applyFn_exp, applyFn_ln, evalR_var] at h
@@ -112,9 +112,9 @@ theorem not_functionRules_soundR : ¬ RuleSoundR functionRules := by
   norm_num at h
 \end{minted}
 
-The positive theorem for that case is \lc{exp_log_sound}, which is \lc{Real.exp_log} with the
-hypothesis $0 < x$; the notebook's label for the rule is \status{conditional} with that
-hypothesis.
+The positive theorem for that case is \lc{functionAssuming_soundR_on}, which is \lc{Real.exp_log}
+with the hypothesis $0 < x$. The case is a rule of its own, \rn{simp.function.assuming}, labelled
+\status{conditional}, and its step says ``Assuming $x > 0$''.
 
 \begin{thmbox}[\lcn{functionRules_tan_soundR}]
   The case $\sin u \cdot (\cos u)^{-1} \to \tan u$ is unconditionally sound.
@@ -126,17 +126,16 @@ $\sin x / \cos x$ with $x/0 = 0$, so the two sides agree even where the cosine v
 proof is \lc{Real.tan_eq_sin_div_cos} and the permutation lemma for products, since the two
 factors may sit anywhere in the list.
 
-The remaining cases have no theorem. $\ln 1 = 0$, $e^0 = 1$, $\sin 0 = 0$, $\cos 0 = 1$,
-$\ln(e^x) = x$, $\sqrt a = a^{1/2}$ and $|c|$ for a numeral are all true unconditionally in
-Mathlib's semantics (\lc{Real.log_one}, \lc{Real.exp_zero}, \lc{Real.sin_zero},
-\lc{Real.cos_zero}, \lc{Real.log_exp}, \lc{Real.sqrt_eq_rpow}, \lc{Rat.cast_abs}) and would each
-be a one-line theorem. $\ln(b^p) \to p \ln b$ is \emph{not} unconditional: for $b = -2$ and
+The remaining cases are true unconditionally in Mathlib's semantics: $\ln 1 = 0$, $e^0 = 1$,
+$\sin 0 = 0$, $\cos 0 = 1$, $\ln(e^x) = x$, $\sqrt a = a^{1/2}$ and $|c|$ for a numeral
+(\lc{Real.log_one}, \lc{Real.exp_zero}, \lc{Real.sin_zero}, \lc{Real.cos_zero}, \lc{Real.log_exp},
+\lc{Real.sqrt_eq_rpow}, \lc{Rat.cast_abs}), and \lc{functionRules_soundR} proves the rule sound with
+all of them. $\ln(b^p) \to p \ln b$ splits. For an integer $p$ it holds at every $b$, because
+\lc{Real.log} is $\ln|x|$ (\lc{Real.log_zpow}). For any other $p$ it does not: for $b = -2$ and
 $p = 1/2$, Mathlib's $(-2)^{1/2} = \sqrt 2 \cos(\pi/2) = 0$, so the left side is $\ln 0 = 0$ while
-the right side is $\frac{1}{2}\ln 2$. It needs $0 < b$ (\lc{Real.log_rpow}), and it needs a
-counterexample theorem like the one above. The rule table's note, ``the other cases are
-unconditional'', is therefore an overstatement for that one case, and the ledger should say
-\status{conditional} for it once the theorems are written. This is recorded here rather than
-hidden: the book's claim is not that everything is proved, but that the boundary is visible.
+the right side is $\frac{1}{2}\ln 2$. That case needs $0 < b$ (\lc{Real.log_rpow}), and it is in
+\rn{simp.function.assuming} with $\exp(\ln x)$. An earlier ledger note called all the other cases
+unconditional; writing the theorems is what showed it was an overstatement for this one.
 
 \begin{trybox}
 \begin{minted}{text}
@@ -145,17 +144,16 @@ ln(exp(x))
 sin(x) / cos(x)
 ln(x^2)
 \end{minted}
-  The first is labelled with its condition. The second has no condition, and no theorem yet.
-  The third is the tangent case. The fourth fires the one case that should be conditional and
-  is not yet labelled so.
+  The first says ``Assuming $x > 0$''. The second has no condition, and its theorem needs none.
+  The third is the tangent case. The fourth is $\ln(b^p)$ with an integer $p$, which holds at
+  every $x$; \texttt{ln(x\^{}(1/2))} would assume $x > 0$.
 \end{trybox}
 
 \section{Exercises}
 
-\begin{exercisebox}[The gaps]
-  Write and prove \lc{functionRules_ln_exp_soundR} in the style of
-  \lc{functionRules_tan_soundR}. Then state the counterexample theorem for $\ln(b^p) \to
-  p \ln b$ and prove it with \lc{Real.rpow_def_of_neg}.
+\begin{exercisebox}[The gap]
+  State the counterexample theorem for $\ln(b^p) \to p \ln b$ with a non-integer $p$, the case
+  \rn{simp.function.assuming} takes, and prove it with \lc{Real.rpow_def_of_neg}.
 \end{exercisebox}
 
 \begin{exercisebox}[The functional equation]

@@ -95,7 +95,7 @@ def cmdN : PlainRule :=
 def cmdSubst : PlainRule :=
   { name := "cmd.subst", apply := fun e => Option.map checked <|
       match e with
-      | .fn "subst" [body, .var x, v] => some ⟨substitute [(x, v)] body, s!"Substitute ${x} := {v.toText}$.", none, none⟩
+      | .fn "subst" [body, .var x, v] => some ⟨substVar x v body, s!"Substitute ${x} := {v.toText}$.", none, none⟩
       | .fn "subst" _ => some (refuse "subst takes (expression, variable, value)")
       | _ => none }
 
@@ -187,13 +187,15 @@ def cmdIntegrate (norm : Norm) : PlainRule :=
       | _ => none }
 
 /-- `factor(e)`: expand and collect, put the sum over a common denominator, pull the numerator's common
-factor out — the shape a hand derivation ends in. One presentation of the normal form; unverified. -/
+factor out — the shape a hand derivation ends in. One presentation of the normal form, checked: times
+its denominator, the expression normalizes to its numerator (`Factor.run`). -/
 def cmdFactor (norm : Norm) : PlainRule :=
   { name := "cmd.factor", apply := fun e => Option.map checked <|
       match e with
       | .fn "factor" [a] =>
         match Factor.run (fun e => (norm e).map (·.1)) a with
-        | .ok out => some ⟨out, "Expand and collect, put the sum over a common denominator (Mathematica's Together), and pull the numerator's common factor out.", none, none⟩
+        | .ok (out, true) => some ⟨out, "Expand and collect, put the sum over a common denominator (Mathematica's Together), and pull the numerator's common factor out. Checked: times its denominator, the expression is its numerator, so the two agree wherever the denominator is not zero.", none, none⟩
+        | .ok (out, false) => some ⟨out, "Expand and collect; the common-denominator form did not check (times its denominator, the expression did not normalize to its numerator), so the expression is left collected.", none, none⟩
         | .error msg => some (refuse s!"factor: {msg}")
       | .fn "factor" _ => some (refuse "factor takes one argument")
       | _ => none }

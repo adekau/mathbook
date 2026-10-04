@@ -33,6 +33,9 @@ const CASES = [
   { src: "[1, 2] ./ [3, 10]", text: "[1/3, 1/5]", step: "Entrywise division" },
   { src: "rref([1,2;2,4])", text: "[1, 2; 0, 0]", step: "Add a multiple of a row" },
   { src: "[1,2] * [1,2]", error: "inner dimensions must match" },
+  // a law split at its assumption: the step that assumes says so
+  { src: "exp(ln(w))", text: "w", step: "Function value, assuming a positive argument" },
+  { src: "t*t^(-1)", text: "1", step: "Collect powers, assuming the base" },
   // the logic world, and relations in the order world
   { src: "cnf(p ∨ (q ∧ r))", text: "(p ∨ q) ∧ (p ∨ r)", step: "Distribute" },
   { src: "taut(p → q)", text: "⊥", step: "False when p = true, q = false" },

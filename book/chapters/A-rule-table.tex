@@ -13,20 +13,23 @@ the engine omits is unverified.
 \rt{simp.fold-constants}{verified}{Exact rational arithmetic; $\mathbb{Q}$ embeds in $\mathbb{R}$.}
 \rt{simp.collect-like-terms}{verified}{Distributivity: $a t + b t = (a+b) t$.}
 \rt{simp.power}{verified}{Includes exact roots; the root search returns only checked roots.}
-\rt{simp.collect-powers}{conditional}{$b^m b^n = b^{m+n}$ needs a positive base: at $b = 0$ it turns $0$ into $1$.}
-\rt{simp.function}{conditional}{$\exp(\ln x) = x$ needs $0 < x$: at $x = -1$ it turns $-1$ into $1$. The other cases, $\sin/\cos = \tan$ among them, are unconditional.}
+\rt{simp.collect-powers}{verified}{$b^m b^n = b^{m+n}$ for every real $b$: integer exponents of one sign ($x \cdot x = x^2$) or a positive numeral base (\lc{collectPowers_soundR}).}
+\rt{simp.collect-powers.assuming}{conditional}{The other merges, $x \cdot x^{-1} = x^0$ and $x^a x^b = x^{a+b}$: the step states its assumption, $b \neq 0$ for integer exponents and $b > 0$ otherwise (\lc{collectPowersAssuming_soundR_on}); at $x = 0$, $x \cdot x^{-1}$ turns $0$ into $1$ (\lc{not_collectPowersAssuming_soundR}).}
+\rt{simp.function}{verified}{$\sin/\cos = \tan$, $\sqrt a = a^{1/2}$, $\ln 1 = 0$, $\ln e^x = x$, $\ln b^p = p \ln b$ for an integer $p$, and the values at $0$, for every real number (\lc{functionRules_soundR}).}
+\rt{simp.function.assuming}{conditional}{$e^{\ln x} = x$ and $\ln b^p = p \ln b$ for a non-integer $p$: the step states its assumption, $x > 0$ or $b > 0$ (\lc{functionAssuming_soundR_on}); at $x = -1$, $e^{\ln x}$ turns $-1$ into $1$ (\lc{not_functionAssuming_soundR}).}
 \rt{simp.radical}{verified}{A perfect-power base is reduced ($8^{1/2} = 2^{3/2}$), same-index radicals multiply under one root, and $\sqrt{18}$ is written $18^{1/2}$, shown as $3\sqrt 2$; unconditional, the bases being positive integers.}
 \rt{simp.sqrt}{verified}{$\sqrt a = a^{1/2}$ for every real $a$. Silent: the two print alike.}
 \rt{simp.collect-radicals}{verified}{Radicals with the same square-free part collect, $\sqrt{50} - \sqrt{18} = 2\sqrt 2$; unconditional.}
+\rt{simp.sort}{verified}{Commutativity: the arguments of $+$ and $\cdot$ are put in a canonical order (\lc{SemEqR.canon}). Silent: it reorders only.}
 \midrule \multicolumn{3}{l}{\textbf{Derivatives}} \\
-\rt{diff.constant}{verified}{A term the variable does not occur in has derivative $0$.}
-\rt{diff.variable}{verified}{The identity function has slope $1$ everywhere.}
-\rt{diff.constant-multiple}{verified}{Constant factors pull out; no differentiability needed.}
-\rt{diff.sum}{conditional}{Needs every summand differentiable: for $|x| + x$ at $0$ the rule gives $1$ where the derivative does not exist.}
-\rt{diff.product}{conditional}{Needs both factors differentiable at the point.}
-\rt{diff.power}{conditional}{Proved for a natural exponent with a differentiable base; real exponents still open.}
-\rt{diff.chain}{conditional}{Needs the inner function differentiable; proved for $\sin$, $\cos$ and $\exp$, while $\ln$ and $\tan$ also need a domain condition.}
-\rt{diff.matrix}{unverified}{Proved, but matrices carry no value in the $\mathbb{R}$ semantics, so the theorem has no content yet.}
+\rt{diff.constant}{verified}{A term the variable does not occur in has derivative $0$ (\lc{diff_constant_sound}).}
+\rt{diff.variable}{verified}{The identity function has slope $1$ everywhere (\lc{diff_variable_sound}).}
+\rt{diff.constant-multiple}{verified}{Constant factors pull out; no differentiability needed (\lc{diff_const_mul_sound}).}
+\rt{diff.sum}{conditional}{Needs every summand differentiable: for $|x| + x$ at $0$ the rule gives $1$ where the derivative does not exist (\lc{diff_sum_sound}, \lc{not_diff_sum_sound}).}
+\rt{diff.product}{conditional}{Needs both factors differentiable at the point (\lc{diff_product_sound}).}
+\rt{diff.power}{conditional}{Proved for a natural exponent with a differentiable base; real exponents still open (\lc{diff_power_nat_sound}).}
+\rt{diff.chain}{conditional}{Needs the inner function differentiable; proved for $\sin$, $\cos$ and $\exp$, while $\ln$ and $\tan$ also need a domain condition (\lc{diff_chain_sin_sound}, \lc{diff_chain_cos_sound}, \lc{diff_chain_exp_sound}).}
+\rt{diff.matrix}{verified}{A matrix is differentiated entry by entry (\lc{diffMatrix_sound}): with matrices given a value (\lc{evalV}), the theorem has content.}
 \rt{diff.higher-order}{unverified}{An abbreviation: it eliminates the three-argument form, so there is nothing to prove.}
 \midrule \multicolumn{3}{l}{\textbf{Linear algebra}} \\
 \rt{cmd.rref}{verified}{Over $\mathbb{Q}$ the reduced matrix has the input's solution set (\lc{sol_rref}) and is in reduced row echelon form (\lc{rref_isRref}). With symbolic entries the nested row operations are the unverified \texttt{.symbolic} ones, and the step inherits their status.}
@@ -34,12 +37,23 @@ the engine omits is unverified.
 \rt{la.row-scale}{verified}{Scaling a row by a nonzero rational preserves the solution set (\lc{sol_scale}).}
 \rt{la.row-add}{verified}{Adding a multiple of another row preserves the solution set (\lc{sol_addMul}).}
 \rt{la.row-swap.symbolic}{unverified}{Symbolic entries: the pivot is assumed nonzero because simplify could not show it is zero.}
-\rt{la.row-scale.symbolic}{unverified}{Symbolic entries: division by a pivot that is only assumed nonzero.}
-\rt{la.row-add.symbolic}{unverified}{Symbolic entries: the arithmetic is the simplifier's, outside the $\mathbb{Q}$ theorem.}
+\rt{la.row-scale.symbolic}{unverified}{Symbolic entries: division by a pivot only assumed nonzero, and each entry rewritten by the simplifier, whose cancellations assume their bases nonzero and are not shown; no theorem yet.}
+\rt{la.row-add.symbolic}{unverified}{Symbolic entries: each entry rewritten by the simplifier, whose cancellations assume their bases nonzero and are not shown; no theorem yet.}
 \rt{la.ediv}{verified}{\texttt{A ./ B}, entrywise by definition: entry $(i,j)$ is $a_{ij}/b_{ij}$, and a scalar side meets every entry; each entry's arithmetic is its nested steps, with their statuses.}
 \rt{la.emul}{verified}{\texttt{A .* B}, the Hadamard product, entrywise by definition: entry $(i,j)$ is $a_{ij} b_{ij}$.}
+\rt{la.add}{verified}{Matrices of one shape add entrywise: the output has the input's value, read in \lc{evalV}, which gives a matrix its value (\lc{laAdd_sound}).}
+\rt{la.scalar-mul}{verified}{A real factor multiplies every entry; real factors commute past a matrix (\lc{laScalarMul_sound}).}
+\rt{la.mul}{verified}{Entry $(i,j)$ of the product is row $i$ of the left factor dotted with column $j$ of the right; the product is associative and real factors commute past the matrices (\lc{laMul_sound}).}
+\rt{la.transpose}{verified}{Rows become columns (\lc{laTranspose_sound}).}
+\rt{la.det}{verified}{Laplace expansion along the first row has Mathlib's determinant as its value (\lc{laDet_sound}, \lc{detExpr_value}).}
+\rt{la.pow}{verified}{$M^k$ for a positive integer $k$ is the power in the monoid of square matrices (\lc{laPow_sound}, \lc{matPow_value}).}
+\rt{la.context}{verified}{A refusal: a matrix literal where no rule gives it a meaning, or nested in another, is an error, never a value, so there is nothing to be wrong.}
 \midrule \multicolumn{3}{l}{\textbf{Expansion}} \\
 \rt{cmd.expand}{verified}{Distribution is a total function proved sound over $\mathbb{R}$ (\lc{dist_sound}); the collection afterwards is the pipeline's own steps with their statuses.}
+\rt{cmd.simplify}{verified}{A cell's argument is already in normal form when the command sees it, so \texttt{simplify} returns it unchanged: the identity.}
+\rt{cmd.subst}{verified}{Structural substitution $e[x := v]$ evaluates as $e$ with $x$ rebound to the value of $v$ (\lc{cmdSubst_soundR}).}
+\rt{cmd.N}{unverified}{A floating-point approximation in IEEE-754 double precision; no error bound is proved.}
+\rt{cmd.factor}{checked}{The common-denominator form is a guess the pipeline checks: the input times the denominator $D$, normalized and expanded, must be the numerator $N$, so $N/D$ agrees with the input wherever $D \neq 0$. When the check fails, the collected normal form is the answer.}
 \rt{expand.distribute}{verified}{Multiplying out a product of sums and collecting like monomials: \lc{dist_sound}.}
 \rt{expand.power}{verified}{A power of a sum is the sum multiplied by itself: \lc{dist_sound}.}
 \midrule \multicolumn{3}{l}{\textbf{Integration}} \\
@@ -50,7 +64,7 @@ the engine omits is unverified.
 \rt{int.variable}{checked}{A guess from the finder, verified by \rn{int.check}.}
 \rt{int.sum}{checked}{A guess from the finder, verified by \rn{int.check}.}
 \rt{int.constant-multiple}{checked}{A guess from the finder, verified by \rn{int.check}.}
-\rt{int.power}{checked}{A guess from the finder, verified by \rn{int.check} (the symbolic-exponent case relies on \rn{simp.collect-powers} there).}
+\rt{int.power}{checked}{A guess from the finder, verified by \rn{int.check} (the symbolic-exponent case relies on \rn{simp.collect-powers.assuming} there, so its check assumes a positive base).}
 \rt{int.exponential}{checked}{A guess from the finder, verified by \rn{int.check}.}
 \rt{int.table}{checked}{A guess from the finder, verified by \rn{int.check}.}
 \rt{int.linear-substitution}{checked}{A guess from the finder, verified by \rn{int.check}.}
@@ -58,6 +72,9 @@ the engine omits is unverified.
 \rt{int.by-parts}{checked}{A guess from the finder (integration by parts), verified by \rn{int.check}.}
 \midrule \multicolumn{3}{l}{\textbf{Order world}} \\
 \rt{order.closure}{verified}{The order is the reflexive-transitive closure, and reflexivity, antisymmetry and transitivity are decided (\lc{checkPartialOrder_none}).}
+\rt{order.divisors}{verified}{The divisors of $n$ ordered by divisibility, by definition.}
+\rt{order.subsets}{verified}{The subsets of a finite set ordered by inclusion, by definition.}
+\rt{order.incomparable}{verified}{$x \le y$ is not in the order: decided on the closure, which is checked to be a partial order (\lc{checkPartialOrder_none}).}
 \rt{order.covers}{verified}{Hasse edges are exactly the covers: $x < y$ with nothing strictly between (\lc{covers_spec}).}
 \rt{order.upper-bounds}{verified}{Every element above both, by the decision on the finite order.}
 \rt{order.least}{verified}{The element found is an upper bound below every upper bound (\lc{sup_spec}); none exists when the search fails (\lc{sup_none}).}
@@ -80,8 +97,8 @@ the engine omits is unverified.
 \rt{rel.transitive-closure}{verified}{Each round adds only pairs forced by two that chain, so every pair lies in any transitive relation containing the original (\lc{round_sub_transitive}); the rounds stop when none is missing, and then the relation is transitive (\lc{stable_transitive}): the least transitive relation containing it.}
 \rt{rel.classes}{verified}{Each element's class is everything related to it; for an equivalence the classes partition the set.}
 \rt{rel.finer}{verified}{Every pair of the first checked in the second.}
-\rt{rel.wellfounded}{unverified}{On a finite set a relation is well-founded exactly when it has no cycle. A cycle found is shown and can be read off the relation; that the search finds one whenever there is one is not yet proved.}
-\rt{rel.measure}{verified}{Every step checked to decrease the measure, by definition; on a finite set a measure that goes down along every step leaves no room for a cycle.}
+\rt{rel.wellfounded}{verified}{Decided with a certificate either way: peeling gives ranks checked to go down along every step, so the relation is well-founded (\lc{wellfounded_none}); or a cycle, checked to step back into itself, shows it is not (\lc{wellfounded_some}).}
+\rt{rel.measure}{verified}{Every step checked to decrease the measure; then the relation is well-founded: no infinite chain of steps (\lc{wf_of_measure}).}
 \rt{order.inner}{verified}{A nested call evaluated first and named: a rewriting of the source, so the commands' own statuses apply.}
 \rt{sys.inner}{verified}{A nested call evaluated first and named: a rewriting of the source, so the commands' own statuses apply.}
 \rt{order.happens-before}{verified}{The reflexive-transitive closure of program order and messages, checked to be a partial order (\lc{checkPartialOrder_none}).}
@@ -101,26 +118,26 @@ the engine omits is unverified.
 \rt{order.product}{verified}{Pairs ordered componentwise, by definition: the order is the product of the two orders.}
 \rt{order.galois}{verified}{Every pair $(x, y)$ checked for $f(x) \le y \iff x \le g(y)$ (\lc{galoisFailure_none}).}
 \rt{order.closure-operator}{verified}{Extensive, monotone and idempotent, each checked on every element or pair (\lc{closureOpFailure_none}).}
-\rt{order.concepts}{unverified}{Each concept's objects are an intersection of attribute extents, and its attributes are those the objects share; that every concept is found, and that each pair is closed, is not yet proved.}
+\rt{order.concepts}{verified}{Every pair listed is a formal concept (\lc{concepts_sound}), and every concept is listed: intersecting attribute extents one attribute at a time reaches the extent of every set of attributes (\lc{concepts_complete}).}
 \rt{order.flow}{verified}{Every flow checked against the order of the classes (\lc{flowFailure_none}).}
 \midrule \multicolumn{3}{l}{\textbf{Systems world}} \\
 \rt{sys.init}{verified}{An initial state: the init condition evaluated on it, by definition.}
 \rt{sys.step}{checked}{Each step of a trace is re-run against the system: the action is enabled there and its updates give the next state.}
 \rt{sys.found}{checked}{The last state of a re-run trace, where the formula is evaluated.}
 \rt{sys.violated}{checked}{The last state of a re-run trace, where the formula is evaluated and fails: a concrete counterexample. That breadth-first search finds a shortest one is not yet proved.}
-\rt{sys.deadlock}{checked}{The last state of a re-run trace, with every action's guard evaluated false. That no deadlock is missed when none is reported is not yet proved.}
-\rt{sys.reach}{unverified}{Breadth-first search from the initial states; that it visits every reachable state is not yet proved.}
-\rt{sys.invariant}{unverified}{The formula holds in every state the search visited; that the search visits every reachable state is not yet proved.}
-\rt{sys.unreachable}{unverified}{No state the search visited satisfies the formula; the search's completeness is not yet proved.}
-\rt{sys.inductive}{unverified}{Every assignment of the domains is enumerated and every enabled action checked; the enumeration is not yet proved complete.}
+\rt{sys.deadlock}{verified}{The last state of a re-run trace, with every action's guard evaluated false. When none is reported none is missed: the search finds every reachable state and every transition (\lc{System.no_deadlock}).}
+\rt{sys.reach}{verified}{Breadth-first search from the initial states finds exactly the reachable states, each once (\lc{System.explore_states}).}
+\rt{sys.invariant}{verified}{The formula holds in every state the search found, and the search finds every reachable state (\lc{System.explore_states}).}
+\rt{sys.unreachable}{verified}{No state the search found satisfies the formula, and the search finds every reachable state (\lc{System.explore_states}).}
+\rt{sys.inductive}{verified}{Every assignment of the domains is enumerated (\lc{allStates_mem}) and every enabled action from a state where the formula holds is checked.}
 \rt{sys.cti}{checked}{A state where the formula holds and an action after which it fails (or leaves a domain): both evaluated, a concrete counterexample to induction.}
-\rt{sys.ctl}{unverified}{The CTL operator as a fixed point of a predicate transformer on the reachable states; the correspondence with paths is the standard theorem, not formalized here.}
+\rt{sys.ctl}{verified}{The set is a fixed point checked with a certificate read off its rounds, and where the check passes it is exactly the states where the formula holds by the meaning of its paths: $\mathrm{EF}$ some path reaches $\varphi$, $\mathrm{EG}$ an infinite path stays in it, $\mathrm{AG}$ every reachable state is in it, $\mathrm{AF}$ every maximal path reaches it (\lc{checkEF_spec} and the others).}
 \rt{sys.iterate}{checked}{One round of the Kleene iteration: the transformer applied to the previous set.}
-\rt{sys.fixed}{checked}{The loop stops when a round changes nothing, so the set is a fixed point; that iterating from the bottom (or top) gives the least (or greatest) is Kleene's theorem, not formalized here.}
+\rt{sys.fixed}{verified}{The loop stops when a round changes nothing, and the set it stops at is checked against the operator's path meaning with \rn{sys.ctl}'s certificate, so it is the right set without appeal to Kleene's theorem.}
 \rt{sys.cycle}{unverified}{A step of the lasso's cycle, found within a strongly connected set of states avoiding the goal.}
 \rt{sys.lasso}{unverified}{A fair cycle avoiding the goal: each fair action is taken on it or disabled as its fairness requires; the search over strongly connected sets is not yet proved complete.}
 \rt{sys.eventually}{unverified}{No deadlock and no fair cycle avoids the goal among the reachable states; the search is not yet proved complete.}
-\rt{sys.refines}{unverified}{Every transition the search found maps to an abstract step or a stutter; the search's completeness is not yet proved.}
+\rt{sys.refines}{verified}{Every initial state and every transition between reachable states is an edge the search found (\lc{System.explore_edges}), and each was mapped to an abstract initial state, step or stutter.}
 \rt{trs.step}{verified}{An instance of one of the system's rules, rewritten at the position the step names (\lc{step\_sound}); the steps chain from the term to the answer (\lc{normalize\_chain}), and a normal form is one no rule applies to (\lc{normalize\_normal}).}
 \rt{trs.decrease}{verified}{A rule passes when its left side's linear form has a larger constant and no smaller coefficient: then the left side is worth more whatever the variables are (\lc{decreases\_sound}), and every step lowers the term's value (\lc{step\_decreases}), so no term rewrites for ever (\lc{no\_infinite\_rewriting}). A rule that fails has values that make its left side worth no more (\lc{decreases\_complete}).}
 \rt{trs.critical}{unverified}{The overlaps come from Robinson's unification, and each side is rewritten to normal form by verified steps; that unification finds every overlap, so that no critical pair is missed, is not yet proved.}

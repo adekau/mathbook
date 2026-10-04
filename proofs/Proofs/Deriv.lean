@@ -270,8 +270,8 @@ theorem diff_variable_sound (ρ : EnvR) (x : String) :
   have : fx ρ x (.var x) = id := by funext t; simp
   rw [D_eq, this, evalD_one]; exact deriv_id (ρ x)
 
-/-- **`diff.matrix`.** Matrices carry no real value in this semantics, so the rule is vacuously
-sound: both sides denote the junk value. Real content waits for M7's linear algebra. -/
+/-- **`diff.matrix`**, read in this semantics: matrices carry no real value here, so both sides denote
+the junk value. The theorem with content is `diffMatrix_sound` (`Matrix.lean`), where a matrix has one. -/
 theorem diff_matrix_sound (ρ : EnvR) (x : String) (rows : List (List Expr)) :
     D ρ x (.matrix rows) = evalD ρ (.matrix (rows.map (·.map (fun e => .fn "diff" [e, .var x])))) := by
   have : fx ρ x (.matrix rows) = fun _ => (0 : ℝ) := by funext t; simp
@@ -407,7 +407,7 @@ theorem fx_abs (ρ : EnvR) (x : String) : fx ρ x (.fn "abs" [.var x]) = fun t =
 /-- **The sum rule is not unconditionally sound.** At `x = 0`, `|x| + x` is not differentiable, so
 the left side is `deriv`'s junk value `0`, while the right side adds the junk derivative of `|x|`
 to the genuine derivative of `x` and gets `1`. This is the `diff.*` analogue of M3's
-`not_collectPowers_soundR`: the engine keeps the usual rule, and the hypothesis is now written
+`not_collectPowersAssuming_soundR`: the engine keeps the usual rule, and the hypothesis is now written
 down in `diff_sum_sound`. -/
 theorem not_diff_sum_sound :
     ¬ ∀ (ρ : EnvR) (x : String) (es : List Expr),

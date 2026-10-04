@@ -291,9 +291,9 @@ theorem evalProd?_none_of_mem (ρ : Env) {e : Expr} : ∀ {es : List Expr}, e �
       simp only [evalProd?, this]
       cases eval? ρ f <;> simp
 
-theorem functionRules_sound : RuleSound functionRules := by
+theorem functionApply_sound : ∀ e r, functionApply e = some r → Refines e r.result := by
   intro e r h ρ v hv
-  cases e <;> simp only [functionRules] at h
+  cases e
   case mul es =>
     unfold functionApply at h
     cases hft : findTan es with
@@ -461,9 +461,9 @@ theorem mergePowers_sound (ρ : Env) : ∀ (es l : List Expr) (t : Expr) (v : In
       obtain ⟨rfl, rfl⟩ := hl
       rw [evalProd?_cons, hve, mergePowers_sound ρ rest l' t' vr hm hvr]; rfl
 
-theorem collectPowers_sound : RuleSound collectPowers := by
+theorem collectPowersApply_sound : ∀ e r, collectPowersApply e = some r → Refines e r.result := by
   intro e r h ρ v hv
-  cases e <;> simp only [collectPowers, collectPowersApply, reduceCtorEq] at h
+  cases e <;> simp only [collectPowersApply, reduceCtorEq] at h
   rename_i es
   split at h
   · rename_i l t hm
@@ -532,19 +532,41 @@ theorem collectTerms_sound : RuleSound collectTerms := by
   · simp at h
 
 -- ---------------------------------------------------------------------------
+-- The rules split at their assumptions: each half rewrites as the whole did
+-- ---------------------------------------------------------------------------
+
+theorem functionRules_sound : RuleSound functionRules :=
+  fun e r h => functionApply_sound e r (gate_some h)
+
+theorem functionAssuming_sound : RuleSound functionAssuming := fun e r h => by
+  obtain ⟨_, r₀, _, h₀, hres, _⟩ := functionAssumingApply_some h
+  show Refines e r.result
+  rw [hres]; exact functionApply_sound e r₀ h₀
+
+theorem collectPowers_sound : RuleSound collectPowers :=
+  fun e r h => collectPowersApply_sound e r (gate_some h)
+
+theorem collectPowersAssuming_sound : RuleSound collectPowersAssuming := fun e r h => by
+  obtain ⟨_, _, r₀, _, h₀, hres, _⟩ := collectAssumingApply_some h
+  show Refines e r.result
+  rw [hres]; exact collectPowersApply_sound e r₀ h₀
+
+-- ---------------------------------------------------------------------------
 -- The fold
 -- ---------------------------------------------------------------------------
 
 theorem simpRules_sound : ∀ r ∈ simpRules, RuleSound r := by
   intro r hr
   simp only [simpRules, List.mem_cons, List.not_mem_nil, or_false] at hr
-  rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact flatten_sound
   · exact identity_sound
   · exact foldConstants_sound
   · exact functionRules_sound
+  · exact functionAssuming_sound
   · exact powerRules_sound
   · exact collectPowers_sound
+  · exact collectPowersAssuming_sound
   · exact collectTerms_sound
 
 /-- **Simplification is sound on the integer fragment**: whatever value the input has, the

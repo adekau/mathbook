@@ -226,6 +226,9 @@ finer(K, A)	false
 wellfounded(R)	true
 let C = rel({x, y, z}; x->y, y->z, z->x)	{(x, y), (y, z), (z, x)}
 wellfounded(C)	false
+wellfounded(rel({a}; a->a))	false
+wellfounded(rel({a, b, c, d}; a->b, b->c, a->c, d->a))	true
+wellfounded(rel({a, b, c, d}; a->b, b->c, c->d, d->b))	false
 measure(R; a->2, b->1, c->0)	true
 measure(C; x->2, y->1, z->0)	false
 let D = divisors(12)	poset {1, 2, 3, 4, 6, 12}
@@ -304,6 +307,7 @@ let Jp = system(var a in 0..2; var b in 0..2; init a = 0 ∧ b = 0; action both 
 refines(Jp, Sm; s := a + b)	false
 system(var x in 0..2; init x = 0; action up do x := x + 1)	<error: action up sets x to 3, outside its domain>
 system(var x in 0..2; action go do y := 1)	<error: action go updates y, which is not a variable>
+system(var x in 0..5999; init x ≥ 0; action stay do x := x)	<error: more than 5000 reachable states>
 let Ev = events({a1, a2, a3}, {b1, b2}; a1->b2, b1->a3)	poset {a1, a2, a3, b1, b2}
 clocks({a1, a2, a3}, {b1, b2}; a1->b2, b1->a3)	{a1↦(1, 0), a2↦(2, 0), a3↦(3, 1), b1↦(0, 1), b2↦(1, 2)}
 concurrent(Ev, a2, b2)	true

@@ -861,3 +861,31 @@ Phases:
    and a file pasted or attached into one lands as a chip at the caret. Completions in both inputs list the names
    bound in the session before the functions, with what each is (`planets — CSV, 8 × 5`, a matrix's shape, a
    function's parameters); a function opens its call, a value does not. `dimensions` has its own Reference entry.
+- verification: the ledger, matrices and the systems search — DONE 2026-10-03 (Alex: "what can we work on to work
+   towards 100% engine verified status"). The ledger had 13 rules the engine reports and never listed (the matrix
+   arithmetic, `cmd.simplify`, `cmd.subst`, `cmd.N`, `la.context`, `simp.sort`, three order steps); each has an
+   honest entry now, and an engine test fails when a pipeline rule is missing from it. `proofs/Proofs/Ledger.lean`
+   reads the ledger from the engine and fails the build unless every theorem a note cites exists; on its first run
+   it caught two names that no longer did (`List.sorted_mergeSort`, `Complex.abs_apply`). `subst` uses the
+   structural `substVar`, so `cmdSubst_soundR` reads it over ℝ. Matrices get a value: `evalV` (`Matrix.lean`), a
+   real number or a matrix with its shape, extends `evalD` (`evalV_of_noLit`), and `la.add`, `la.scalar-mul`,
+   `la.mul`, `la.transpose`, `la.det` (Laplace expansion is Mathlib's `det`), `la.pow` and `diff.matrix` are proved
+   against it, for a node whose children are normal (`litAtRoot_of_normal`, from `normal_facts`). The systems
+   world's search is `exploreWith`, a breadth-first search over any successor function, and `SystemsProofs.lean`
+   proves a returned graph has exactly the reachable states, each once, and exactly their transitions; `reach`,
+   `invariant`, `unreachable`, `inductive` (`allStates_mem`), `refines` and the no-deadlock answer are verified.
+   Finding: with more initial states than the search's limit, the old loop stopped with states unexpanded and could
+   report a deadlock that is not there; the search now refuses. Open: shortest traces, the CTL fixed points, the
+   lasso search, `rel.wellfounded`, `trs.critical`, `order.concepts`, the symbolic row operations, `cmd.factor`.
+- the conditional laws, split at their assumptions — DONE 2026-10-03 (Alex agreed to "prove the unconditional
+   fragment, keep the rest conditional with the condition shown in the step"). `simp.collect-powers` now merges only
+   pairs that obey `b^m·b^n = b^(m+n)` at every real base, integer exponents of one sign or a positive numeral base,
+   and is verified (`collectPowers_soundR`, through `rpow_int_add_of_sameSign`); `simp.collect-powers.assuming`
+   merges the rest and its step ends "Assuming $x \neq 0$." (integer exponents) or "Assuming $x > 0$."
+   (`collectPowersAssuming_soundR_on`). `simp.function` keeps every case that holds for every real number and is
+   verified (`functionRules_soundR`, `SimpAll.lean`); `simp.function.assuming` takes `exp(ln x) = x` and
+   `ln(b^p) = p ln b` for a non-integer `p`, assuming the argument positive (`functionAssuming_soundR_on`). Finding:
+   the old ledger note called every case but `exp(ln x)` unconditional, but `ln(b^p) = p ln b` fails at `b = -2`,
+   `p = 1/2`; with an integer `p` it holds everywhere, since `Real.log` is `ln |x|`. Answers are unchanged: the
+   two halves fire on exactly the cases the whole rule did. `normalizeSafe_sound` folds every simp rule but the two
+   that assume.

@@ -91,14 +91,14 @@ $x^2$ and $x \cdot x^{-1}$ merges to $x^0$.
 
 \section{The theorem, and the counterexample}
 
-\begin{thmbox}[\lcn{collectPowers_soundR_on}]
-  If the rule fires on $e$ with result $e'$, and the base it merged has a positive value in
+\begin{thmbox}[\lcn{collectPowersApply_soundR_on}]
+  If the merge fires on $e$ with result $e'$, and the base it merged has a positive value in
   $\rho$, then $\lc{evalR}\,\rho\,e = \lc{evalR}\,\rho\,e'$.
 \end{thmbox}
 
 \begin{minted}{lean}
-theorem collectPowers_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
-    (h : collectPowers.apply e = some res)
+theorem collectPowersApply_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
+    (h : collectPowersApply e = some res)
     (ht : ∀ es l t, e = .mul es → mergePowers es = some (l, t) → 0 < evalR ρ t) :
     evalR ρ e = evalR ρ res.result
 \end{minted}
@@ -106,13 +106,13 @@ theorem collectPowers_soundR_on {e : Expr} {res : RuleResult} (ρ : EnvR)
 The mathematical content is \lc{Real.rpow_add}: for $0 < b$, $b^{x+y} = b^x b^y$. The rest is the
 permutation lemma for products. And the hypothesis is not an artefact of the proof:
 
-\begin{thmbox}[\lcn{not_collectPowers_soundR}]
+\begin{thmbox}[\lcn{not_collectPowersAssuming_soundR}]
   The rule is not unconditionally sound. At $x = 0$ it rewrites $x \cdot x^{-1}$, whose value is
   $0 \cdot 0^{-1} = 0$, to $x^0$, whose value is $1$.
 \end{thmbox}
 
 \begin{minted}{lean}
-theorem not_collectPowers_soundR : ¬ RuleSoundR collectPowers := by
+theorem not_collectPowersAssuming_soundR : ¬ RuleSoundR collectPowersAssuming := by
   intro hs
   have h := hs (.mul [.var "x", .pow (.var "x") (.num (Q.ofInt (-1)))]) _ rfl (fun _ => 0)
   norm_num [… , Real.rpow_zero] at h
@@ -127,6 +127,13 @@ The engine keeps the rule, because every computer-algebra system simplifies $x/x
 labels it \status{conditional} with the hypothesis ``positive base''. The reader who clicks the
 step sees the condition. That is the whole of what changed by proving it: not the rule, the
 label.
+
+Later the label moved into the step. The rule was split at its assumption: \rn{simp.collect-powers}
+merges only where the law holds at every real base, integer exponents of one sign (the exercise
+below) or a positive numeral base, and is proved unconditionally (\lc{collectPowers_soundR});
+\rn{simp.collect-powers.assuming} merges the rest, $x \cdot x^{-1} \to x^0$ among them, and its
+explanation ends ``Assuming $x \neq 0$'' or ``Assuming $x > 0$'', the hypothesis its theorem takes
+(\lc{collectPowersAssuming_soundR_on}). The counterexample above is now a theorem about that half.
 
 \section{What is not proved}
 
@@ -160,8 +167,8 @@ x^3 * x^(-3)
 \end{exercisebox}
 
 \begin{exercisebox}[Where exactly]
-  \lc{collectPowers_soundR_on} asks for a positive base. Show that for \emph{integer}
-  exponents the rule is also sound at negative bases, and find the term on which it fails at a
+  \lc{collectPowersApply_soundR_on} asks for a positive base. Show that for \emph{integer}
+  exponents the rule is also sound at negative bases (the engine's \lc{rpow_int_add_of_ne}), and find the term on which it fails at a
   negative base with a fractional exponent.
 \end{exercisebox}
 

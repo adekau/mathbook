@@ -116,6 +116,16 @@ theorem cmdSum_spec {f : Expr} {k : String} {a b : Q} {res : RuleResult}
   rw [hrr] at hok ⊢
   (repeat' split at hr) <;> first | (cases hr; simp [refuse] at hok; done) | (cases hr; rfl) | (simp_all; done) | (cases hr; simp_all)
 
+/-- **`subst`'s claim**: the result is the structural substitution `body[x := v]`. -/
+theorem cmdSubst_spec {body v : Expr} {x : String} {res : RuleResult}
+    (h : cmdSubst.apply (.fn "subst" [body, .var x, v]) = some res) (hok : res.error = none) :
+    res.result = substVar x v body := by
+  unfold cmdSubst at h; simp only [Option.map_eq_some_iff] at h
+  obtain ⟨r, hr, rfl⟩ := h
+  obtain ⟨hrr, -⟩ := checked_spec rfl hok
+  rw [hrr] at hok ⊢
+  cases hr; rfl
+
 /-- **`exptotrig`'s claim**: the result is `expToTrig` of the argument. -/
 theorem cmdExpToTrig_spec {a : Expr} {res : RuleResult}
     (h : cmdExpToTrig.apply (.fn "exptotrig" [a]) = some res) (hok : res.error = none) :

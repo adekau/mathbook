@@ -444,10 +444,8 @@ macro "rule_leaf" h:ident : tactic =>
        simp only [M_num, M_var, M_add, M_mul, M_pow, M_fn, M_matrix, ML_cons, ML_nil, M_zero, M_one]
        omega))
 
-def functionRules : Rule simpW where
-  name := "simp.function"
-  apply := functionApply
-  decreasing e r h := by
+theorem functionApply_decreasing : ∀ e r, functionApply e = some r → measure simpW r.result < measure simpW e := by
+    intro e r h
     cases e <;> simp only [functionApply, reduceCtorEq] at h
     · -- sin u / cos u = tan u
       rename_i es
@@ -468,6 +466,53 @@ def functionRules : Rule simpW where
       all_goals (try injections)
       all_goals (try subst_vars)
       all_goals (simp only [M_num, M_var, M_add, M_mul, M_pow, M_fn, M_matrix, ML_cons, ML_nil, M_zero, M_one]; omega)
+
+/-- A numeral that is an integer, as an integer. -/
+def intExp : Expr → Option Int
+  | .num q => if q.isInt then some q.val.num else none
+  | _ => none
+
+/-- The term a `simp.function` step needs positive, where it needs one: `x` in `exp(ln x) = x`, and
+`b` in `ln(b^p) = p ln b` for an exponent `p` that is not an integer. Every other case holds for every
+real number (`functionRules_soundR`). -/
+def functionAssumed : Expr → Option Expr
+  | .fn "exp" [.fn "ln" [x]] => some x
+  | .fn "ln" [.pow b p] => if (intExp p).isSome then none else some b
+  | _ => none
+
+/-- A rule that fires only where `p` holds, with `f`'s result. -/
+theorem gate_some {p : Bool} {f : Option RuleResult} {r : RuleResult} (h : (if p then f else none) = some r) :
+    f = some r := by
+  split at h <;> simp_all
+
+/-- `simp.function` where it holds for every real number. -/
+def functionRules : Rule simpW where
+  name := "simp.function"
+  apply e := if (functionAssumed e).isNone then functionApply e else none
+  decreasing e r h := functionApply_decreasing e r (gate_some h)
+
+/-- `simp.function` where it needs a positive argument: the step says so. -/
+def functionAssumingApply (e : Expr) : Option RuleResult :=
+  match functionAssumed e with
+  | some a => (functionApply e).map fun r => { r with explanation := r.explanation ++ s!" Assuming ${a.toText} > 0$." }
+  | none => none
+
+theorem functionAssumingApply_some {e : Expr} {r : RuleResult} (h : functionAssumingApply e = some r) :
+    ∃ a r₀, functionAssumed e = some a ∧ functionApply e = some r₀ ∧ r.result = r₀.result ∧ r.error = r₀.error := by
+  unfold functionAssumingApply at h
+  split at h
+  · rename_i a ha
+    simp only [Option.map_eq_some_iff] at h
+    obtain ⟨r₀, h₀, rfl⟩ := h
+    exact ⟨a, r₀, ha, h₀, rfl, rfl⟩
+  · cases h
+
+def functionAssuming : Rule simpW where
+  name := "simp.function.assuming"
+  apply := functionAssumingApply
+  decreasing e r h := by
+    obtain ⟨_, r₀, _, h₀, hres, _⟩ := functionAssumingApply_some h
+    rw [hres]; exact functionApply_decreasing e r₀ h₀
 
 -- ---------------------------------------------------------------------------
 -- simp.power
@@ -591,10 +636,8 @@ theorem mergePowers_lt : ∀ (es l : List Expr) (t : Expr), mergePowers es = som
       have := mergePowers_lt rest l' t' hm
       rw [ML_cons, ML_cons]; omega
 
-def collectPowers : Rule simpW where
-  name := "simp.collect-powers"
-  apply := collectPowersApply
-  decreasing e r h := by
+theorem collectPowersApply_decreasing : ∀ e r, collectPowersApply e = some r → measure simpW r.result < measure simpW e := by
+    intro e r h
     cases e <;> simp only [collectPowersApply, reduceCtorEq] at h
     rename_i es
     split at h
@@ -602,6 +645,64 @@ def collectPowers : Rule simpW where
       simp only [Option.some.injEq] at h; subst h
       simp only [M_mul]; have := mergePowers_lt es l t hm; omega
     · simp at h
+
+/-- The base and the two exponents of the pair `mergePowers` merges: the same search. -/
+def mergedExps : List Expr → Option (Expr × Expr × Expr)
+  | [] => none
+  | e :: rest =>
+    let (b, x) := baseExp e
+    if bigBase b then
+      match rest.find? (fun f => equal (baseExp f).1 b) with
+      | some f => some (b, x, (baseExp f).2)
+      | none => mergedExps rest
+    else mergedExps rest
+
+/-- `b^m · b^n = b^(m+n)` for every real `b`: a positive numeral base, or integer exponents of one
+sign (at `b = 0`, `x·x⁻¹` would turn `0` into `1`). -/
+def powSafe (b x y : Expr) : Bool :=
+  isPosNum b || match intExp x, intExp y with
+    | some m, some n => (decide (0 ≤ m) && decide (0 ≤ n)) || (decide (m ≤ 0) && decide (n ≤ 0))
+    | _, _ => false
+
+/-- What a `simp.collect-powers` step assumes of its base, where it assumes anything: `(b, true)` for
+`b ≠ 0` (integer exponents of either sign), `(b, false)` for `b > 0` (other exponents). -/
+def collectAssumed : Expr → Option (Expr × Bool)
+  | .mul es =>
+    match mergedExps es with
+    | some (b, x, y) => if powSafe b x y then none else some (b, (intExp x).isSome && (intExp y).isSome)
+    | none => none
+  | _ => none
+
+/-- `simp.collect-powers` where it holds for every real base. -/
+def collectPowers : Rule simpW where
+  name := "simp.collect-powers"
+  apply e := if (collectAssumed e).isNone then collectPowersApply e else none
+  decreasing e r h := collectPowersApply_decreasing e r (gate_some h)
+
+/-- `simp.collect-powers` where it needs its base nonzero or positive: the step says which. -/
+def collectAssumingApply (e : Expr) : Option RuleResult :=
+  match collectAssumed e with
+  | some (b, nz) => (collectPowersApply e).map fun r =>
+      { r with explanation := r.explanation ++ (if nz then s!" Assuming ${b.toText} \\neq 0$." else s!" Assuming ${b.toText} > 0$.") }
+  | none => none
+
+theorem collectAssumingApply_some {e : Expr} {r : RuleResult} (h : collectAssumingApply e = some r) :
+    ∃ b nz r₀, collectAssumed e = some (b, nz) ∧ collectPowersApply e = some r₀ ∧ r.result = r₀.result ∧
+      r.error = r₀.error := by
+  unfold collectAssumingApply at h
+  split at h
+  · rename_i b nz hb
+    simp only [Option.map_eq_some_iff] at h
+    obtain ⟨r₀, h₀, rfl⟩ := h
+    exact ⟨b, nz, r₀, hb, h₀, rfl, rfl⟩
+  · cases h
+
+def collectPowersAssuming : Rule simpW where
+  name := "simp.collect-powers.assuming"
+  apply := collectAssumingApply
+  decreasing e r h := by
+    obtain ⟨_, _, r₀, _, h₀, hres, _⟩ := collectAssumingApply_some h
+    rw [hres]; exact collectPowersApply_decreasing e r₀ h₀
 
 -- ---------------------------------------------------------------------------
 -- simp.collect-like-terms
@@ -705,7 +806,8 @@ def collectTerms : Rule simpW where
 -- The rule set
 -- ---------------------------------------------------------------------------
 
-def simpRules : List (Rule simpW) := [flatten, identity, foldConstants, functionRules, powerRules, collectPowers, collectTerms]
+def simpRules : List (Rule simpW) :=
+  [flatten, identity, foldConstants, functionRules, functionAssuming, powerRules, collectPowers, collectPowersAssuming, collectTerms]
 
 def simplify (e : Expr) : TraceM Expr := normalize simpRules e
 def simplify0 (e : Expr) : Expr := (simplify e).run' #[]

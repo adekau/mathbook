@@ -55,9 +55,10 @@ differential test with zero mismatches.
   `Order.lean` and the innermost rewriter `normalizeT` (`Terminate.lean`), whose obligation is
   conditional: a rule must decrease the ordering *on a node whose children are already normal*.
   That hypothesis is what lets the product rule duplicate its body. The theorem is
-  `pipelineOrdered` (`PipelineOrder.lean`), one lemma per rule. Rules that delegate to unverified
-  code (commands, matrix arithmetic) have their outputs *checked* for the tier they must decrease
-  rather than proved. There is no step budget anywhere: `expand` distributes by a total function
+  `pipelineOrdered` (`PipelineOrder.lean`), one lemma per rule. Rules that delegate to code the
+  ordering cannot see into (commands, matrix arithmetic) have their outputs *checked* for the tier they
+  must decrease rather than proved; what the matrix rules compute is proved separately, against `evalV`.
+  There is no step budget anywhere: `expand` distributes by a total function
   (`Expand.dist`, proved sound over ℝ in `proofs/Proofs/Expand.lean`) and the pipeline collects
   the result.
 - **Elimination is verified over ℚ by construction.** `LinAlgQ.lean` writes Gauss–Jordan as a
@@ -146,8 +147,17 @@ differential test with zero mismatches.
   of predicate transformers, each Kleene round a step; liveness under weak and strong fairness,
   refuted by a lasso found among strongly connected sets; refinement under an abstraction map. A trace
   is the derivation, a step per action, so the notebook's stepping applies; each step is re-run against
-  the system before it is reported (`checked`), while "holds everywhere" answers rest on a search not
-  yet proved complete (`unverified`). Guards reuse the logic world's formulas, evaluated over the
+  the system before it is reported (`checked`). "Holds everywhere" answers rest on the search, which is
+  proved: `exploreWith` is breadth-first search along any successor function, and `SystemsProofs.lean`
+  shows a returned graph has exactly the reachable states, each once, and exactly the transitions
+  between them, so an invariant, an unreachable state, the absence of a deadlock and a refinement are
+  decided on all of them; `allStates_mem` does the same for the assignments `inductive` checks. The
+  search refuses rather than returns when it cannot expand every state it found (more initial states
+  than its limit used to leave some unexpanded). A CTL answer carries a certificate read off its Kleene
+  rounds (each state's round is its rank), checked before it is reported; `CtlProofs.lean` proves that
+  where the check passes the set is exactly the states where the formula holds by the meaning of its
+  paths, infinite paths and paths that stop included. Shortest traces and the lasso search are not
+  proved yet. Guards reuse the logic world's formulas, evaluated over the
   state with names (`idle`, `true`) as values.
 - **Logic is a fourth world.** `Logic.lean` reads formulas of propositional logic and bounded
   first-order formulas over finite sets of numbers, with its own grammar (ASCII spellings read as
@@ -203,15 +213,20 @@ differential test with zero mismatches.
   invariant under `canon`). Supply those four facts for a new semantics and normalization's
   soundness follows without touching the rewriter. The integer fragment and ℝ are two instances.
 - **Semantics are added in layers, never edited.** `eval?` (integer fragment, M1) ⊂ `evalR` (ℝ, M3) ⊂ `evalD` (ℝ with
-  derivatives, M4), each with a theorem that the previous one is a restriction of it. A new layer extends rather than
+  derivatives, M4) ⊂ `evalV` (values: a real number or a matrix with its shape, `proofs/Proofs/Matrix.lean`), each
+  with a theorem that the previous one is a restriction of it. A new layer extends rather than
   replaces because the earlier theorems are stated against the earlier semantics; widening in place would silently
   restate them. It is also forced here: `evalR` cannot interpret `diff`, whose second child is a binder that `Expr`
   does not distinguish from a value, and a semantics reading it breaks the congruence M3's fold needs.
-- **A rule that needs a side condition says so.** Over ℝ, `simp.collect-powers` and part of
-  `simp.function` are only sound away from `0` (see `book/TRACKING.md`, M3). The engine keeps the
-  usual computer-algebra behaviour; `proofs/` states the hypothesis and *proves* that no
-  unconditional theorem exists. Silence is not an option: either a rule has an unconditional
-  theorem or its condition is written down.
+- **A rule that needs a side condition says so, in its step.** Over ℝ, `x·x⁻¹ = x⁰` holds only for
+  `x ≠ 0`, `x^a·x^b = x^(a+b)` and `ln(b^p) = p ln b` only for a positive base, and `exp(ln x) = x` only for
+  `x > 0`. The engine keeps the usual computer-algebra behaviour, but each law is split at its
+  assumption: `simp.collect-powers` and `simp.function` are the cases that hold for every real number
+  (proved unconditionally), and `simp.collect-powers.assuming` and `simp.function.assuming` the cases
+  that need the assumption, whose explanation states it ("Assuming $x > 0$.") and whose theorem takes
+  it as a hypothesis; `proofs/` also *proves* that no unconditional theorem exists for them. Silence is
+  not an option: either a rule has an unconditional theorem or its condition is written down where
+  the step is shown.
 - **Two packages.** `engine/` is executable code and goes into the wasm build: it imports Init
   (Std/Batteries allowed) and never Mathlib. `proofs/` is theorems only, may be `noncomputable`,
   requires `engine/` and (from M3) Mathlib. `scripts/check-engine-deps.sh` enforces the split.

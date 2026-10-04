@@ -73,26 +73,55 @@ def finerFailure (R S : Rel) : Option (String × String) := R.pairs.find? fun (x
 
 /-! ## Well-founded relations and measures -/
 
-/-- A cycle of `R` read as "steps to" (`x R y`: `x` steps to `y`), if there is one: a path back to
-where it started, found by following steps from each element, at most `n` of them. -/
-def findCycle (R : Rel) : Option (List String) :=
-  let n := R.elems.length
-  let next (x : String) : List String := (R.pairs.filter (·.1 == x)).map (·.2)
-  -- depth-first from `start`, the path so far reversed in `path`
-  let rec dfs (fuel : Nat) (start : String) (path : List String) : Option (List String) :=
-    match fuel with
-    | 0 => none
-    | f + 1 =>
-      let cur := path.headD start
-      (next cur).findSome? fun y =>
-        if y == start then some ((y :: path).reverse)
-        else if path.contains y then none
-        else dfs f start (y :: path)
-  R.elems.findSome? fun x => dfs n x [x]
-
 /-- A step `x R y` the measure does not decrease along: `m y ≥ m x`. -/
 def measureFailure (R : Rel) (m : String → Option Int) : Option (String × String) :=
   R.pairs.find? fun (x, y) => match m x, m y with | some a, some b => !(b < a) | _, _ => true
+
+/-- Every element the relation mentions. -/
+def Rel.nodes (R : Rel) : List String := (R.elems ++ R.pairs.flatMap fun (a, b) => [a, b]).eraseDups
+
+/-- Ranks by peeling: the elements with no step to an element still unranked get the next rank. When
+everything is ranked, every step goes down in rank; what is left otherwise has a step out of every
+element back into it. -/
+def peelRanks (R : Rel) : List (String × Nat) × List String :=
+  go (R.nodes.length + 1) 0 R.nodes []
+where
+  go : Nat → Nat → List String → List (String × Nat) → List (String × Nat) × List String
+    | 0, _, left, ranks => (ranks, left)
+    | f + 1, k, left, ranks =>
+      let sinks := left.filter fun x => !(R.pairs.any fun (a, b) => a == x && left.contains b)
+      if sinks.isEmpty then (ranks, left)
+      else go f (k + 1) (left.filter fun x => !sinks.contains x) (ranks ++ sinks.map (·, k))
+
+/-- Follow steps inside `left` from the head of `path` until an element repeats: the cycle. -/
+def walkCycle (R : Rel) (left : List String) : Nat → List String → Option (List String)
+  | 0, _ => none
+  | f + 1, path =>
+    match path.head? with
+    | none => none
+    | some x =>
+      match R.pairs.find? fun (a, b) => a == x && left.contains b with
+      | none => none
+      | some (_, y) =>
+        if path.contains y then some (y :: (path.takeWhile (· != y)).reverse ++ [y])
+        else walkCycle R left f (y :: path)
+
+/-- The certificate a cycle gives: a nonempty set in which every element steps to an element of the
+set, so following steps never stops (`not_wf_of_closed`). -/
+def stepClosed (R : Rel) (c : List String) : Bool := !c.isEmpty && c.all fun x => c.any fun y => R.has x y
+
+/-- **Is `R`, read as "steps to", well-founded?** `none`: yes, and the peeling ranks are a measure that
+goes down along every step, checked (`wellfounded_none`). `some c`: no, and `c` is a cycle, checked
+to step back into itself (`wellfounded_some`). Either way the answer carries its certificate. -/
+def wellfounded (R : Rel) : Except String (Option (List String)) :=
+  let (ranks, left) := peelRanks R
+  if left.isEmpty then
+    if (measureFailure R fun x => (ranks.lookup x).map Int.ofNat).isNone then .ok none
+    else .error "internal: the peeling ranks do not go down along a step"
+  else
+    match left.head? >>= fun x => walkCycle R left (left.length + 1) [x] with
+    | some c => if stepClosed R c then .ok (some c) else .error "internal: the cycle does not check"
+    | none => .error "internal: no cycle among the elements left"
 
 /-! ## Encoding for the wire -/
 

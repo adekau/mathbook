@@ -683,9 +683,10 @@ def orderCell (s : Session) (cellId source : String) :
       match getR r with
       | .error m => err m
       | .ok R =>
-        match Ord.findCycle R with
-        | none => done (bool true) #[step "rel.wellfounded" "No cycle: on a finite set every chain of steps stops, so the relation is well-founded." (relExpr' R) (bool true)] none "well-founded" (graph := some (R, [], []))
-        | some c =>
+        match Ord.wellfounded R with
+        | .error m => err m
+        | .ok none => done (bool true) #[step "rel.wellfounded" "No cycle: on a finite set every chain of steps stops, so the relation is well-founded." (relExpr' R) (bool true)] none "well-founded" (graph := some (R, [], []))
+        | .ok (some c) =>
           let edges := c.zip c.tail
           done (bool false) #[step "rel.wellfounded" s!"A cycle: {" → ".intercalate c}; following it never stops." (relExpr' R) (bool false)] none s!"not well-founded: {" → ".intercalate c}" (graph := some (R, edges, []))
     | "measure", [r, .maps ps] =>
@@ -1311,6 +1312,9 @@ def systemCell (s : Session) (cellId source : String) :
         | "EG" => (Sys.iterateSets n (fun Z => sat.filter (G.preE Z).contains) (List.range n), false)
         | _ => (Sys.iterateSets n (fun Z => sat.filter (G.preA Z).contains) (List.range n), false)
       let final := chain.getLastD []
+      -- the answer carries its certificate: the set and its ranks, checked (`CtlProofs.lean`)
+      let es := G.edges.map fun (a, _, b) => (a, b)
+      if !Sys.Ctl.check op n es sat chain final then throw s!"internal: the {op} set does not check"
       let what := match op with
         | "EF" => "states with a path to one where φ holds: the least Z with Z = φ ∪ EX Z"
         | "AF" => "states all of whose paths reach φ: the least Z with Z = φ ∪ AX Z (a state with no successor has no path onward)"

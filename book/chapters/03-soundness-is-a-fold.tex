@@ -87,31 +87,34 @@ shown to be a restriction of the next.
 
 \section{Two rules that are not sound}
 
-Five of the seven rules are sound for \lc{SemEqR} and the fold applies to them. Two are not, and
-the interesting part is that this is \emph{proved}.
+Five of the seven rules were sound for \lc{SemEqR} from the start and the fold applies to them. Two
+laws were not, and the interesting part is that this is \emph{proved}.
 
-\begin{thmbox}[\lcn{not_collectPowers_soundR}]
+\begin{thmbox}[\lcn{not_collectPowersAssuming_soundR}]
   The rule $b^m \cdot b^n \to b^{m+n}$ is not unconditionally sound over $\mathbb{R}$: at $x = 0$
   it rewrites $x \cdot x^{-1}$, which is $0$, to $x^0$, which is $1$.
 \end{thmbox}
 
 \begin{minted}{lean}
-theorem not_collectPowers_soundR : ¬ RuleSoundR collectPowers := by
+theorem not_collectPowersAssuming_soundR : ¬ RuleSoundR collectPowersAssuming := by
   intro hs
   have h := hs (.mul [.var "x", .pow (.var "x") (.num (Q.ofInt (-1)))]) _ rfl (fun _ => 0)
   norm_num [evalR_mul, prodR_cons, prodR_nil, evalR_var, evalR_pow, evalR_num, …] at h
 \end{minted}
 
-\begin{thmbox}[\lcn{not_functionRules_soundR}]
+\begin{thmbox}[\lcn{not_functionAssuming_soundR}]
   The rule $\exp(\ln x) \to x$ is not unconditionally sound: at $x = -1$ the left side is
   $\exp(\ln(-1)) = \exp(\ln 1) = 1$, because \lc{Real.log} is even, while the right side is $-1$.
 \end{thmbox}
 
-Both rules are the standard convention of every computer-algebra system, and the engine keeps
-them. What changed is the label. The collect-powers rule is \status{conditional}, and the theorem
-\lc{collectPowers_soundR_on} says exactly when it is right: whenever the merged base is positive.
-The notebook shows that condition next to the step. A reader who has only ever seen $x/x = 1$
-printed without comment now sees the $x \neq 0$ that was always there.
+Both laws are the standard convention of every computer-algebra system, and the engine keeps
+them, split at their assumptions. The cases that hold for every real number are rules of their own,
+\rn{simp.collect-powers} (integer exponents of one sign, or a positive numeral base) and
+\rn{simp.function}, with unconditional theorems (\lc{collectPowers_soundR}, \lc{functionRules_soundR})
+that the fold takes in. The rest are \rn{simp.collect-powers.assuming} and \rn{simp.function.assuming},
+whose step states its assumption and whose theorem, \lc{collectPowersAssuming_soundR_on}, says exactly
+when it is right: $b \neq 0$ for integer exponents, $b > 0$ otherwise. A reader who has only ever
+seen $x/x = 1$ printed without comment now reads ``Assuming $x \neq 0$'' in the step that does it.
 
 \begin{logbox}[On pinning Mathlib]
   The proofs package pins Mathlib at the release tag whose \texttt{lean-toolchain} equals the
